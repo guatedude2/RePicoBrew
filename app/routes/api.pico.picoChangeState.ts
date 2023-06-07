@@ -1,6 +1,6 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceRepository, DeviceState } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository, DeviceState } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
@@ -23,6 +23,9 @@ export const loader = async ({ request }: LoaderArgs) => {
 
   // update the state of the device
   await DeviceRepository.updateDeviceState(device.id, body.data.state);
+
+  // log device state change event
+  await DeviceRepository.createDeviceLog(device.id, { type: DeviceLogType.STATE_CHANGE, state: body.data.state });
 
   // publish a state update of the device
   pubsub.publish('device-state-update', { uid: device.uid, state: body.data.state });

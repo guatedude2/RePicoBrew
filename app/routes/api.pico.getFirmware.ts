@@ -4,7 +4,7 @@ import path from 'path';
 import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
-import { DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -29,6 +29,13 @@ export const loader = async ({ request }: LoaderArgs) => {
   if (!firmware || !hadUpdate) {
     return new Response(`#F#\r\n`);
   }
+
+  // log device firmware update event
+  await DeviceRepository.createDeviceLog(device.id, {
+    type: DeviceLogType.FIRMWARE_UPDATED,
+    from: device.firmwareVersion,
+    to: firmware.version,
+  });
 
   // send over the raw file contents
   const rawContents = await fs.readFile(path.join(process.cwd(), firmware.file), 'utf8');

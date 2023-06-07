@@ -35,7 +35,6 @@ CREATE TABLE "Device" (
 -- CreateTable
 CREATE TABLE "Recipe" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "uid" TEXT NOT NULL,
     "deviceType" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "abv" REAL NOT NULL,
@@ -63,13 +62,16 @@ CREATE TABLE "RecipeStep" (
 CREATE TABLE "Session" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "uid" TEXT NOT NULL,
+    "type" INTEGER NOT NULL,
     "deviceId" INTEGER NOT NULL,
-    "userId" INTEGER NOT NULL,
-    "status" TEXT NOT NULL,
+    "recipeId" INTEGER,
+    "state" INTEGER NOT NULL,
+    "statusText" TEXT NOT NULL,
+    "timeRemaining" INTEGER,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "Session_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "Session_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Session_recipeId_fkey" FOREIGN KEY ("recipeId") REFERENCES "Recipe" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -95,9 +97,6 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Device_uid_key" ON "Device"("uid");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Recipe_uid_key" ON "Recipe"("uid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_uid_key" ON "Session"("uid");

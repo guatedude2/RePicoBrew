@@ -1,7 +1,7 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { getClientIPAddress } from 'remix-utils';
 import { z } from 'zod';
-import { DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
@@ -24,10 +24,13 @@ export const loader = async ({ request }: LoaderArgs) => {
   if (device) {
     // update the device IP address
     await DeviceRepository.updateDeviceIPAddress(device.id, deviceIP);
-  } else if (!device) {
-    // if device is not registered then publish an event to the UI
-    pubsub.publish('device-detected', { uid: body.data.uid, type: DeviceType.PICOBREW_C });
+
+    // log device register event
+    await DeviceRepository.createDeviceLog(device.id, { type: DeviceLogType.REGISTER, ip: deviceIP });
   }
+
+  // publish existing device detected event
+  pubsub.publish('device-detected', { uid: body.data.uid, type: DeviceType.PICOBREW_C, isRegistered });
 
   return new Response(`#${isRegistered ? 'T' : 'F'}#\r\n`);
 };

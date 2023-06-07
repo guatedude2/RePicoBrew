@@ -2,7 +2,7 @@ import type { LoaderArgs } from '@remix-run/node';
 import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
-import { DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
@@ -19,16 +19,28 @@ export const loader = async ({ request }: LoaderArgs) => {
   // get the device firmware
   const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOBREW_C);
 
-  // compare version with pico brew c version
-  const hadUpdate = Boolean(firmware && SemVer.lt(body.data.version, firmware.version));
-
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
-  if (device) {
-    // update the firmware version
-    await DeviceRepository.updateDeviceFirmwareVersion(device.id, body.data.version);
-    // if device registered, publish the firmware version to UI
-    pubsub.publish('device-firmware', { uid: body.data.uid, firmwareVersion: body.data.version, hadUpdate });
+  if (!device || !firmware) {
+    return new Response(`#F#\r\n`);
   }
 
-  return new Response(`#${hadUpdate ? 'T' : 'F'}#\r\n`);
+  // compare version with pico brew c version
+  const hasUpdate = Boolean(SemVer.lt(body.data.version, firmware.version));
+
+  // update the actual firmware version
+  await DeviceRepository.updateDeviceFirmwareVersion(device.id, body.data.version);
+
+  if (hasUpdate) {
+    // log device firmware update warning
+    await DeviceRepository.createDeviceLog(device.id, {
+      type: DeviceLogType.FIRMWARE_UPDATE_WARNING,
+      current: body.data.version,
+      to: firmware.version,
+    });
+
+    // if device registered, publish the firmware version to UI
+    pubsub.publish('device-firmware', { uid: body.data.uid, firmwareVersion: body.data.version });
+  }
+
+  return new Response(`#${hasUpdate ? 'T' : 'F'}#\r\n`);
 };

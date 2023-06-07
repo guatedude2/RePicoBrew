@@ -15,7 +15,7 @@ export class ConfigRepository {
   }
 
   public static async getDeviceSessionsToDeepClean(deviceType: DeviceType) {
-    const config = await this.getConfig<DeviceConfig<number>>('DEVICE_MAX_SESSIONS_TO_DEEPCLEAN');
+    const config = await this.getConfig<DeviceConfig<number>>('DEVICE_MAX_SESSIONS_TO_DEEP_CLEAN');
     return (config && config[deviceType]) || null;
   }
 }

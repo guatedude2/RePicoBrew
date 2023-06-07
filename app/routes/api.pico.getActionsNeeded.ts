@@ -1,7 +1,7 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
-import { DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -24,9 +24,15 @@ export const loader = async ({ request }: LoaderArgs) => {
 
   // check if cleaning is needed
   const needsCleaning = maxSessions ? device.sessionCount >= lastDeepClean + maxSessions : false;
-  if (needsCleaning) {
-    return new Response(`#7#\r\n`);
+  if (!needsCleaning || !maxSessions) {
+    return new Response(`##\r\n`);
   }
 
-  return new Response(`##\r\n`);
+  // log device deep clean warning
+  await DeviceRepository.createDeviceLog(device.id, {
+    type: DeviceLogType.DEEP_CLEAN_WARNING,
+    sesOverCount: device.sessionCount - (lastDeepClean + maxSessions),
+  });
+
+  return new Response(`#7#\r\n`);
 };

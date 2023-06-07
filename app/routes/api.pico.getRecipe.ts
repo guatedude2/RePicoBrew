@@ -1,7 +1,8 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceRepository } from '~/repositories/device.server';
+import { DeviceLogType, DeviceRepository } from '~/repositories/device.server';
 import { PicoLocationMap, RecipeRepository } from '~/repositories/recipe.server';
+import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
 import { getPakIdData } from '~/utils/pak';
 
 const DEFAULT_IMAGE =
@@ -28,14 +29,34 @@ export const loader = async ({ request }: LoaderArgs) => {
     return new Response(`##\r\n`);
   }
 
+  // decode the pak id
   const { recipeId } = getPakIdData(body.data.rfid);
   if (recipeId === null) {
     return new Response(`##\r\n`);
   }
 
+  // get recipe
   const recipe = await RecipeRepository.getRecipe(recipeId);
   if (!recipe) {
     return new Response(`##\r\n`);
+  }
+
+  const session = await SessionRepository.getSession(body.data.rfid);
+  if (session) {
+    // update the status if the session exists
+    await SessionRepository.updateSessionState(session.id, SessionType.BREWING, SessionState.READY, 'Ready to Brew');
+  } else {
+    // create a session
+    await SessionRepository.createSession(body.data.rfid, SessionType.BREWING, device.id, recipe.id);
+
+    // record the session creation on the device
+    await DeviceRepository.updateDeviceSessionCount(device.id, device.sessionCount + 1);
+
+    // log device session creation event
+    await DeviceRepository.createDeviceLog(device.id, {
+      type: DeviceLogType.SESSION_CREATED,
+      sesType: SessionType.BREWING,
+    });
   }
 
   const recipeHeader = `${recipe.name}/${body.data.ibu},${body.data.abv},${recipe.abv},${recipe.ibu}`;

@@ -1,4 +1,5 @@
 import prisma from '~/services/prisma.server';
+import type { SessionType } from './session.server';
 
 export enum DeviceState {
   READY = 2,
@@ -20,6 +21,25 @@ export enum DeviceType {
   // TILT = 'TILT',
 }
 
+export enum DeviceLogType {
+  ERROR = 'ERROR',
+  REGISTER = 'REGISTER',
+  STATE_CHANGE = 'STATE_CHANGE',
+  SESSION_CREATED = 'SESSION_CREATED',
+  FIRMWARE_UPDATE_WARNING = 'FIRMWARE_UPDATE_WARNING',
+  FIRMWARE_UPDATED = 'FIRMWARE_UPDATED',
+  DEEP_CLEAN_WARNING = 'DEEP_CLEAN_WARNING',
+}
+
+export type DeviceLogData =
+  | { type: DeviceLogType.ERROR; errorCode: number; sessionUID?: string }
+  | { type: DeviceLogType.REGISTER; ip: string | null }
+  | { type: DeviceLogType.STATE_CHANGE; state: DeviceState }
+  | { type: DeviceLogType.SESSION_CREATED; sesType: SessionType }
+  | { type: DeviceLogType.FIRMWARE_UPDATE_WARNING; current: string | null; to: string }
+  | { type: DeviceLogType.FIRMWARE_UPDATED; from: string | null; to: string }
+  | { type: DeviceLogType.DEEP_CLEAN_WARNING; sesOverCount: number };
+
 export class DeviceRepository {
   public static async getDeviceByUID(uid: string) {
     return await prisma.device.findFirst({ where: { uid } });
@@ -35,5 +55,17 @@ export class DeviceRepository {
 
   public static async updateDeviceState(id: number, state: DeviceState) {
     return await prisma.device.update({ where: { id }, data: { state } });
+  }
+
+  public static async updateDeviceSessionCount(id: number, sessionCount: number) {
+    return await prisma.device.update({ where: { id }, data: { sessionCount } });
+  }
+
+  public static async updateDeviceDeepCleanSession(id: number, lastDeepCleanSession: number) {
+    return await prisma.device.update({ where: { id }, data: { lastDeepCleanSession } });
+  }
+
+  public static async createDeviceLog(deviceId: number, data: DeviceLogData) {
+    return await prisma.deviceLog.create({ data: { deviceId, data: JSON.stringify(data) } });
   }
 }

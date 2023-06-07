@@ -22,7 +22,7 @@ async function main() {
   });
   await prisma.config.create({
     data: {
-      key: 'DEVICE_MAX_SESSIONS_TO_DEEPCLEAN',
+      key: 'DEVICE_MAX_SESSIONS_TO_DEEP_CLEAN',
       value: JSON.stringify({
         PICOBREW_C: 3,
       }),
@@ -31,7 +31,6 @@ async function main() {
 
   await prisma.recipe.create({
     data: {
-      uid: 'c5b10c6e82ab43',
       deviceType: 'PICOBREW_C',
       name: 'Base Recipe - American Amber Ale',
       abv: 6.4,

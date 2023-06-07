@@ -19,8 +19,6 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @default(now()) @updatedAt
   deletedAt DateTime?
-
-  sessions Session[]
 }
 
 model Config {
@@ -58,7 +56,8 @@ model Recipe {
   updatedAt  DateTime  @default(now()) @updatedAt
   deletedAt  DateTime?
 
-  steps RecipeStep[]
+  steps   RecipeStep[]
+  Session Session[]
 }
 
 model RecipeStep {
@@ -74,17 +73,20 @@ model RecipeStep {
 }
 
 model Session {
-  id        Int      @id @default(autoincrement())
-  uid       String   @unique
-  deviceId  Int
-  userId    Int
-  status    String // enum
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  id            Int      @id @default(autoincrement())
+  uid           String   @unique
+  type          Int //enum
+  deviceId      Int
+  recipeId      Int?
+  state         Int // enum
+  statusText    String
+  timeRemaining Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
-  user   User         @relation(fields: [userId], references: [id])
   device Device       @relation(fields: [deviceId], references: [id])
   logs   SessionLog[]
+  recipe Recipe?      @relation(fields: [recipeId], references: [id])
 }
 
 model SessionLog {
