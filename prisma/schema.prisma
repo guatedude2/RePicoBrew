@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./picobrew.db"
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  salt      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  deletedAt DateTime?
+
+  sessions Session[]
+}
+
+model Config {
+  key   String @id
+  value String // json
+}
+
+model Device {
+  id              Int       @id @default(autoincrement())
+  name            String
+  uid             String    @unique
+  deviceType      String //enum
+  state           Int       @default(0) // enum
+  ipAddress       String?
+  firmwareVersion String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  deletedAt       DateTime?
+
+  sessions Session[]
+}
+
+model Recipe {
+  id         Int          @id @default(autoincrement())
+  uid        String       @unique
+  deviceType String //enum
+  name       String
+  abv        Float
+  ibu        Float
+  image      String
+  notes      String
+  steps      RecipeStep[]
+}
+
+model RecipeStep {
+  id          Int    @id @default(autoincrement())
+  recipeId    Int
+  name        String
+  drainTime   Int
+  location    String // enum
+  stepTime    Int
+  temperature Int
+
+  recipe Recipe @relation(fields: [recipeId], references: [id])
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  uid       String   @unique
+  deviceId  Int
+  userId    Int
+  status    String // enum
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user    User      @relation(fields: [userId], references: [id])
+  device  Device    @relation(fields: [deviceId], references: [id])
+  logData LogData[]
+}
+
+model LogData {
+  id        Int      @id @default(autoincrement())
+  sessionId Int
+  session   Session  @relation(fields: [sessionId], references: [id])
+  time      DateTime @default(now())
+  data      String // json
+}

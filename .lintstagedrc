@@ -1,0 +1,3 @@
+{
+  "{app,prisma,workers,public}/**/*.{ts,tsx}": ["eslint --fix"]
+}
