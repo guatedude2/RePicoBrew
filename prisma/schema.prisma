@@ -29,18 +29,21 @@ model Config {
 }
 
 model Device {
-  id              Int       @id @default(autoincrement())
-  name            String
-  uid             String    @unique
-  deviceType      String //enum
-  state           Int       @default(0) // enum
-  ipAddress       String?
-  firmwareVersion String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now()) @updatedAt
-  deletedAt       DateTime?
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  uid                  String    @unique
+  deviceType           String //enum
+  state                Int       @default(0) // enum
+  ipAddress            String?
+  firmwareVersion      String?
+  sessionCount         Int       @default(0)
+  lastDeepCleanSession Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @default(now()) @updatedAt
+  deletedAt            DateTime?
 
   sessions Session[]
+  logs     DeviceLog[]
 }
 
 model Recipe {
@@ -76,15 +79,23 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  user    User      @relation(fields: [userId], references: [id])
-  device  Device    @relation(fields: [deviceId], references: [id])
-  logData LogData[]
+  user   User         @relation(fields: [userId], references: [id])
+  device Device       @relation(fields: [deviceId], references: [id])
+  logs   SessionLog[]
 }
 
-model LogData {
+model SessionLog {
   id        Int      @id @default(autoincrement())
   sessionId Int
   session   Session  @relation(fields: [sessionId], references: [id])
   time      DateTime @default(now())
   data      String // json
+}
+
+model DeviceLog {
+  id       Int      @id @default(autoincrement())
+  deviceId Int
+  device   Device   @relation(fields: [deviceId], references: [id])
+  time     DateTime @default(now())
+  data     String // json
 }

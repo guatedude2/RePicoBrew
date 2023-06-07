@@ -25,6 +25,8 @@ CREATE TABLE "Device" (
     "state" INTEGER NOT NULL DEFAULT 0,
     "ipAddress" TEXT,
     "firmwareVersion" TEXT,
+    "sessionCount" INTEGER NOT NULL DEFAULT 0,
+    "lastDeepCleanSession" INTEGER,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" DATETIME
@@ -68,12 +70,21 @@ CREATE TABLE "Session" (
 );
 
 -- CreateTable
-CREATE TABLE "LogData" (
+CREATE TABLE "SessionLog" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "sessionId" INTEGER NOT NULL,
     "time" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "data" TEXT NOT NULL,
-    CONSTRAINT "LogData_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "SessionLog_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "DeviceLog" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "deviceId" INTEGER NOT NULL,
+    "time" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "data" TEXT NOT NULL,
+    CONSTRAINT "DeviceLog_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateIndex

@@ -1,0 +1,33 @@
+import type { LoaderArgs } from '@remix-run/node';
+import { z } from 'zod';
+import { ConfigRepository } from '~/repositories/config.server';
+import { DeviceRepository, DeviceType } from '~/repositories/device.server';
+
+const bodyValidator = z.object({
+  uid: z.string(),
+});
+
+export const loader = async ({ request }: LoaderArgs) => {
+  const body = bodyValidator.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
+  if (!body.success) {
+    throw new Response(`Action payload error: ${JSON.stringify(body.error.flatten().fieldErrors)}`, { status: 400 });
+  }
+
+  const device = await DeviceRepository.getDeviceByUID(body.data.uid);
+  if (!device) {
+    return new Response(`##\r\n`);
+  }
+
+  // get max sessions to deep clean from config based on device type
+  const maxSessions = await ConfigRepository.getDeviceSessionsToDeepClean(DeviceType.PICOBREW_C);
+  const lastDeepClean = device.lastDeepCleanSession ?? 0;
+
+  // check if cleaning is needed
+  const needsCleaning = maxSessions ? device.sessionCount >= lastDeepClean + maxSessions : false;
+  console.log(device.sessionCount, lastDeepClean, maxSessions);
+  if (needsCleaning) {
+    return new Response(`#7#\r\n`);
+  }
+
+  return new Response(`##\r\n`);
+};

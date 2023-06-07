@@ -1,4 +1,6 @@
-# Welcome to Remix!
+# RePicoBrew
+
+A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github.com/chiefwigms/picobrew_pico) written in TypeScript and improved UX using React + Material UI.
 
 - [Remix Docs](https://remix.run/docs)
 

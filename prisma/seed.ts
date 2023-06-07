@@ -20,6 +20,14 @@ async function main() {
       }),
     },
   });
+  await prisma.config.create({
+    data: {
+      key: 'DEVICE_MAX_SESSIONS_TO_DEEPCLEAN',
+      value: JSON.stringify({
+        PICOBREW_C: 3,
+      }),
+    },
+  });
 
   await prisma.recipe.create({
     data: {
@@ -106,6 +114,15 @@ async function main() {
           },
         ],
       },
+    },
+  });
+
+  // TODO: remove mock device and data
+  await prisma.device.create({
+    data: {
+      name: 'PicoBrew Kitchen',
+      uid: '5c11b9a5b047159662038ea2261bf2e4',
+      deviceType: 'PICOBREW_C',
     },
   });
 
