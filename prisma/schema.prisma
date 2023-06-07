@@ -47,15 +47,18 @@ model Device {
 }
 
 model Recipe {
-  id         Int          @id @default(autoincrement())
-  uid        String       @unique
+  id         Int       @id @default(autoincrement())
   deviceType String //enum
   name       String
   abv        Float
   ibu        Float
   image      String
   notes      String
-  steps      RecipeStep[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  deletedAt  DateTime?
+
+  steps RecipeStep[]
 }
 
 model RecipeStep {

@@ -41,7 +41,10 @@ CREATE TABLE "Recipe" (
     "abv" REAL NOT NULL,
     "ibu" REAL NOT NULL,
     "image" TEXT NOT NULL,
-    "notes" TEXT NOT NULL
+    "notes" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" DATETIME
 );
 
 -- CreateTable

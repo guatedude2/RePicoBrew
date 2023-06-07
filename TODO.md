@@ -3,6 +3,7 @@
 ## Phase 1 (PicoBrew C only)
 
 [ ] implement Pico API
+[ ] add API docs
 [ ] Add Material UI + i18Next
 [ ] Create design
 [ ] Add login page

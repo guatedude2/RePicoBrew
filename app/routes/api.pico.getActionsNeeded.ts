@@ -24,7 +24,6 @@ export const loader = async ({ request }: LoaderArgs) => {
 
   // check if cleaning is needed
   const needsCleaning = maxSessions ? device.sessionCount >= lastDeepClean + maxSessions : false;
-  console.log(device.sessionCount, lastDeepClean, maxSessions);
   if (needsCleaning) {
     return new Response(`#7#\r\n`);
   }
