@@ -39,11 +39,25 @@ CREATE TABLE "Recipe" (
     "name" TEXT NOT NULL,
     "abv" REAL NOT NULL,
     "ibu" REAL NOT NULL,
+    "style" TEXT,
+    "og" REAL,
+    "fg" REAL,
+    "colorSRM" INTEGER,
+    "fermentDays" INTEGER,
     "image" TEXT NOT NULL,
-    "notes" TEXT NOT NULL,
+    "notes" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "RecipeIngredient" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" TEXT NOT NULL,
+    "type" INTEGER NOT NULL,
+    "amount" REAL NOT NULL,
+    "unit" TEXT NOT NULL
 );
 
 -- CreateTable
@@ -78,6 +92,7 @@ CREATE TABLE "Session" (
 CREATE TABLE "SessionLog" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "sessionId" INTEGER NOT NULL,
+    "type" INTEGER NOT NULL,
     "time" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "data" TEXT NOT NULL,
     CONSTRAINT "SessionLog_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
@@ -92,6 +107,14 @@ CREATE TABLE "DeviceLog" (
     CONSTRAINT "DeviceLog_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "_RecipeToRecipeIngredient" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+    CONSTRAINT "_RecipeToRecipeIngredient_A_fkey" FOREIGN KEY ("A") REFERENCES "Recipe" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "_RecipeToRecipeIngredient_B_fkey" FOREIGN KEY ("B") REFERENCES "RecipeIngredient" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -100,3 +123,9 @@ CREATE UNIQUE INDEX "Device_uid_key" ON "Device"("uid");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Session_uid_key" ON "Session"("uid");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "_RecipeToRecipeIngredient_AB_unique" ON "_RecipeToRecipeIngredient"("A", "B");
+
+-- CreateIndex
+CREATE INDEX "_RecipeToRecipeIngredient_B_index" ON "_RecipeToRecipeIngredient"("B");

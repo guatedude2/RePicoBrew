@@ -45,19 +45,35 @@ model Device {
 }
 
 model Recipe {
-  id         Int       @id @default(autoincrement())
-  deviceType String //enum
-  name       String
-  abv        Float
-  ibu        Float
-  image      String
-  notes      String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @default(now()) @updatedAt
-  deletedAt  DateTime?
+  id          Int       @id @default(autoincrement())
+  deviceType  String //enum
+  name        String
+  abv         Float
+  ibu         Float
+  style       String? //https://www.bjcp.org/beer-styles/beer-style-guidelines/
+  og          Float?
+  fg          Float?
+  colorSRM    Int? //https://www.twobeerdudes.com/index.php/beer/srm
+  fermentDays Int? //days
+  image       String
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  deletedAt   DateTime?
 
-  steps   RecipeStep[]
-  Session Session[]
+  steps       RecipeStep[]
+  session     Session[]
+  ingredients RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id     Int    @id @default(autoincrement())
+  name   String
+  type   Int //enum (GRAIN,HOP,YEAST,FLAVORING)
+  amount Float
+  unit   String //enum
+
+  recipes Recipe[]
 }
 
 model RecipeStep {
@@ -93,6 +109,7 @@ model SessionLog {
   id        Int      @id @default(autoincrement())
   sessionId Int
   session   Session  @relation(fields: [sessionId], references: [id])
+  type      Int // 0 = Brew log, 1 = Ferment log
   time      DateTime @default(now())
   data      String // json
 }
