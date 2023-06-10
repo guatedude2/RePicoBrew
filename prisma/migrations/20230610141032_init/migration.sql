@@ -55,9 +55,11 @@ CREATE TABLE "Recipe" (
 CREATE TABLE "RecipeIngredient" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "name" TEXT NOT NULL,
+    "location" INTEGER,
     "type" INTEGER NOT NULL,
     "amount" REAL NOT NULL,
-    "unit" TEXT NOT NULL
+    "unit" TEXT NOT NULL,
+    "note" TEXT
 );
 
 -- CreateTable
@@ -66,7 +68,7 @@ CREATE TABLE "RecipeStep" (
     "recipeId" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "drainTime" INTEGER NOT NULL,
-    "location" TEXT NOT NULL,
+    "location" INTEGER NOT NULL,
     "stepTime" INTEGER NOT NULL,
     "temperature" INTEGER NOT NULL,
     CONSTRAINT "RecipeStep_recipeId_fkey" FOREIGN KEY ("recipeId") REFERENCES "Recipe" ("id") ON DELETE RESTRICT ON UPDATE CASCADE

@@ -67,11 +67,13 @@ model Recipe {
 }
 
 model RecipeIngredient {
-  id     Int    @id @default(autoincrement())
-  name   String
-  type   Int //enum (GRAIN,HOP,YEAST,FLAVORING)
-  amount Float
-  unit   String //enum
+  id       Int     @id @default(autoincrement())
+  name     String
+  location Int? // enum
+  type     Int //enum (0=GRAIN,1=HOP,2=YEAST,3=OTHER)
+  amount   Float
+  unit     String //enum
+  note     String?
 
   recipes Recipe[]
 }
@@ -81,7 +83,7 @@ model RecipeStep {
   recipeId    Int
   name        String
   drainTime   Int
-  location    String // enum
+  location    Int // enum
   stepTime    Int
   temperature Int
 
