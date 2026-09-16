@@ -1,7 +1,7 @@
 import { Icon } from '@chakra-ui/react';
 import { GiCookingPot } from 'react-icons/gi';
 import { IoIosBeer, IoMdSettings } from 'react-icons/io';
-import { MdSpaceDashboard } from 'react-icons/md';
+import { MdSpaceDashboard, MdScience } from 'react-icons/md';
 
 export interface NavItem {
   name: string;
@@ -15,6 +15,11 @@ const routes: NavItem[] = [
     name: 'Dashboard',
     path: '/dashboard',
     icon: <Icon as={MdSpaceDashboard} width="20px" height="20px" color="inherit" />,
+  },
+  {
+    name: 'Fermentation',
+    path: '/fermentation',
+    icon: <Icon as={MdScience} width="20px" height="20px" color="inherit" />,
   },
   {
     name: 'Sessions',

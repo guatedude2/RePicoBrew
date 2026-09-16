@@ -1,0 +1,23 @@
+[Unit]
+Description=Tilt BLE Scanner for RePicoBrew
+After=network.target bluetooth.target repicobrew.service
+Requires=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/RePicoBrew
+Environment="NODE_ENV=production"
+Environment="PATH=/home/pi/.local/share/pnpm:/home/pi/.nvm/versions/node/v18.16.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/usr/bin/node --loader tsx workers/tilt-ble.ts
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Bluetooth permissions
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

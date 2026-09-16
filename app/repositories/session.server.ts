@@ -2,11 +2,12 @@ import prisma from '~/services/prisma.server';
 
 export type SessionLogData = any;
 
-// 0 = Brewing, 1 = Deep Clean, 2 = Sous Vide
+// 0 = Brewing, 1 = Deep Clean, 2 = Sous Vide, 3 = Fermentation
 export enum SessionType {
   BREWING = 0,
   DEEP_CLEAN = 1,
   SOUS_VIDE = 2,
+  FERMENTATION = 3,
   COLD_BREW = 4,
   MANUAL_BREW = 5,
 }
@@ -105,6 +106,33 @@ export class SessionRepository {
   public static async createSessionLogEntry(sessionId: number, data: SessionLogData, type = 0) {
     return await prisma.sessionLog.create({
       data: { sessionId, type, data: JSON.stringify(data) },
+    });
+  }
+
+  public static async getSessionById(id: number) {
+    return await prisma.session.findUnique({
+      where: { id },
+      include: { device: true, recipe: true },
+    });
+  }
+
+  public static async startSession(id: number) {
+    return await prisma.session.update({
+      where: { id },
+      data: {
+        state: SessionState.IN_PROGRESS,
+        statusText: 'Fermenting',
+      },
+    });
+  }
+
+  public static async completeSession(id: number) {
+    return await prisma.session.update({
+      where: { id },
+      data: {
+        state: SessionState.COMPLETED,
+        statusText: 'Completed',
+      },
     });
   }
 

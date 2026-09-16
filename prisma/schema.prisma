@@ -36,6 +36,8 @@ model Device {
   firmwareVersion      String?
   sessionCount         Int       @default(0)
   lastDeepCleanSession Int?
+  color                String? // For Tilt hydrometers: Red, Green, Black, Purple, Orange, Blue, Yellow, Pink
+  metadata             String? // JSON for additional device-specific data
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @default(now()) @updatedAt
   deletedAt            DateTime?

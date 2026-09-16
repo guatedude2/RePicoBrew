@@ -41,7 +41,10 @@ type Device = {
   ipAddress: string | null;
   firmwareVersion: string | null;
   sessionCount: number;
+  color: string | null; // Tilt color
+  metadata: string | null; // JSON string
   createdAt: string;
+  updatedAt: string;
   _count: {
     sessions: number;
   };
@@ -50,6 +53,23 @@ type Device = {
 interface DevicesCardProps {
   devices: Device[];
 }
+
+const getTiltColorScheme = (color: string | null): string => {
+  if (!color) {
+    return 'gray';
+  }
+  const colorMap: Record<string, string> = {
+    Red: 'red',
+    Green: 'green',
+    Black: 'gray',
+    Purple: 'purple',
+    Orange: 'orange',
+    Blue: 'blue',
+    Yellow: 'yellow',
+    Pink: 'pink',
+  };
+  return colorMap[color] || 'gray';
+};
 
 const getStateLabel = (state: number): { label: string; color: string } => {
   switch (state) {
@@ -120,7 +140,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
           </Flex>
 
           <Text mb={4} color="secondaryGray.600">
-            Manage your PicoBrew devices. New devices must be approved before they can brew.
+            Manage your PicoBrew and Tilt devices. New devices must be approved before use.
           </Text>
 
           {devices.length === 0 ? (
@@ -128,7 +148,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
               <Icon as={MdDevices} w={12} h={12} color="gray.400" mb={4} />
               <Text color="secondaryGray.600">No devices registered yet</Text>
               <Text fontSize="sm" color="secondaryGray.500" mt={2}>
-                Power on your Pico and connect it to the PICOBREW WiFi network
+                Power on your Pico or Tilt and connect to the network
               </Text>
             </Flex>
           ) : (
@@ -139,8 +159,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
                     <Th borderColor={borderColor}>Name</Th>
                     <Th borderColor={borderColor}>Type</Th>
                     <Th borderColor={borderColor}>Status</Th>
-                    <Th borderColor={borderColor}>IP Address</Th>
-                    <Th borderColor={borderColor}>Firmware</Th>
+                    <Th borderColor={borderColor}>Details</Th>
                     <Th borderColor={borderColor}>Sessions</Th>
                     <Th borderColor={borderColor}>UID</Th>
                   </Tr>
@@ -148,12 +167,27 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
                 <Tbody>
                   {devices.map((device) => {
                     const stateInfo = getStateLabel(device.state);
+                    const isTilt = device.deviceType === 'TILT';
+                    let metadata: any = {};
+                    try {
+                      metadata = device.metadata ? JSON.parse(device.metadata) : {};
+                    } catch (e) {
+                      // Ignore
+                    }
+
                     return (
                       <Tr key={device.id}>
                         <Td borderColor={borderColor}>
-                          <Text color={textColor} fontSize="sm" fontWeight="700">
-                            {device.name}
-                          </Text>
+                          <HStack>
+                            <Text color={textColor} fontSize="sm" fontWeight="700">
+                              {device.name}
+                            </Text>
+                            {isTilt && device.color && (
+                              <Badge colorScheme={getTiltColorScheme(device.color)} fontSize="xs">
+                                {device.color}
+                              </Badge>
+                            )}
+                          </HStack>
                         </Td>
                         <Td borderColor={borderColor}>
                           <Text color={textColor} fontSize="sm">
@@ -161,17 +195,36 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
                           </Text>
                         </Td>
                         <Td borderColor={borderColor}>
-                          <Badge colorScheme={stateInfo.color}>{stateInfo.label}</Badge>
+                          {isTilt ? (
+                            <Badge colorScheme="green">Active</Badge>
+                          ) : (
+                            <Badge colorScheme={stateInfo.color}>{stateInfo.label}</Badge>
+                          )}
                         </Td>
                         <Td borderColor={borderColor}>
-                          <Text color={textColor} fontSize="sm">
-                            {device.ipAddress || '-'}
-                          </Text>
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          <Text color={textColor} fontSize="sm">
-                            {device.firmwareVersion || '-'}
-                          </Text>
+                          {isTilt ? (
+                            <VStack align="start" spacing={0}>
+                              {metadata.rssi !== undefined && (
+                                <Text color={textColor} fontSize="xs">
+                                  RSSI: {metadata.rssi} dBm
+                                </Text>
+                              )}
+                              {metadata.lastSeen && (
+                                <Text color="secondaryGray.600" fontSize="xs">
+                                  {new Date(metadata.lastSeen).toLocaleString()}
+                                </Text>
+                              )}
+                            </VStack>
+                          ) : (
+                            <VStack align="start" spacing={0}>
+                              <Text color={textColor} fontSize="xs">
+                                {device.ipAddress || '-'}
+                              </Text>
+                              <Text color="secondaryGray.600" fontSize="xs">
+                                {device.firmwareVersion || '-'}
+                              </Text>
+                            </VStack>
+                          )}
                         </Td>
                         <Td borderColor={borderColor}>
                           <Text color={textColor} fontSize="sm">

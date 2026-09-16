@@ -61,17 +61,50 @@ export default function SessionDetailPage() {
     const timestamps: string[] = [];
     const wortData: number[] = [];
     const thermData: number[] = [];
+    const gravityData: number[] = [];
+    const tempData: number[] = [];
+
+    const isFermentation = session.type === 3; // SessionType.FERMENTATION
 
     logs.forEach((log) => {
       try {
         const data = JSON.parse(log.data);
-        timestamps.push(new Date(log.time).toLocaleTimeString());
-        wortData.push(data.wort || 0);
-        thermData.push(data.therm || 0);
+        timestamps.push(new Date(log.time).toLocaleString());
+
+        if (isFermentation) {
+          // Fermentation logs: gravity and temp
+          gravityData.push(data.gravity || 0);
+          tempData.push(data.temp || 0);
+        } else {
+          // Brew logs: wort and therm
+          wortData.push(data.wort || 0);
+          thermData.push(data.therm || 0);
+        }
       } catch (e) {
         // Skip invalid log entries
       }
     });
+
+    if (isFermentation) {
+      return {
+        labels: timestamps,
+        datasets: [
+          {
+            label: 'Temperature (°F)',
+            data: tempData,
+            borderColor: '#F6AD55',
+            backgroundColor: 'rgba(246, 173, 85, 0.1)',
+          },
+          {
+            label: 'Specific Gravity',
+            data: gravityData,
+            borderColor: '#4299E1',
+            backgroundColor: 'rgba(66, 153, 225, 0.1)',
+            yAxisID: 'y1',
+          },
+        ],
+      };
+    }
 
     return {
       labels: timestamps,
@@ -90,7 +123,7 @@ export default function SessionDetailPage() {
         },
       ],
     };
-  }, [logs]);
+  }, [logs, session.type]);
 
   // Extract events from logs
   const events = useMemo(() => {
@@ -126,7 +159,7 @@ export default function SessionDetailPage() {
               />
               <VStack align="start" spacing={1}>
                 <Text fontSize="xl" fontWeight="700" color={textColor}>
-                  {session.recipe?.name || 'Custom Brew'}
+                  {session.type === 3 ? `${session.device?.name} Fermentation` : session.recipe?.name || 'Custom Brew'}
                 </Text>
                 <HStack>
                   <Badge colorScheme={getStateColor(session.state)}>
@@ -186,7 +219,7 @@ export default function SessionDetailPage() {
           <HStack mb={4}>
             <Icon as={MdThermostat} w={6} h={6} color="brand.500" />
             <Text fontSize="xl" fontWeight="700" color={textColor}>
-              Temperature Graph
+              {session.type === 3 ? 'Fermentation Progress' : 'Temperature Graph'}
             </Text>
           </HStack>
 
@@ -195,7 +228,9 @@ export default function SessionDetailPage() {
               <LineChart chartData={chartData} chartOptions={{}} />
             ) : (
               <Flex w="100%" h="100%" justify="center" align="center">
-                <Text color="secondaryGray.600">No temperature data available</Text>
+                <Text color="secondaryGray.600">
+                  {session.type === 3 ? 'No fermentation data available' : 'No temperature data available'}
+                </Text>
               </Flex>
             )}
           </Box>
@@ -205,7 +240,7 @@ export default function SessionDetailPage() {
       <Card alignItems="center" flexDirection="column" w="100%">
         <Flex direction="column" alignItems="flex-start" w="100%" px="15px" py="10px">
           <Text fontSize="xl" fontWeight="700" color={textColor} mb={4}>
-            Brew Timeline
+            {session.type === 3 ? 'Fermentation Timeline' : 'Brew Timeline'}
           </Text>
 
           <VStack w="100%" align="stretch" spacing={3}>

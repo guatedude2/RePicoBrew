@@ -5,3 +5,4 @@ node_modules
 /public/build
 .env
 pnpm-debug.log*
+.pnpm-store/**

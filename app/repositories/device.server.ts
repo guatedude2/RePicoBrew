@@ -3,15 +3,27 @@ import type { DeviceLogData, DeviceState } from '~/types';
 import { DeviceType } from '~/types';
 
 export class DeviceRepository {
-  public static async createDevice(uid: string, name: string, deviceType: DeviceType = DeviceType.PICOBREW_C) {
+  public static async createDevice(
+    uid: string,
+    name: string,
+    deviceType: DeviceType = DeviceType.PICOBREW_C,
+    options?: { color?: string; metadata?: Record<string, unknown> },
+  ) {
     return await prisma.device.create({
       data: {
         uid,
         name,
         deviceType,
         state: 0,
+        color: options?.color,
+        metadata: options?.metadata ? JSON.stringify(options.metadata) : null,
       },
     });
+  }
+
+  public static async createTiltDevice(uid: string, color: string, alias?: string) {
+    const name = alias || `Tilt ${color}`;
+    return await this.createDevice(uid, name, DeviceType.TILT, { color });
   }
 
   public static async listDevices() {
@@ -48,6 +60,18 @@ export class DeviceRepository {
 
   public static async updateDeviceDeepCleanSession(id: number, lastDeepCleanSession: number) {
     return await prisma.device.update({ where: { id }, data: { lastDeepCleanSession } });
+  }
+
+  public static async updateDeviceColor(id: number, color: string) {
+    return await prisma.device.update({ where: { id }, data: { color } });
+  }
+
+  public static async updateDeviceMetadata(id: number, metadata: Record<string, unknown>) {
+    return await prisma.device.update({ where: { id }, data: { metadata: JSON.stringify(metadata) } });
+  }
+
+  public static async updateDeviceName(id: number, name: string) {
+    return await prisma.device.update({ where: { id }, data: { name } });
   }
 
   public static async createDeviceLog(deviceId: number, data: DeviceLogData) {

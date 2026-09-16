@@ -318,7 +318,185 @@ sudo apt install -y iptables-persistent
 sudo netfilter-persistent save
 ```
 
-## End-to-End Verification Checklist
+---
+
+## Phase 2: Tilt Hydrometer Support (Bluetooth)
+
+### Overview
+
+RePicoBrew can monitor Tilt wireless hydrometers during fermentation using Bluetooth Low Energy (BLE) on the Raspberry Pi.
+
+**Supported Tilt colors:** Red, Green, Black, Purple, Orange, Blue, Yellow, Pink
+
+### Prerequisites
+
+- Raspberry Pi with Bluetooth support (Pi 3, 4, 5, or Zero W)
+- Tilt Hydrometer (any color)
+- Bluetooth enabled on the Pi
+
+### 1. Enable Bluetooth
+
+```bash
+# Check Bluetooth status
+sudo systemctl status bluetooth
+
+# Enable if not already running
+sudo systemctl enable bluetooth
+sudo systemctl start bluetooth
+
+# Verify Bluetooth adapter
+hciconfig
+# Should show hci0 in UP RUNNING state
+```
+
+### 2. Install Noble Dependencies
+
+```bash
+# Install required system libraries for BLE
+sudo apt install -y bluetooth bluez libbluetooth-dev libudev-dev
+
+# Grant Node.js BLE permissions (avoids running as root)
+sudo setcap cap_net_raw+eip $(eval readlink -f `which node`)
+```
+
+### 3. Install Node.js Dependencies
+
+The `@stoprocent/noble` package is already in `package.json`. Reinstall if needed:
+
+```bash
+cd /home/pi/RePicoBrew
+pnpm install
+```
+
+### 4. Setup Tilt BLE Worker Service
+
+Create a systemd service for the Tilt BLE scanner:
+
+```bash
+# Copy service file
+sudo cp scripts/tilt-ble.service /etc/systemd/system/
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable auto-start on boot
+sudo systemctl enable tilt-ble
+
+# Start service
+sudo systemctl start tilt-ble
+
+# Check status
+sudo systemctl status tilt-ble
+
+# View logs
+sudo journalctl -u tilt-ble -f
+```
+
+### 5. Verify Tilt Detection
+
+Power on your Tilt hydrometer (place in water or beer) and check the logs:
+
+```bash
+sudo journalctl -u tilt-ble -f
+```
+
+Expected output:
+
+```
+[Tilt BLE] Starting BLE scan for Tilt hydrometers...
+[Tilt BLE] Bluetooth state: poweredOn
+[Tilt BLE] Scan started. Waiting for Tilt devices...
+[Tilt BLE] Black: SG 1050, Temp 68.0°F, RSSI -67dBm
+```
+
+### 6. Register Tilt in UI
+
+1. Open RePicoBrew UI at `http://picobrew.com/` or `http://192.168.72.1/`
+2. Go to **Settings → Devices**
+3. Wait for Tilt to be auto-detected (check logs or wait for UI notification)
+4. Click **Add Device** if needed
+5. Enter Tilt UID (e.g., `BlackA1B2C3D4E5F6`) and alias (e.g., "Fermenter 1")
+6. Click **Approve Device**
+
+### 7. Start Fermentation Tracking
+
+1. Go to **Fermentation** page in the UI
+2. Select your Tilt from the dropdown
+3. Click **Start Tracking**
+4. Monitor live gravity and temperature updates
+5. Click **Stop Tracking** when fermentation is complete
+
+### 8. Alternative: HTTP POST Method (for Testing)
+
+If you prefer to use an external tool like [pytilt](https://github.com/rbauststfc/pytilt), you can POST readings directly to the API:
+
+```bash
+# Install pytilt on another device
+pip install pytilt
+
+# Configure to POST to RePicoBrew
+pytilt --device BlackTilt --url http://192.168.72.1/API/tilt --interval 60
+```
+
+RePicoBrew's `/API/tilt` endpoint accepts:
+
+```json
+[
+  {
+    "color": "Black",
+    "temp": 20.0,
+    "gravity": 1050,
+    "timestamp": "2024-01-01T00:00:00Z",
+    "uid": "BlackA1B2C3D4E5F6",
+    "rssi": -67
+  }
+]
+```
+
+**Note:** Temperature from pytilt is in Celsius and will be converted to Fahrenheit automatically.
+
+### Troubleshooting Tilt
+
+#### Tilt not detected
+
+```bash
+# Check Bluetooth is powered on
+sudo bluetoothctl
+# > power on
+# > scan on
+# Wait 30 seconds, you should see iBeacon advertisements
+
+# Check tilt-ble service is running
+sudo systemctl status tilt-ble
+
+# Check for permission errors
+sudo journalctl -u tilt-ble -f
+# If you see "Operation not permitted", run:
+sudo setcap cap_net_raw+eip $(eval readlink -f `which node`)
+sudo systemctl restart tilt-ble
+```
+
+#### Readings not appearing in UI
+
+- Verify a fermentation session is **started** (Tilt readings are only logged during active sessions)
+- Check SSE connection: Open browser console, look for `/api/events` connection
+- Check logs: `sudo journalctl -u tilt-ble -u repicobrew -f`
+
+#### Multiple Tilts
+
+- Each Tilt has a unique color/MAC UID
+- Register each one separately in Settings → Devices
+- Start separate fermentation sessions for each Tilt
+- The BLE worker scans for all colors simultaneously
+
+### Performance Notes
+
+- BLE scanning runs continuously in the background
+- Readings are throttled to every 5 seconds per Tilt to avoid spamming
+- RSSI (signal strength) is logged for debugging range issues
+- Noble may report "warning: unknown peripheral" for non-Tilt devices — this is normal
+
+---
 
 Use this checklist to verify the complete brew-and-track flow on your Raspberry Pi:
 

@@ -17,7 +17,7 @@ export enum DeviceType {
   // ZSERIES = 'ZSERIES',
   // PICOFERM = 'PICOFERM',
   // PICOSTILL_ISPINDEL = 'PICOSTILL_ISPINDEL',
-  // TILT = 'TILT',
+  TILT = 'TILT',
 }
 
 export enum DeviceLogType {

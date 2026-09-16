@@ -21,6 +21,8 @@ export const loader = ({ request }: LoaderArgs) => {
   wrapPubSubSignal(response, { topic: 'device-detected' });
   wrapPubSubSignal(response, { topic: 'device-state-update' });
   wrapPubSubSignal(response, { topic: 'session-update' });
+  wrapPubSubSignal(response, { topic: 'tilt-update' });
+  wrapPubSubSignal(response, { topic: 'tilt-seen' });
 
   return response;
 };
