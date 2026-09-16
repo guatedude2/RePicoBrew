@@ -1,7 +1,8 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceLogType, DeviceRepository, DeviceState } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
+import { DeviceLogType, DeviceState } from '~/types';
 
 const bodyValidator = z.object({
   picoUID: z.string(),

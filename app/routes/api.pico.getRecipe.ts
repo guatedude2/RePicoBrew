@@ -1,8 +1,10 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceLogType, DeviceRepository } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
 import { PicoLocationMap, RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
+import pubSub from '~/services/pubsub.server';
+import { DeviceLogType, DeviceState } from '~/types';
 import { getPakIdData } from '~/utils/pak';
 
 const DEFAULT_IMAGE =
@@ -62,10 +64,14 @@ export const loader = async ({ request }: LoaderArgs) => {
   const recipeHeader = `${recipe.name}/${body.data.ibu},${body.data.abv},${recipe.abv},${recipe.ibu}`;
   const recipeImage = `|${recipe.image ?? DEFAULT_IMAGE}|`;
 
+  pubSub.publish('device-state-update', { uid: body.data.uid, state: DeviceState.BREWING });
+
   return new Response(
     `#${recipeHeader},${recipe.steps.map(
       ({ temperature, stepTime, drainTime, location, name }) =>
-        `${temperature},${stepTime},${drainTime},${PicoLocationMap[location as keyof typeof PicoLocationMap]},${name}`,
+        `${temperature},${stepTime},${drainTime},${
+          PicoLocationMap[location as unknown as keyof typeof PicoLocationMap]
+        },${name}`,
     )},${recipeImage}#\r\n`,
   );
 };

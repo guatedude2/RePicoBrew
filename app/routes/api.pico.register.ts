@@ -1,8 +1,9 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { getClientIPAddress } from 'remix-utils';
 import { z } from 'zod';
-import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
+import { DeviceLogType, DeviceType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),

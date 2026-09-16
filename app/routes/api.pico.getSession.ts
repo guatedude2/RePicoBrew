@@ -1,8 +1,8 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceLogType, DeviceRepository } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository, SessionType } from '~/repositories/session.server';
-import { md5 } from '~/utils/encryption';
+import { DeviceLogType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -26,7 +26,7 @@ export const loader = async ({ request }: LoaderArgs) => {
   }
 
   // create a session
-  await SessionRepository.createSession(body.data.uid, body.data.sesType, device.id);
+  const session = await SessionRepository.createSession(body.data.uid, body.data.sesType, device.id);
 
   // log device session creation event
   await DeviceRepository.createDeviceLog(device.id, {
@@ -35,13 +35,13 @@ export const loader = async ({ request }: LoaderArgs) => {
   });
 
   if (body.data.sesType === SessionType.DEEP_CLEAN) {
-    // update the last deep clean based on session countc
+    // update the last deep clean based on session count
     await DeviceRepository.updateDeviceDeepCleanSession(device.id, device.sessionCount);
   } else {
     // record the session creation on the device
     await DeviceRepository.updateDeviceSessionCount(device.id, device.sessionCount + 1);
   }
 
-  // generates a unique id
-  return new Response(`#${md5(`${Math.random()}`).substring(0, 20)}#\r\n`);
+  // Return the actual session UID (not a random hash)
+  return new Response(`#${session.uid}#\r\n`);
 };

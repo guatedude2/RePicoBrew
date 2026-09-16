@@ -44,7 +44,42 @@ export class SessionRepository {
   }
 
   public static async getLastActiveSessionByDeviceId(deviceId: number) {
-    return await prisma.session.findFirst({ where: { deviceId } });
+    return await prisma.session.findFirst({
+      where: { deviceId },
+      orderBy: { updatedAt: 'desc' },
+      include: { device: true, recipe: true },
+    });
+  }
+
+  public static async listSessions(filters?: { deviceId?: number; state?: SessionState; limit?: number }) {
+    return await prisma.session.findMany({
+      where: {
+        ...(filters?.deviceId && { deviceId: filters.deviceId }),
+        ...(filters?.state !== undefined && { state: filters.state }),
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: filters?.limit || 100,
+      include: {
+        device: true,
+        recipe: true,
+        _count: {
+          select: { logs: true },
+        },
+      },
+    });
+  }
+
+  public static async listActiveSessions() {
+    return await prisma.session.findMany({
+      where: {
+        state: { in: [SessionState.READY, SessionState.IN_PROGRESS] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        device: true,
+        recipe: true,
+      },
+    });
   }
 
   public static async updateSessionState(
@@ -57,9 +92,26 @@ export class SessionRepository {
     return await prisma.session.update({ where: { id }, data: { type, state, statusText, timeRemaining } });
   }
 
-  public static async createSessionLogEntry(sessionId: number, data: SessionLogData) {
+  public static async cancelSession(id: number) {
+    return await prisma.session.update({
+      where: { id },
+      data: {
+        state: SessionState.CANCELED,
+        statusText: 'Canceled',
+      },
+    });
+  }
+
+  public static async createSessionLogEntry(sessionId: number, data: SessionLogData, type = 0) {
     return await prisma.sessionLog.create({
-      data: { sessionId, data: JSON.stringify(data) },
+      data: { sessionId, type, data: JSON.stringify(data) },
+    });
+  }
+
+  public static async listSessionLogs(sessionId: number) {
+    return await prisma.sessionLog.findMany({
+      where: { sessionId },
+      orderBy: { time: 'asc' },
     });
   }
 }

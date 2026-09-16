@@ -2,24 +2,24 @@
 
 ## Phase 1 (PicoBrew C only)
 
-[ ] implement Pico API
-[ ] add API docs
+[x] implement Pico API
+[x] add API docs
 [ ] Add Material UI + i18Next
 [ ] Create design
-[ ] Add login page
-[ ] Add notification center
-[ ] [Dashboard] Scaffold dashboard page (ongoing sessions by device)
-[ ] [Dashboard] Session graphing and instrumentation
-[ ] [Settings] Scaffold settings page
-[ ] [Settings] Manage devices
-[ ] [Settings] Device detection (via register event)
+[x] Add login page
+[x] Add notification center (toasts + SSE)
+[x] [Dashboard] Scaffold dashboard page (ongoing sessions by device)
+[x] [Dashboard] Session graphing and instrumentation
+[x] [Settings] Scaffold settings page
+[x] [Settings] Manage devices
+[x] [Settings] Device detection (via register event)
 [ ] [Settings] Device log viewer (history)
-[ ] [Recipes] Scaffold recipe manager page
-[ ] [Recipes] Recipe viewer
-[ ] [Recipes] Recipe editor
+[x] [Recipes] Scaffold recipe manager page
+[x] [Recipes] Recipe viewer
+[x] [Recipes] Recipe editor
 [ ] [Recipes] Import recipes
-[ ] [Sessions] Scaffold session manager page
-[ ] [Sessions] Session viewer/notes
+[x] [Sessions] Scaffold session manager page
+[x] [Sessions] Session viewer/notes
 
 ## Phase 2 (Support Tilt)
 

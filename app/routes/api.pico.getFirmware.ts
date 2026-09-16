@@ -4,7 +4,8 @@ import path from 'path';
 import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
-import { DeviceLogType, DeviceRepository, DeviceType } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
+import { DeviceLogType, DeviceType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),

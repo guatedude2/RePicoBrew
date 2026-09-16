@@ -1,46 +1,31 @@
 import prisma from '~/services/prisma.server';
-import type { SessionType } from './session.server';
-
-export enum DeviceState {
-  READY = 2,
-  BREWING = 3,
-  SOUS_VIDE = 4,
-  RACK_BEER = 5,
-  RINSE = 6,
-  DEEP_CLEAN = 7,
-  DE_SCALE = 9,
-}
-
-export enum DeviceType {
-  PICOBREW_C = 'PICOBREW_C',
-  // PICOBREW_PRO_S = 'PICOBREW_PRO_S',
-  // ZYMATIC = 'ZYMATIC',
-  // ZSERIES = 'ZSERIES',
-  // PICOFERM = 'PICOFERM',
-  // PICOSTILL_ISPINDEL = 'PICOSTILL_ISPINDEL',
-  // TILT = 'TILT',
-}
-
-export enum DeviceLogType {
-  ERROR = 'ERROR',
-  REGISTER = 'REGISTER',
-  STATE_CHANGE = 'STATE_CHANGE',
-  SESSION_CREATED = 'SESSION_CREATED',
-  FIRMWARE_UPDATE_WARNING = 'FIRMWARE_UPDATE_WARNING',
-  FIRMWARE_UPDATED = 'FIRMWARE_UPDATED',
-  DEEP_CLEAN_WARNING = 'DEEP_CLEAN_WARNING',
-}
-
-export type DeviceLogData =
-  | { type: DeviceLogType.ERROR; errorCode: number; sessionUID?: string }
-  | { type: DeviceLogType.REGISTER; ip: string | null }
-  | { type: DeviceLogType.STATE_CHANGE; state: DeviceState }
-  | { type: DeviceLogType.SESSION_CREATED; sesType: SessionType }
-  | { type: DeviceLogType.FIRMWARE_UPDATE_WARNING; current: string | null; to: string }
-  | { type: DeviceLogType.FIRMWARE_UPDATED; from: string | null; to: string }
-  | { type: DeviceLogType.DEEP_CLEAN_WARNING; sesOverCount: number };
+import type { DeviceLogData, DeviceState } from '~/types';
+import { DeviceType } from '~/types';
 
 export class DeviceRepository {
+  public static async createDevice(uid: string, name: string, deviceType: DeviceType = DeviceType.PICOBREW_C) {
+    return await prisma.device.create({
+      data: {
+        uid,
+        name,
+        deviceType,
+        state: 0,
+      },
+    });
+  }
+
+  public static async listDevices() {
+    return await prisma.device.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { sessions: true },
+        },
+      },
+    });
+  }
+
   public static async getDeviceByUID(uid: string) {
     return await prisma.device.findFirst({ where: { uid } });
   }
@@ -67,5 +52,13 @@ export class DeviceRepository {
 
   public static async createDeviceLog(deviceId: number, data: DeviceLogData) {
     return await prisma.deviceLog.create({ data: { deviceId, data: JSON.stringify(data) } });
+  }
+
+  public static async listDeviceLogs(deviceId: number, limit = 50) {
+    return await prisma.deviceLog.findMany({
+      where: { deviceId },
+      orderBy: { time: 'desc' },
+      take: limit,
+    });
   }
 }

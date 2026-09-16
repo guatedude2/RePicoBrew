@@ -1,3 +1,4 @@
+/* eslint-disable no-var */
 import { EventEmitter } from 'node:events';
 
 class PubSub {
@@ -21,4 +22,19 @@ class PubSub {
   }
 }
 
-export default new PubSub();
+let pubSub: PubSub;
+
+declare global {
+  var __pubSub: PubSub | undefined;
+}
+
+if (process.env.NODE_ENV === 'production') {
+  pubSub = new PubSub();
+} else {
+  if (!global.__pubSub) {
+    global.__pubSub = new PubSub();
+  }
+  pubSub = global.__pubSub;
+}
+
+export default pubSub;

@@ -1,7 +1,9 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
-import { DeviceRepository, DeviceState } from '~/repositories/device.server';
+import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
+import { pubSub } from '~/services/pubsub.server';
+import { DeviceState } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -41,14 +43,22 @@ export const loader = async ({ request }: LoaderArgs) => {
     return new Response(`\r\n`);
   }
 
+  // Check if brew is complete (step contains "complete")
+  const isComplete = body.data.step.toLowerCase().includes('complete');
+  const sessionState = isComplete ? SessionState.COMPLETED : SessionState.IN_PROGRESS;
+
   // update device state
-  await DeviceRepository.updateDeviceState(session.deviceId, getStateFromType(body.data.sesType));
+  if (isComplete) {
+    await DeviceRepository.updateDeviceState(session.deviceId, DeviceState.READY);
+  } else {
+    await DeviceRepository.updateDeviceState(session.deviceId, getStateFromType(body.data.sesType));
+  }
 
   // update the session status
   await SessionRepository.updateSessionState(
     session.id,
     body.data.sesType,
-    SessionState.IN_PROGRESS,
+    sessionState,
     body.data.step,
     body.data.timeLeft,
   );
@@ -57,9 +67,25 @@ export const loader = async ({ request }: LoaderArgs) => {
   await SessionRepository.createSessionLogEntry(session.id, {
     wort: body.data.wort,
     therm: body.data.therm,
+    step: body.data.step,
     event: body.data.event,
     error: body.data.error,
+    timeLeft: body.data.timeLeft,
     shutScale: body.data.shutScale,
+  });
+
+  // Publish session update event for live UI
+  pubSub.publish('session-update', {
+    sessionId: session.id,
+    sessionUid: session.uid,
+    deviceId: session.deviceId,
+    state: sessionState,
+    step: body.data.step,
+    event: body.data.event,
+    wort: body.data.wort,
+    therm: body.data.therm,
+    timeLeft: body.data.timeLeft,
+    isComplete,
   });
 
   return new Response(`\r\n`);
