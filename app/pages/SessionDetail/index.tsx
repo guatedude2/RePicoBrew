@@ -84,6 +84,9 @@ const fermentationTypeLabel = (t: number | null | undefined) => {
 };
 
 type ApexChartContext = {
+  el?: {
+    querySelector?: (selector: string) => Element | null;
+  };
   w?: {
     globals?: {
       gridWidth?: number;

@@ -1,7 +1,7 @@
 import type { AlertStatus } from '@chakra-ui/react';
 import { Flex, Portal } from '@chakra-ui/react';
 import { createContext, useEffect } from 'react';
-import type { Dispatch, PropsWithChildren, type FC } from 'react';
+import type { Dispatch, FC, PropsWithChildren } from 'react';
 import type { AnyAction, PayloadAction } from '~/utils/use-tiny-reducer';
 import { createTinyReducer, useTinyReducer } from '~/utils/use-tiny-reducer';
 import { ToastAlert } from './ToastAlert';

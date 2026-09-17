@@ -1,11 +1,13 @@
 {
   "include": ["app/env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["scripts/**"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2019"],
     "types": ["vite/client"],
     "isolatedModules": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",
+    "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "target": "ES2019",

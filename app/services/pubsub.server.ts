@@ -11,13 +11,12 @@ class PubSub {
     this._eventEmitter.emit(topic, data);
   }
 
-  public subscribe<T = unknown>(topic: string, callback: (data: T) => void) {
-    const callbackWrapper = (data: T) => callback(data);
-    this._eventEmitter.addListener(topic, callbackWrapper);
-    return callbackWrapper;
+  public subscribe(topic: string, callback: (data: unknown) => void) {
+    this._eventEmitter.addListener(topic, callback);
+    return callback;
   }
 
-  public unsubscribe(topic: string, callback: (data: string) => void) {
+  public unsubscribe(topic: string, callback: (data: unknown) => void) {
     this._eventEmitter.removeListener(topic, callback);
   }
 }

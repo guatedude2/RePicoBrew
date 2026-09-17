@@ -4,12 +4,15 @@ import { ServerSideResponse } from '~/utils/sse';
 
 const wrapPubSubSignal = <T = unknown>(
   response: ServerSideResponse,
-  options: { topic: string; eventName?: string; middleware?: (data: T) => T },
+  options: { topic: string; eventName?: string; middleware?: (data: T) => T | Promise<T> },
 ) => {
-  const subId = pubsub.subscribe(options.topic, async (data) => {
+  const onEvent = async (data: unknown) => {
     console.log('PUB');
-    response.send(options.eventName ?? options.topic, options.middleware ? await options.middleware(data) : data);
-  });
+    const typed = data as T;
+    const payload = options.middleware ? await options.middleware(typed) : typed;
+    response.send(options.eventName ?? options.topic, payload);
+  };
+  const subId = pubsub.subscribe(options.topic, onEvent);
   response.signal.addEventListener('abort', () => {
     pubsub.unsubscribe(options.topic, subId);
   });
