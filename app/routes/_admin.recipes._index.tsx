@@ -18,6 +18,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Portal,
   Text,
 } from '@chakra-ui/react';
 import { useState, type FC } from 'react';
@@ -129,23 +130,25 @@ const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void 
             variant="ghost"
             size="sm"
           />
-          <MenuList>
-            <MenuItem icon={<Icon as={MdEdit} />} onClick={() => navigate(`/recipes/${recipe.id}`)}>
-              Edit
-            </MenuItem>
-            <MenuItem
-              icon={<Icon as={MdContentCopy} />}
-              isDisabled={duplicateFetcher.state !== 'idle'}
-              onClick={() =>
-                duplicateFetcher.submit({ intent: 'duplicate', id: String(recipe.id) }, { method: 'post' })
-              }
-            >
-              Duplicate
-            </MenuItem>
-            <MenuItem icon={<Icon as={MdDelete} />} color="danger.500" onClick={() => onRequestDelete(recipe)}>
-              Delete
-            </MenuItem>
-          </MenuList>
+          <Portal>
+            <MenuList>
+              <MenuItem icon={<Icon as={MdEdit} />} onClick={() => navigate(`/recipes/${recipe.id}`)}>
+                Edit
+              </MenuItem>
+              <MenuItem
+                icon={<Icon as={MdContentCopy} />}
+                isDisabled={duplicateFetcher.state !== 'idle'}
+                onClick={() =>
+                  duplicateFetcher.submit({ intent: 'duplicate', id: String(recipe.id) }, { method: 'post' })
+                }
+              >
+                Duplicate
+              </MenuItem>
+              <MenuItem icon={<Icon as={MdDelete} />} color="danger.500" onClick={() => onRequestDelete(recipe)}>
+                Delete
+              </MenuItem>
+            </MenuList>
+          </Portal>
         </Menu>
       </Flex>
     </Grid>

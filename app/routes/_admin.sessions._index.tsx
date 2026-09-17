@@ -18,6 +18,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Portal,
   Text,
   Tooltip,
 } from '@chakra-ui/react';
@@ -161,27 +162,29 @@ const SessionRow: FC<{ batch: BatchRow; onRequestCancel: (batch: BatchRow) => vo
               variant="ghost"
               size="sm"
             />
-            <MenuList>
-              {isLive && (
-                <MenuItem icon={<Icon as={MdCancel} />} color="danger.500" onClick={() => onRequestCancel(batch)}>
-                  Cancel Session
-                </MenuItem>
-              )}
-              {isArchivable && (
-                <MenuItem
-                  icon={<Icon as={MdArchive} />}
-                  isDisabled={archiveFetcher.state !== 'idle'}
-                  onClick={() =>
-                    archiveFetcher.submit(
-                      { intent: 'archive' },
-                      { method: 'post', action: `/api/batches/${batch.id}`, encType: 'application/json' },
-                    )
-                  }
-                >
-                  Archive
-                </MenuItem>
-              )}
-            </MenuList>
+            <Portal>
+              <MenuList>
+                {isLive && (
+                  <MenuItem icon={<Icon as={MdCancel} />} color="danger.500" onClick={() => onRequestCancel(batch)}>
+                    Cancel Session
+                  </MenuItem>
+                )}
+                {isArchivable && (
+                  <MenuItem
+                    icon={<Icon as={MdArchive} />}
+                    isDisabled={archiveFetcher.state !== 'idle'}
+                    onClick={() =>
+                      archiveFetcher.submit(
+                        { intent: 'archive' },
+                        { method: 'post', action: `/api/batches/${batch.id}`, encType: 'application/json' },
+                      )
+                    }
+                  >
+                    Archive
+                  </MenuItem>
+                )}
+              </MenuList>
+            </Portal>
           </Menu>
         )}
       </Flex>
