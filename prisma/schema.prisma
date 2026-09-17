@@ -48,6 +48,17 @@ model Device {
   fermentBatches Batch[]
 }
 
+// A hardware uid the server has seen check in but that hasn't been claimed into a named Device
+// yet — mirrors the reference server's "registered but unaliased" in-memory session, except we
+// persist it so it survives a restart until someone pairs it from the Devices settings page.
+model DiscoveredDevice {
+  uid         String   @id
+  deviceType  String? //enum — null when the wire protocol can't disambiguate the model (Pico S/C/Pro)
+  metadata    String? // JSON — e.g. Tilt color, last-seen IP
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now()) @updatedAt
+}
+
 model Recipe {
   id          Int       @id @default(autoincrement())
   deviceType  String //enum

@@ -1,6 +1,6 @@
 import omit from 'lodash/omit';
 import prisma from '~/services/prisma.server';
-import { IngredientSection, PicoLocationMap } from '~/types';
+import { BatchPhase, IngredientSection, PicoLocationMap } from '~/types';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 
 export { IngredientSection, PicoLocationMap };
@@ -74,6 +74,38 @@ export class RecipeRepository {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // Same as getAllRecipes, but with each recipe's count of batches (brewing sessions) that
+  // have ever used it — total across every phase, and how many reached Completed — including
+  // archived ones. Used by the Recipes list page.
+  public static async getAllRecipesWithSessionCounts(deviceType?: string) {
+    const recipes = await prisma.recipe.findMany({
+      where: {
+        deletedAt: null,
+        ...(deviceType && { deviceType }),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const batches = await prisma.batch.findMany({
+      where: { recipeId: { in: recipes.map((r) => r.id) } },
+      select: { recipeId: true, phase: true },
+    });
+    const countsByRecipeId = new Map<number, { sessionCount: number; completedSessionCount: number }>();
+    for (const batch of batches) {
+      const entry = countsByRecipeId.get(batch.recipeId as number) ?? { sessionCount: 0, completedSessionCount: 0 };
+      entry.sessionCount += 1;
+      if (batch.phase === BatchPhase.COMPLETED) {
+        entry.completedSessionCount += 1;
+      }
+      countsByRecipeId.set(batch.recipeId as number, entry);
+    }
+
+    return recipes.map((recipe) => ({
+      ...recipe,
+      ...(countsByRecipeId.get(recipe.id) ?? { sessionCount: 0, completedSessionCount: 0 }),
+    }));
   }
 
   // Same as getAllRecipes, but with steps included so callers can estimate brew time

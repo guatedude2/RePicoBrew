@@ -5,13 +5,18 @@ import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { BatchPhase, SessionState, SessionType, DeviceType } from '~/types';
 
+// Device types that can serve as a fermentation-tracking hydrometer/monitor and plug into this
+// same session/batch lifecycle (Tilt, PicoFerm, iSpindel are functionally identical in this role).
+const FERMENTATION_DEVICE_TYPES: DeviceType[] = [DeviceType.TILT, DeviceType.PICOFERM, DeviceType.ISPINDEL];
+
 /**
  * GET /api/fermentation/devices
- * List all Tilt devices, plus batches currently fermenting without a tracker yet
+ * List all fermentation-tracking devices (Tilt, PicoFerm, iSpindel), plus batches currently
+ * fermenting without a tracker yet
  */
 export async function loader(_args: LoaderArgs) {
   const devices = await DeviceRepository.listDevices();
-  const tiltDevices = devices.filter((d) => d.deviceType === DeviceType.TILT);
+  const tiltDevices = devices.filter((d) => FERMENTATION_DEVICE_TYPES.includes(d.deviceType as DeviceType));
 
   const devicesWithSessions = await Promise.all(
     tiltDevices.map(async (device) => {
@@ -50,8 +55,8 @@ export async function action({ request }: ActionArgs) {
     return json({ error: 'Device not found' }, { status: 404 });
   }
 
-  if (device.deviceType !== DeviceType.TILT) {
-    return json({ error: 'Device is not a Tilt hydrometer' }, { status: 400 });
+  if (!FERMENTATION_DEVICE_TYPES.includes(device.deviceType as DeviceType)) {
+    return json({ error: 'Device is not a fermentation-tracking hydrometer' }, { status: 400 });
   }
 
   try {

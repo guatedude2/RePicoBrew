@@ -1,54 +1,18 @@
-import { mode } from '@chakra-ui/theme-tools';
+import { fieldBase } from './input';
+
+// Textarea is a single-part Chakra component (unlike Input/Select, which are multi-part with a
+// "field" anatomy key) — styles go directly on baseStyle/variants, not wrapped in `{ field: {} }`.
 export const textareaStyles = {
   components: {
     Textarea: {
+      defaultProps: { variant: 'main' },
       baseStyle: {
-        field: {
-          fontWeight: 400,
-          borderRadius: '8px',
-        },
+        fontWeight: 400,
+        borderRadius: '8px',
       },
-
       variants: {
-        main: (props: any) => ({
-          field: {
-            bg: mode('transparent', 'navy.800')(props),
-            border: '1px solid !important',
-            color: mode('secondaryGray.900', 'white')(props),
-            borderColor: mode('secondaryGray.100', 'whiteAlpha.100')(props),
-            borderRadius: '16px',
-            fontSize: 'sm',
-            p: '20px',
-            _placeholder: { color: 'secondaryGray.400' },
-          },
-        }),
-        auth: () => ({
-          field: {
-            bg: 'white',
-            border: '1px solid',
-            borderColor: 'secondaryGray.100',
-            borderRadius: '16px',
-            _placeholder: { color: 'secondaryGray.600' },
-          },
-        }),
-        authSecondary: () => ({
-          field: {
-            bg: 'white',
-            border: '1px solid',
-
-            borderColor: 'secondaryGray.100',
-            borderRadius: '16px',
-            _placeholder: { color: 'secondaryGray.600' },
-          },
-        }),
-        search: () => ({
-          field: {
-            border: 'none',
-            py: '11px',
-            borderRadius: 'inherit',
-            _placeholder: { color: 'secondaryGray.600' },
-          },
-        }),
+        main: fieldBase,
+        search: { border: 'none', py: '11px', borderRadius: 'inherit', _placeholder: { color: 'ink.textFaintest' } },
       },
     },
   },

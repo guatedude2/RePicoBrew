@@ -4,9 +4,13 @@ import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
-import type { DeviceType } from '~/types';
-import { DeviceLogType } from '~/types';
+import { DeviceLogType, DeviceType } from '~/types';
 
+/**
+ * GET /API/PicoFerm/checkFirmware?uid={uid}&version={version}
+ *
+ * Response: '#1#' if an update is available, else '#0#'.
+ */
 const bodyValidator = z.object({
   uid: z.string(),
   version: z.string(),
@@ -20,32 +24,28 @@ export const loader = async ({ request }: LoaderArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`#F#\r\n`);
+    return new Response('#0#');
   }
 
-  // get the device firmware for this device's own registered model
-  const firmware = await ConfigRepository.getDeviceFirmware(device.deviceType as DeviceType);
+  // No firmware config for PICOFERM is fine — just means no update available.
+  const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOFERM);
   if (!firmware) {
-    return new Response(`#F#\r\n`);
+    return new Response('#0#');
   }
 
-  // compare version with pico brew c version
   const hasUpdate = Boolean(SemVer.lt(body.data.version, firmware.version));
 
-  // update the actual firmware version
   await DeviceRepository.updateDeviceFirmwareVersion(device.id, body.data.version);
 
   if (hasUpdate) {
-    // log device firmware update warning
     await DeviceRepository.createDeviceLog(device.id, {
       type: DeviceLogType.FIRMWARE_UPDATE_WARNING,
       current: body.data.version,
       to: firmware.version,
     });
 
-    // if device registered, publish the firmware version to UI
     pubsub.publish('device-firmware', { uid: body.data.uid, firmwareVersion: body.data.version });
   }
 
-  return new Response(`#${hasUpdate ? 'T' : 'F'}#\r\n`);
+  return new Response(`#${hasUpdate ? '1' : '0'}#`);
 };

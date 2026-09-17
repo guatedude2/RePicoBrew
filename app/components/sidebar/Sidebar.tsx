@@ -80,29 +80,7 @@ const NavSection: FC<{ label: string; items: NavItem[]; pathname: string }> = ({
   </>
 );
 
-const DevicesFooter: FC<{ online: number; total: number }> = ({ online, total }) => (
-  <Box m="12px" p="14px" borderRadius="10px" bg="ink.card" border="1px solid" borderColor="ink.cardBorder">
-    <HStack spacing="8px" fontSize="12px" color="ink.textMuted">
-      <Box
-        w="7px"
-        h="7px"
-        borderRadius="full"
-        bg={online > 0 ? 'success.500' : 'ink.textFaintest'}
-        sx={online > 0 ? { animation: 'pulse-dot 2s infinite' } : undefined}
-      />
-      <Text>
-        {online} of {total} devices online
-      </Text>
-    </HStack>
-  </Box>
-);
-
-const SidebarBody: FC<{ pathname: string; online: number; total: number; routes: NavItem[] }> = ({
-  pathname,
-  online,
-  total,
-  routes,
-}) => {
+const SidebarBody: FC<{ pathname: string; routes: NavItem[] }> = ({ pathname, routes }) => {
   const brewing = routes.filter((r) => r.section === 'BREWING');
   const system = routes.filter((r) => r.section === 'SYSTEM');
   return (
@@ -114,12 +92,11 @@ const SidebarBody: FC<{ pathname: string; online: number; total: number; routes:
         <NavSection label="BREWING" items={brewing} pathname={pathname} />
         <NavSection label="SYSTEM" items={system} pathname={pathname} />
       </Flex>
-      <DevicesFooter online={online} total={total} />
     </Flex>
   );
 };
 
-export function Sidebar({ routes, online, total }: { routes: NavItem[]; online: number; total: number }) {
+export function Sidebar({ routes }: { routes: NavItem[] }) {
   const { pathname } = useLocation();
 
   return (
@@ -134,12 +111,12 @@ export function Sidebar({ routes, online, total }: { routes: NavItem[]; online: 
       top="0"
       h="100vh"
     >
-      <SidebarBody pathname={pathname} online={online} total={total} routes={routes} />
+      <SidebarBody pathname={pathname} routes={routes} />
     </Box>
   );
 }
 
-export function SidebarDrawer({ routes, online, total }: { routes: NavItem[]; online: number; total: number }) {
+export function SidebarDrawer({ routes }: { routes: NavItem[] }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { pathname } = useLocation();
 
@@ -151,7 +128,7 @@ export function SidebarDrawer({ routes, online, total }: { routes: NavItem[]; on
         <DrawerContent bg="ink.sidebar" maxW="240px">
           <DrawerCloseButton color="ink.textSecondary" zIndex={2} />
           <DrawerBody p="0">
-            <SidebarBody pathname={pathname} online={online} total={total} routes={routes} />
+            <SidebarBody pathname={pathname} routes={routes} />
           </DrawerBody>
         </DrawerContent>
       </Drawer>

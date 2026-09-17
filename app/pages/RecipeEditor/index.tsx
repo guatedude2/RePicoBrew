@@ -1,7 +1,7 @@
 import { Box, Button, Checkbox, Flex, Grid, Icon, Input, Select, Text, Textarea } from '@chakra-ui/react';
 import { Form, Link, useNavigate, useNavigation } from '@remix-run/react';
 import { useMemo, useRef, useState, type FC } from 'react';
-import { MdArrowBack, MdCameraAlt, MdEdit, MdError } from 'react-icons/md';
+import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import Card from '~/components/card/Card';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
@@ -127,6 +127,25 @@ const FieldLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
   </Text>
 );
 
+const FieldValue: FC<{ children: React.ReactNode; mono?: boolean }> = ({ children, mono }) => (
+  <Text px="11px" py="9px" fontSize="14px" fontFamily={mono ? 'mono' : undefined} color="ink.textMuted">
+    {children}
+  </Text>
+);
+
+const MASH_TYPE_LABELS: Record<string, string> = {
+  '0': 'Single Step Infusion',
+  '3': 'Single Step Infusion With Mash Out',
+  '1': 'High Efficiency Multi Step',
+  '2': 'Custom',
+};
+
+const FERMENTATION_TYPE_LABELS: Record<string, string> = {
+  '0': 'Ale',
+  '1': 'Lager',
+  '2': 'Advanced / Custom',
+};
+
 const OverviewStat: FC<{
   label: string;
   value: React.ReactNode;
@@ -238,6 +257,15 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS,
   );
   const [modalOpen, setModalOpen] = useState(false);
+  const [machineStepsExpanded, setMachineStepsExpanded] = useState(false);
+
+  const initialSnapshotRef = useRef({
+    name,
+    mashStepsCount: mashSteps.length,
+    yeastName,
+    boilTime,
+    machineStepsJson: JSON.stringify(machineSteps.map(({ id: _id, ...rest }) => rest)),
+  });
 
   const rowActions = (setter: (fn: (rows: Row[]) => Row[]) => void) => ({
     onChange: (id: string, key: keyof Row, value: string | number) =>
@@ -306,6 +334,17 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     return errs;
   }, [name, mashSteps.length, yeastName, boilTime, machineValidation.errors]);
   const hasErrors = errors.length > 0;
+
+  const isDirty = useMemo(
+    () =>
+      name !== initialSnapshotRef.current.name ||
+      mashSteps.length !== initialSnapshotRef.current.mashStepsCount ||
+      yeastName !== initialSnapshotRef.current.yeastName ||
+      boilTime !== initialSnapshotRef.current.boilTime ||
+      JSON.stringify(machineSteps.map(({ id: _id, ...rest }) => rest)) !== initialSnapshotRef.current.machineStepsJson,
+    [name, mashSteps.length, yeastName, boilTime, machineSteps],
+  );
+  const blockingErrors = hasErrors && isDirty;
 
   const payload = useMemo(
     () => ({
@@ -433,7 +472,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
         )}
 
         <Box display="flex" flexDirection="column" gap="16px" maxW="1040px">
-          {hasErrors && !readOnly && (
+          {blockingErrors && !readOnly && (
             <Box
               bg="danger.100"
               border="1px solid"
@@ -458,7 +497,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
 
           {!readOnly && (
             <Flex justify="flex-end">
-              <Button type="submit" variant="brand" isDisabled={hasErrors} isLoading={isSubmitting}>
+              <Button type="submit" variant="brand" isDisabled={blockingErrors} isLoading={isSubmitting}>
                 Save Recipe
               </Button>
             </Flex>
@@ -478,7 +517,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               border="1px dashed"
               borderColor="ink.borderStrong"
               bg="ink.bg"
-              backgroundImage={photoPreview ? `url(${photoPreview})` : undefined}
+              backgroundImage={`url(${photoPreview || '/img/no-photo.jpg'})`}
               backgroundSize="cover"
               backgroundPosition="center"
               display="flex"
@@ -488,7 +527,16 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               cursor={readOnly ? 'default' : 'pointer'}
             >
               {!photoPreview && !readOnly && (
-                <Flex direction="column" align="center" gap="6px" color="ink.textFaint">
+                <Flex
+                  direction="column"
+                  align="center"
+                  gap="6px"
+                  color="ink.text"
+                  bg="blackAlpha.600"
+                  px="10px"
+                  py="8px"
+                  borderRadius="8px"
+                >
                   <Icon as={MdCameraAlt} boxSize="24px" />
                   <Text fontSize="12px">Beer glass photo</Text>
                 </Flex>
@@ -669,22 +717,28 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <Flex gap="14px" wrap="wrap">
               <Box flex="1" minW="200px">
                 <FieldLabel>Recipe Name *</FieldLabel>
-                <Input value={name} onChange={(e) => setName(e.target.value)} isReadOnly={readOnly} />
+                {readOnly ? (
+                  <FieldValue>{name}</FieldValue>
+                ) : (
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                )}
               </Box>
               <Box flex="1" minW="200px">
                 <FieldLabel>Style</FieldLabel>
-                <Input value={style} onChange={(e) => setStyle(e.target.value)} isReadOnly={readOnly} />
+                {readOnly ? (
+                  <FieldValue>{style || '—'}</FieldValue>
+                ) : (
+                  <Input value={style} onChange={(e) => setStyle(e.target.value)} />
+                )}
               </Box>
             </Flex>
             <Box>
               <FieldLabel>Notes</FieldLabel>
-              <Textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                resize="vertical"
-                isReadOnly={readOnly}
-              />
+              {readOnly ? (
+                <FieldValue>{notes || '—'}</FieldValue>
+              ) : (
+                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} resize="vertical" />
+              )}
             </Box>
           </Card>
 
@@ -696,14 +750,17 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <Flex gap="14px" wrap="wrap">
               <Box flex="1" minW="160px">
                 <FieldLabel>Batch Size (Gal)</FieldLabel>
-                <Input
-                  type="number"
-                  step={0.1}
-                  value={batchSize}
-                  onChange={(e) => setBatchSize(Number(e.target.value))}
-                  fontFamily="mono"
-                  isReadOnly={readOnly}
-                />
+                {readOnly ? (
+                  <FieldValue mono>{batchSize}</FieldValue>
+                ) : (
+                  <Input
+                    type="number"
+                    step={0.1}
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(Number(e.target.value))}
+                    fontFamily="mono"
+                  />
+                )}
               </Box>
               <Box flex="1" minW="160px">
                 <FieldLabel>Starting Water (Gal)</FieldLabel>
@@ -712,32 +769,34 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 </Text>
               </Box>
             </Flex>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Water Amendments
-              </Text>
-              <EditableRowList
-                rows={amendments}
-                templateColumns="1.5fr 1fr 1fr"
-                columns={[
-                  { key: 'name', label: 'Name', type: 'text', placeholder: 'Gypsum' },
-                  { key: 'amount', label: 'Amount', type: 'number', step: 0.1 },
-                  { key: 'unit', label: 'Units', type: 'text', placeholder: 'g' },
-                ]}
-                onChange={amendmentActions.onChange}
-                onAdd={() => amendmentActions.onAdd({ unit: 'g' })}
-                onRemove={amendmentActions.onRemove}
-                addLabel="Add Water Amendment"
-                readOnly={readOnly}
-              />
-            </Box>
+            {(!readOnly || amendments.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Water Amendments
+                </Text>
+                <EditableRowList
+                  rows={amendments}
+                  templateColumns="1.5fr 1fr 1fr"
+                  columns={[
+                    { key: 'name', label: 'Name', type: 'text', placeholder: 'Gypsum' },
+                    { key: 'amount', label: 'Amount', type: 'number', step: 0.1 },
+                    { key: 'unit', label: 'Units', type: 'text', placeholder: 'g' },
+                  ]}
+                  onChange={amendmentActions.onChange}
+                  onAdd={() => amendmentActions.onAdd({ unit: 'g' })}
+                  onRemove={amendmentActions.onRemove}
+                  addLabel="Add Water Amendment"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
           </Card>
 
           {/* Mash & Fermentables */}
@@ -747,66 +806,74 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             </Text>
             <Box maxW="220px">
               <FieldLabel>Mash Type</FieldLabel>
-              <Select value={mashType} onChange={(e) => setMashType(e.target.value)} isDisabled={readOnly}>
-                <option value="0">Single Step Infusion</option>
-                <option value="3">Single Step Infusion With Mash Out</option>
-                <option value="1">High Efficiency Multi Step</option>
-                <option value="2">Custom</option>
-              </Select>
+              {readOnly ? (
+                <FieldValue>{MASH_TYPE_LABELS[mashType] ?? mashType}</FieldValue>
+              ) : (
+                <Select value={mashType} onChange={(e) => setMashType(e.target.value)}>
+                  <option value="0">Single Step Infusion</option>
+                  <option value="3">Single Step Infusion With Mash Out</option>
+                  <option value="1">High Efficiency Multi Step</option>
+                  <option value="2">Custom</option>
+                </Select>
+              )}
             </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Mash Steps
-              </Text>
-              <EditableRowList
-                rows={mashSteps}
-                templateColumns="1.6fr 0.9fr 0.9fr"
-                columns={[
-                  { key: 'name', label: 'Step', type: 'text' },
-                  { key: 'temp', label: 'Temp °F', type: 'number' },
-                  { key: 'time', label: 'Time (min)', type: 'number' },
-                ]}
-                onChange={mashStepActions.onChange}
-                onAdd={() => mashStepActions.onAdd({ name: 'New Step', temp: 152, time: 20 })}
-                onRemove={mashStepActions.onRemove}
-                addLabel="Add Mash Step"
-                minRows={1}
-                readOnly={readOnly}
-              />
-            </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Fermentables
-              </Text>
-              <EditableRowList
-                rows={fermentables}
-                templateColumns="1.6fr 0.9fr 0.9fr"
-                columns={[
-                  { key: 'name', label: 'Ingredient', type: 'text' },
-                  { key: 'amount', label: 'Amount (lbs)', type: 'number', step: 0.1 },
-                  { key: 'color', label: 'Color (pts)', type: 'number' },
-                ]}
-                onChange={fermentableActions.onChange}
-                onAdd={() => fermentableActions.onAdd({ amount: 1, color: 2 })}
-                onRemove={fermentableActions.onRemove}
-                addLabel="Add Fermentable"
-                readOnly={readOnly}
-              />
-            </Box>
+            {(!readOnly || mashSteps.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Mash Steps
+                </Text>
+                <EditableRowList
+                  rows={mashSteps}
+                  templateColumns="1.6fr 0.9fr 0.9fr"
+                  columns={[
+                    { key: 'name', label: 'Step', type: 'text' },
+                    { key: 'temp', label: 'Temp °F', type: 'number' },
+                    { key: 'time', label: 'Time (min)', type: 'number' },
+                  ]}
+                  onChange={mashStepActions.onChange}
+                  onAdd={() => mashStepActions.onAdd({ name: 'New Step', temp: 152, time: 20 })}
+                  onRemove={mashStepActions.onRemove}
+                  addLabel="Add Mash Step"
+                  minRows={1}
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
+            {(!readOnly || fermentables.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Fermentables
+                </Text>
+                <EditableRowList
+                  rows={fermentables}
+                  templateColumns="1.6fr 0.9fr 0.9fr"
+                  columns={[
+                    { key: 'name', label: 'Ingredient', type: 'text' },
+                    { key: 'amount', label: 'Amount (lbs)', type: 'number', step: 0.1 },
+                    { key: 'color', label: 'Color (pts)', type: 'number' },
+                  ]}
+                  onChange={fermentableActions.onChange}
+                  onAdd={() => fermentableActions.onAdd({ amount: 1, color: 2 })}
+                  onRemove={fermentableActions.onRemove}
+                  addLabel="Add Fermentable"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
           </Card>
 
           {/* Boil */}
@@ -817,93 +884,106 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <Flex gap="14px" wrap="wrap">
               <Box flex="1" minW="160px">
                 <FieldLabel>Total Boil Time (min)</FieldLabel>
-                <Input
-                  type="number"
-                  value={boilTime}
-                  onChange={(e) => setBoilTime(Number(e.target.value))}
-                  fontFamily="mono"
-                  isReadOnly={readOnly}
-                />
+                {readOnly ? (
+                  <FieldValue mono>{boilTime}</FieldValue>
+                ) : (
+                  <Input
+                    type="number"
+                    value={boilTime}
+                    onChange={(e) => setBoilTime(Number(e.target.value))}
+                    fontFamily="mono"
+                  />
+                )}
               </Box>
               <Box flex="1" minW="160px">
                 <FieldLabel>Boil Temp °F</FieldLabel>
-                <Input
-                  type="number"
-                  value={boilTemp}
-                  onChange={(e) => setBoilTemp(Number(e.target.value))}
-                  fontFamily="mono"
-                  isReadOnly={readOnly}
-                />
+                {readOnly ? (
+                  <FieldValue mono>{boilTemp}</FieldValue>
+                ) : (
+                  <Input
+                    type="number"
+                    value={boilTemp}
+                    onChange={(e) => setBoilTemp(Number(e.target.value))}
+                    fontFamily="mono"
+                  />
+                )}
               </Box>
               <Box flex="1" minW="180px">
                 <FieldLabel>First Wort Hopping</FieldLabel>
-                <Checkbox
-                  isChecked={firstWortHopping}
-                  onChange={(e) => setFirstWortHopping(e.target.checked)}
-                  colorScheme="brand"
-                  mt="6px"
-                  isDisabled={readOnly}
-                >
-                  <Text fontSize="13px" color="ink.textSecondary">
-                    Enabled
-                  </Text>
-                </Checkbox>
+                {readOnly ? (
+                  <FieldValue>{firstWortHopping ? 'Enabled' : 'Disabled'}</FieldValue>
+                ) : (
+                  <Checkbox
+                    isChecked={firstWortHopping}
+                    onChange={(e) => setFirstWortHopping(e.target.checked)}
+                    colorScheme="brand"
+                    mt="6px"
+                  >
+                    <Text fontSize="13px" color="ink.textSecondary">
+                      Enabled
+                    </Text>
+                  </Checkbox>
+                )}
               </Box>
             </Flex>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Hops
-              </Text>
-              <EditableRowList
-                rows={hops}
-                templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
-                columns={[
-                  { key: 'name', label: 'Type', type: 'text' },
-                  { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
-                  { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
-                  { key: 'time', label: 'Time (min)', type: 'number' },
-                ]}
-                onChange={hopActions.onChange}
-                onAdd={() => hopActions.onAdd({ amount: 1, aa: 5, time: 15 })}
-                onRemove={hopActions.onRemove}
-                addLabel="Add Hop"
-                readOnly={readOnly}
-              />
-            </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Other Boil Ingredients
-              </Text>
-              <EditableRowList
-                rows={otherBoil}
-                templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
-                columns={[
-                  { key: 'name', label: 'Name', type: 'text', placeholder: 'Irish Moss' },
-                  { key: 'amount', label: 'Amount', type: 'number', step: 0.1 },
-                  { key: 'unit', label: 'Units', type: 'text', placeholder: 'tsp' },
-                  { key: 'time', label: 'Time (min)', type: 'number' },
-                ]}
-                onChange={otherBoilActions.onChange}
-                onAdd={() => otherBoilActions.onAdd({ amount: 1, unit: 'tsp', time: 10 })}
-                onRemove={otherBoilActions.onRemove}
-                addLabel="Add Ingredient"
-                readOnly={readOnly}
-              />
-            </Box>
+            {(!readOnly || hops.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Hops
+                </Text>
+                <EditableRowList
+                  rows={hops}
+                  templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
+                  columns={[
+                    { key: 'name', label: 'Type', type: 'text' },
+                    { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
+                    { key: 'time', label: 'Time (min)', type: 'number' },
+                  ]}
+                  onChange={hopActions.onChange}
+                  onAdd={() => hopActions.onAdd({ amount: 1, aa: 5, time: 15 })}
+                  onRemove={hopActions.onRemove}
+                  addLabel="Add Hop"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
+            {(!readOnly || otherBoil.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Other Boil Ingredients
+                </Text>
+                <EditableRowList
+                  rows={otherBoil}
+                  templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
+                  columns={[
+                    { key: 'name', label: 'Name', type: 'text', placeholder: 'Irish Moss' },
+                    { key: 'amount', label: 'Amount', type: 'number', step: 0.1 },
+                    { key: 'unit', label: 'Units', type: 'text', placeholder: 'tsp' },
+                    { key: 'time', label: 'Time (min)', type: 'number' },
+                  ]}
+                  onChange={otherBoilActions.onChange}
+                  onAdd={() => otherBoilActions.onAdd({ amount: 1, unit: 'tsp', time: 10 })}
+                  onRemove={otherBoilActions.onRemove}
+                  addLabel="Add Ingredient"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
           </Card>
 
           {/* Fermentation */}
@@ -913,15 +993,15 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             </Text>
             <Box maxW="220px">
               <FieldLabel>Fermentation Type</FieldLabel>
-              <Select
-                value={fermentationType}
-                onChange={(e) => setFermentationType(e.target.value)}
-                isDisabled={readOnly}
-              >
-                <option value="0">Ale</option>
-                <option value="1">Lager</option>
-                <option value="2">Advanced / Custom</option>
-              </Select>
+              {readOnly ? (
+                <FieldValue>{FERMENTATION_TYPE_LABELS[fermentationType] ?? fermentationType}</FieldValue>
+              ) : (
+                <Select value={fermentationType} onChange={(e) => setFermentationType(e.target.value)}>
+                  <option value="0">Ale</option>
+                  <option value="1">Lager</option>
+                  <option value="2">Advanced / Custom</option>
+                </Select>
+              )}
             </Box>
             <Box>
               <Text
@@ -939,160 +1019,185 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   <Text fontSize="10px" color="ink.textFaintest" mb="4px">
                     Name
                   </Text>
-                  <Input
-                    value={yeastName}
-                    onChange={(e) => setYeastName(e.target.value)}
-                    fontSize="13px"
-                    isReadOnly={readOnly}
-                  />
+                  {readOnly ? (
+                    <FieldValue>{yeastName || '—'}</FieldValue>
+                  ) : (
+                    <Input value={yeastName} onChange={(e) => setYeastName(e.target.value)} fontSize="13px" />
+                  )}
                 </Box>
                 <Box>
                   <Text fontSize="10px" color="ink.textFaintest" mb="4px">
                     Expected Attenuation %
                   </Text>
-                  <Input
-                    type="number"
-                    value={yeastAttenuation}
-                    onChange={(e) => setYeastAttenuation(Number(e.target.value))}
-                    fontFamily="mono"
-                    fontSize="13px"
-                    isReadOnly={readOnly}
-                  />
+                  {readOnly ? (
+                    <FieldValue mono>{yeastAttenuation}</FieldValue>
+                  ) : (
+                    <Input
+                      type="number"
+                      value={yeastAttenuation}
+                      onChange={(e) => setYeastAttenuation(Number(e.target.value))}
+                      fontFamily="mono"
+                      fontSize="13px"
+                    />
+                  )}
                 </Box>
                 <Box>
                   <Text fontSize="10px" color="ink.textFaintest" mb="4px">
                     Range Temp °F
                   </Text>
-                  <Input
-                    value={yeastRangeTemp}
-                    onChange={(e) => setYeastRangeTemp(e.target.value)}
-                    fontFamily="mono"
-                    fontSize="13px"
-                    placeholder="64 - 82"
-                    isReadOnly={readOnly}
-                  />
+                  {readOnly ? (
+                    <FieldValue mono>{yeastRangeTemp || '—'}</FieldValue>
+                  ) : (
+                    <Input
+                      value={yeastRangeTemp}
+                      onChange={(e) => setYeastRangeTemp(e.target.value)}
+                      fontFamily="mono"
+                      fontSize="13px"
+                      placeholder="64 - 82"
+                    />
+                  )}
                 </Box>
                 <Box>
                   <Text fontSize="10px" color="ink.textFaintest" mb="4px">
                     Pitch Temp °F
                   </Text>
-                  <Input
-                    type="number"
-                    value={yeastPitchTemp}
-                    onChange={(e) => setYeastPitchTemp(Number(e.target.value))}
-                    fontFamily="mono"
-                    fontSize="13px"
-                    isReadOnly={readOnly}
-                  />
+                  {readOnly ? (
+                    <FieldValue mono>{yeastPitchTemp}</FieldValue>
+                  ) : (
+                    <Input
+                      type="number"
+                      value={yeastPitchTemp}
+                      onChange={(e) => setYeastPitchTemp(Number(e.target.value))}
+                      fontFamily="mono"
+                      fontSize="13px"
+                    />
+                  )}
                 </Box>
               </Grid>
             </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Fermentation Steps
-              </Text>
-              <EditableRowList
-                rows={fermentationSteps}
-                templateColumns="1.6fr 0.8fr 0.7fr 0.7fr"
-                columns={[
-                  { key: 'name', label: 'Step', type: 'text' },
-                  { key: 'temp', label: 'Temp °F', type: 'number' },
-                  { key: 'days', label: 'Days', type: 'number' },
-                  { key: 'hours', label: 'Hours', type: 'number' },
-                ]}
-                onChange={fermentationStepActions.onChange}
-                onAdd={() => fermentationStepActions.onAdd({ name: 'New Step', temp: 65, days: 1, hours: 0 })}
-                onRemove={fermentationStepActions.onRemove}
-                addLabel="Add Fermentation Step"
-                readOnly={readOnly}
-              />
-            </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Dry Hops
-              </Text>
-              <EditableRowList
-                rows={dryHops}
-                templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
-                columns={[
-                  { key: 'name', label: 'Type', type: 'text' },
-                  { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
-                  { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
-                  { key: 'time', label: 'Time (days)', type: 'number' },
-                ]}
-                onChange={dryHopActions.onChange}
-                onAdd={() => dryHopActions.onAdd({ amount: 1, aa: 5, time: 3 })}
-                onRemove={dryHopActions.onRemove}
-                addLabel="Add Hop"
-                readOnly={readOnly}
-              />
-            </Box>
+            {(!readOnly || fermentationSteps.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Fermentation Steps
+                </Text>
+                <EditableRowList
+                  rows={fermentationSteps}
+                  templateColumns="1.6fr 0.8fr 0.7fr 0.7fr"
+                  columns={[
+                    { key: 'name', label: 'Step', type: 'text' },
+                    { key: 'temp', label: 'Temp °F', type: 'number' },
+                    { key: 'days', label: 'Days', type: 'number' },
+                    { key: 'hours', label: 'Hours', type: 'number' },
+                  ]}
+                  onChange={fermentationStepActions.onChange}
+                  onAdd={() => fermentationStepActions.onAdd({ name: 'New Step', temp: 65, days: 1, hours: 0 })}
+                  onRemove={fermentationStepActions.onRemove}
+                  addLabel="Add Fermentation Step"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
+            {(!readOnly || dryHops.length > 0) && (
+              <Box>
+                <Text
+                  fontSize="12px"
+                  fontWeight="700"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
+                  letterSpacing="0.4px"
+                  mb="8px"
+                >
+                  Dry Hops
+                </Text>
+                <EditableRowList
+                  rows={dryHops}
+                  templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
+                  columns={[
+                    { key: 'name', label: 'Type', type: 'text' },
+                    { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
+                    { key: 'time', label: 'Time (days)', type: 'number' },
+                  ]}
+                  onChange={dryHopActions.onChange}
+                  onAdd={() => dryHopActions.onAdd({ amount: 1, aa: 5, time: 3 })}
+                  onRemove={dryHopActions.onRemove}
+                  addLabel="Add Hop"
+                  readOnly={readOnly}
+                />
+              </Box>
+            )}
           </Card>
 
           {/* Machine Steps */}
           <Card p="22px" gap="14px">
-            <Flex justify="space-between" align="center" wrap="wrap" gap="10px">
+            <Flex
+              align="center"
+              gap="8px"
+              as="button"
+              type="button"
+              onClick={() => setMachineStepsExpanded((v) => !v)}
+              cursor="pointer"
+              textAlign="left"
+            >
+              <Icon
+                as={MdExpandMore}
+                boxSize="18px"
+                color="ink.textFaint"
+                transform={machineStepsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)'}
+                transition="transform 0.15s ease"
+              />
               <Text fontSize="15px" fontWeight="700">
                 Machine Steps
               </Text>
-              <Text fontSize="11px" color="ink.textFaintest">
-                Firmware program run by the Pico. Step times are subject to change when compensating for lower boil
-                temp.
-              </Text>
             </Flex>
-            <Box border="1px solid" borderColor="ink.divider" borderRadius="10px" overflow="hidden">
-              <Grid
-                templateColumns="1.7fr 1fr 0.8fr 0.8fr 0.8fr"
-                gap="10px"
-                px="14px"
-                py="10px"
-                bg="ink.bg"
-                fontSize="11px"
-                fontWeight="700"
-                letterSpacing="0.4px"
-                color="ink.textFaint"
-                textTransform="uppercase"
-              >
-                <Text>Name</Text>
-                <Text>Location</Text>
-                <Text>Temp °F</Text>
-                <Text>Time (min)</Text>
-                <Text>Drain (min)</Text>
-              </Grid>
-              {machineSteps.map((row, index) => (
+            {machineStepsExpanded && (
+              <Box border="1px solid" borderColor="ink.divider" borderRadius="10px" overflow="hidden">
                 <Grid
-                  key={row.id}
                   templateColumns="1.7fr 1fr 0.8fr 0.8fr 0.8fr"
                   gap="10px"
                   px="14px"
-                  py="9px"
-                  alignItems="center"
-                  borderTop={index > 0 ? '1px solid' : undefined}
-                  borderColor="ink.divider"
-                  fontSize="13px"
+                  py="10px"
+                  bg="ink.bg"
+                  fontSize="11px"
+                  fontWeight="700"
+                  letterSpacing="0.4px"
+                  color="ink.textFaint"
+                  textTransform="uppercase"
                 >
-                  <Text>{row.name}</Text>
-                  <Text color="ink.textMuted">{PicoLocationMap[row.location]}</Text>
-                  <Text fontFamily="mono">{row.temperature}</Text>
-                  <Text fontFamily="mono">{row.stepTime}</Text>
-                  <Text fontFamily="mono">{row.drainTime}</Text>
+                  <Text>Name</Text>
+                  <Text>Location</Text>
+                  <Text>Temp °F</Text>
+                  <Text>Time (min)</Text>
+                  <Text>Drain (min)</Text>
                 </Grid>
-              ))}
-            </Box>
+                {machineSteps.map((row, index) => (
+                  <Grid
+                    key={row.id}
+                    templateColumns="1.7fr 1fr 0.8fr 0.8fr 0.8fr"
+                    gap="10px"
+                    px="14px"
+                    py="9px"
+                    alignItems="center"
+                    borderTop={index > 0 ? '1px solid' : undefined}
+                    borderColor="ink.divider"
+                    fontSize="13px"
+                  >
+                    <Text>{row.name}</Text>
+                    <Text color="ink.textMuted">{PicoLocationMap[row.location]}</Text>
+                    <Text fontFamily="mono">{row.temperature}</Text>
+                    <Text fontFamily="mono">{row.stepTime}</Text>
+                    <Text fontFamily="mono">{row.drainTime}</Text>
+                  </Grid>
+                ))}
+              </Box>
+            )}
             {!readOnly && (
               <Text
                 as="button"
@@ -1108,6 +1213,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               </Text>
             )}
           </Card>
+          <Text fontSize="11px" color="ink.textFaintest" px="4px">
+            Firmware program run by the Pico. Step times are subject to change when compensating for lower boil temp.
+          </Text>
         </Box>
       </FormWrapper>
 

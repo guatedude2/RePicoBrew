@@ -1,4 +1,4 @@
-const fieldBase = {
+export const fieldBase = {
   bg: 'ink.inputBg',
   border: '1px solid',
   borderColor: 'ink.inputBorder',

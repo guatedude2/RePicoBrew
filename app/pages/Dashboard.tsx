@@ -55,12 +55,12 @@ export const Dashboard: FC = () => {
         </Box>
         <HStack spacing="10px">
           <Link to="/recipes">
-            <Button variant="outline" leftIcon={<Icon as={IoIosBeer} />}>
+            <Button variant="outline" size="sm" leftIcon={<Icon as={IoIosBeer} />}>
               View Recipes
             </Button>
           </Link>
           <Link to="/sessions/new">
-            <Button variant="brand" leftIcon={<Icon as={MdAdd} />}>
+            <Button variant="brand" size="sm" leftIcon={<Icon as={MdAdd} />}>
               Start a Brew
             </Button>
           </Link>

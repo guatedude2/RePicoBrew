@@ -1,6 +1,6 @@
 import type { ActionArgs, LoaderArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, Link, useFetcher, useNavigate } from '@remix-run/react';
+import { useLoaderData, Link, useFetcher, useNavigate, useSearchParams } from '@remix-run/react';
 import {
   Box,
   Button,
@@ -20,17 +20,57 @@ import {
   ModalOverlay,
   Portal,
   Text,
+  Tooltip,
 } from '@chakra-ui/react';
 import { useState, type FC } from 'react';
-import { MdAdd, MdContentCopy, MdDelete, MdEdit, MdMoreVert } from 'react-icons/md';
+import { MdAdd, MdArrowDownward, MdArrowUpward, MdContentCopy, MdDelete, MdEdit, MdMoreVert } from 'react-icons/md';
 import Card from '~/components/card/Card';
 import { RecipeRepository } from '~/repositories/recipe.server';
 
 export const meta = () => [{ title: 'Recipes | RePicoBrew' }];
 
-export const loader = async (_args: LoaderArgs) => {
-  const recipes = await RecipeRepository.getAllRecipes();
-  return json({ recipes });
+type SortKey = 'name' | 'style' | 'abv' | 'ibu' | 'sessions' | 'type';
+type SortDir = 'asc' | 'desc';
+const SORT_KEYS: SortKey[] = ['name', 'style', 'abv', 'ibu', 'sessions', 'type'];
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  name: 'asc',
+  style: 'asc',
+  abv: 'desc',
+  ibu: 'desc',
+  sessions: 'desc',
+  type: 'asc',
+};
+
+export const loader = async ({ request }: LoaderArgs) => {
+  const url = new URL(request.url);
+  const sortParam = url.searchParams.get('sort');
+  const sort: SortKey = SORT_KEYS.includes(sortParam as SortKey) ? (sortParam as SortKey) : 'name';
+  const dirParam = url.searchParams.get('dir');
+  const dir: SortDir = dirParam === 'asc' || dirParam === 'desc' ? dirParam : DEFAULT_DIR[sort];
+
+  const recipes = await RecipeRepository.getAllRecipesWithSessionCounts();
+  const sorted = [...recipes].sort((a, b) => {
+    const cmp = (() => {
+      switch (sort) {
+        case 'style':
+          return (a.style ?? '').localeCompare(b.style ?? '');
+        case 'abv':
+          return a.abv - b.abv;
+        case 'ibu':
+          return a.ibu - b.ibu;
+        case 'sessions':
+          return a.sessionCount - b.sessionCount;
+        case 'type':
+          return a.deviceType.localeCompare(b.deviceType);
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    })();
+    return dir === 'asc' ? cmp : -cmp;
+  });
+
+  return json({ recipes: sorted, sort, dir });
 };
 
 export const action = async ({ request }: ActionArgs) => {
@@ -52,9 +92,27 @@ export const action = async ({ request }: ActionArgs) => {
   return json({ error: 'Unknown intent' }, { status: 400 });
 };
 
-const columns = '1.6fr 1.1fr 0.8fr 0.8fr 1fr 1fr';
+const columns = '1.6fr 1.1fr 0.8fr 0.8fr 0.9fr 1fr 1fr';
 
 type Recipe = ReturnType<typeof useLoaderData<typeof loader>>['recipes'][number];
+
+const SortableHeader: FC<{ label: string; sortKey: SortKey; activeSort: SortKey; dir: SortDir; href: string }> = ({
+  label,
+  sortKey,
+  activeSort,
+  dir,
+  href,
+}) => {
+  const isActive = activeSort === sortKey;
+  return (
+    <Link to={href} style={{ textDecoration: 'none' }}>
+      <Flex align="center" gap="4px" color={isActive ? 'ink.text' : 'ink.textFaint'} _hover={{ color: 'ink.text' }}>
+        <Text>{label}</Text>
+        {isActive && <Icon as={dir === 'asc' ? MdArrowUpward : MdArrowDownward} boxSize="12px" />}
+      </Flex>
+    </Link>
+  );
+};
 
 const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void }> = ({ recipe, onRequestDelete }) => {
   const navigate = useNavigate();
@@ -108,6 +166,16 @@ const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void 
       >
         {recipe.ibu} IBU
       </Box>
+      <Tooltip
+        label={`${recipe.completedSessionCount} completed out of ${recipe.sessionCount} ${
+          recipe.sessionCount === 1 ? 'session' : 'sessions'
+        }`}
+        fontSize="12px"
+      >
+        <Text fontSize="13px" color="ink.textSecondary" w="fit-content" fontFamily="mono">
+          {recipe.completedSessionCount}/{recipe.sessionCount}
+        </Text>
+      </Tooltip>
       <Box
         as="span"
         fontSize="11px"
@@ -156,9 +224,18 @@ const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void 
 };
 
 export default function RecipesPage() {
-  const { recipes } = useLoaderData<typeof loader>();
+  const { recipes, sort, dir } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
   const deleteFetcher = useFetcher();
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+
+  const sortHref = (key: SortKey) => {
+    const nextDir: SortDir = sort === key ? (dir === 'asc' ? 'desc' : 'asc') : DEFAULT_DIR[key];
+    const params = new URLSearchParams(searchParams);
+    params.set('sort', key);
+    params.set('dir', nextDir);
+    return `?${params.toString()}`;
+  };
 
   return (
     <>
@@ -184,7 +261,7 @@ export default function RecipesPage() {
             {recipes.length} Total
           </Box>
           <Link to="/recipes/new">
-            <Button variant="brand" leftIcon={<Icon as={MdAdd} />}>
+            <Button variant="brand" size="sm" leftIcon={<Icon as={MdAdd} />}>
               New Recipe
             </Button>
           </Link>
@@ -221,12 +298,19 @@ export default function RecipesPage() {
               borderBottom="1px solid"
               borderColor="ink.divider"
             >
-              <Text>Name</Text>
-              <Text>Style</Text>
-              <Text>ABV</Text>
-              <Text>IBU</Text>
-              <Text>Type</Text>
-              <Text>Actions</Text>
+              <SortableHeader label="Name" sortKey="name" activeSort={sort} dir={dir} href={sortHref('name')} />
+              <SortableHeader label="Style" sortKey="style" activeSort={sort} dir={dir} href={sortHref('style')} />
+              <SortableHeader label="ABV" sortKey="abv" activeSort={sort} dir={dir} href={sortHref('abv')} />
+              <SortableHeader label="IBU" sortKey="ibu" activeSort={sort} dir={dir} href={sortHref('ibu')} />
+              <SortableHeader
+                label="Sessions"
+                sortKey="sessions"
+                activeSort={sort}
+                dir={dir}
+                href={sortHref('sessions')}
+              />
+              <SortableHeader label="Type" sortKey="type" activeSort={sort} dir={dir} href={sortHref('type')} />
+              <Box />
             </Grid>
             {recipes.map((recipe) => (
               <RecipeRow

@@ -1,7 +1,7 @@
 import { Box, Button, Flex, Icon, Image, Input, Select, Text } from '@chakra-ui/react';
 import { Form, useActionData, useNavigate, useNavigation } from '@remix-run/react';
 import { useMemo, useState, type FC } from 'react';
-import { MdArrowBack, MdLocalDrink } from 'react-icons/md';
+import { MdArrowBack } from 'react-icons/md';
 import Card from '~/components/card/Card';
 
 const CARB_METHODS = [
@@ -120,13 +120,14 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
 
             {recipe && (
               <Flex align="center" gap="14px" p="12px" bg="ink.bg" borderRadius="10px">
-                {recipe.photoUrl ? (
-                  <Image src={recipe.photoUrl} alt={recipe.name} boxSize="56px" objectFit="cover" borderRadius="8px" />
-                ) : (
-                  <Flex boxSize="56px" borderRadius="8px" bg="brand.100" align="center" justify="center" flexShrink={0}>
-                    <Icon as={MdLocalDrink} boxSize="26px" color="brand.500" />
-                  </Flex>
-                )}
+                <Image
+                  src={recipe.photoUrl || '/img/no-photo.jpg'}
+                  alt={recipe.name}
+                  boxSize="56px"
+                  objectFit="cover"
+                  borderRadius="8px"
+                  flexShrink={0}
+                />
                 <Box flex="1" minW="0">
                   <Text fontSize="14px" fontWeight="700" noOfLines={1}>
                     {recipe.name}

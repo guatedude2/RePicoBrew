@@ -124,6 +124,26 @@ export const globalStyles = {
       },
       html: {
         fontFamily: `'IBM Plex Sans', sans-serif`,
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'oklch(0.32 0.01 260) transparent',
+      },
+      '*': {
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'oklch(0.32 0.01 260) transparent',
+      },
+      '::-webkit-scrollbar': {
+        width: '8px',
+        height: '8px',
+      },
+      '::-webkit-scrollbar-track': {
+        background: 'transparent',
+      },
+      '::-webkit-scrollbar-thumb': {
+        background: 'oklch(0.32 0.01 260)',
+        borderRadius: '999px',
+      },
+      '::-webkit-scrollbar-thumb:hover': {
+        background: 'oklch(0.4 0.01 260)',
       },
       '::selection': {
         background: 'oklch(0.78 0.135 65 / 0.35)',

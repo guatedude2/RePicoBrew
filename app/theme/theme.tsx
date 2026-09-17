@@ -10,6 +10,7 @@ import { modalStyles } from './components/modal';
 import { progressStyles } from './components/progress';
 import { sliderStyles } from './components/slider';
 import { switchStyles } from './components/switch';
+import { tabsStyles } from './components/tabs';
 import { textareaStyles } from './components/textarea';
 import { breakpoints } from './foundations/breakpoints';
 import { globalStyles } from './styles';
@@ -26,6 +27,7 @@ export default extendTheme(
   progressStyles, // progress styles
   sliderStyles, // slider styles
   inputStyles, // input styles
+  tabsStyles, // tabs styles
   textareaStyles, // textarea styles
   switchStyles, // switch styles
   CardComponent, // card component

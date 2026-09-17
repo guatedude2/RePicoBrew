@@ -41,11 +41,27 @@ export class UserRepository {
     return await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
   }
 
-  public static async updateUserRole(id: number, role: string) {
-    return await prisma.user.update({ where: { id }, data: { role } });
+  public static async updateUser(id: number, details: { name: string; email: string; role?: string }) {
+    return await prisma.user.update({ where: { id }, data: details });
   }
 
   public static async deleteUser(id: number) {
     return await prisma.user.delete({ where: { id } });
+  }
+
+  // Returns null if currentPassword doesn't match, so the caller can distinguish
+  // "wrong current password" from other failures.
+  public static async changePassword(id: number, currentPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return null;
+    }
+    const encryptedCurrent = encryptSHAH256(currentPassword, user.salt);
+    if (user.password !== encryptedCurrent) {
+      return null;
+    }
+    const salt = randomUUID().replace(/-/g, '');
+    const password = encryptSHAH256(newPassword, salt);
+    return await prisma.user.update({ where: { id }, data: { password, salt } });
   }
 }

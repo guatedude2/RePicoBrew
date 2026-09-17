@@ -60,21 +60,33 @@ export function EditableRowList<T extends { id: string }>({
       )}
       {rows.map((row) => (
         <Grid key={row.id} templateColumns={rowTemplateColumns} gap="8px" alignItems="center">
-          {columns.map((col) => (
-            <Input
-              key={col.key}
-              type={col.type}
-              step={col.step}
-              placeholder={col.placeholder}
-              value={(row[col.key] as string | number | undefined) ?? ''}
-              onChange={(e) =>
-                onChange(row.id, col.key, col.type === 'number' ? Number(e.target.value) : e.target.value)
-              }
-              isReadOnly={readOnly}
-              fontFamily={col.type === 'number' ? 'mono' : undefined}
-              {...fieldStyle}
-            />
-          ))}
+          {columns.map((col) =>
+            readOnly ? (
+              <Text
+                key={col.key}
+                fontSize="13px"
+                fontFamily={col.type === 'number' ? 'mono' : undefined}
+                color="ink.textMuted"
+                px="11px"
+                py="9px"
+              >
+                {(row[col.key] as string | number | undefined) ?? '—'}
+              </Text>
+            ) : (
+              <Input
+                key={col.key}
+                type={col.type}
+                step={col.step}
+                placeholder={col.placeholder}
+                value={(row[col.key] as string | number | undefined) ?? ''}
+                onChange={(e) =>
+                  onChange(row.id, col.key, col.type === 'number' ? Number(e.target.value) : e.target.value)
+                }
+                fontFamily={col.type === 'number' ? 'mono' : undefined}
+                {...fieldStyle}
+              />
+            ),
+          )}
           {!readOnly &&
             (rows.length > minRows ? (
               <Box

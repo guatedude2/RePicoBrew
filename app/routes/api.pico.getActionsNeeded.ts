@@ -2,7 +2,8 @@ import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
-import { DeviceLogType, DeviceType } from '~/types';
+import type { DeviceType } from '~/types';
+import { DeviceLogType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -19,8 +20,8 @@ export const loader = async ({ request }: LoaderArgs) => {
     return new Response(`##\r\n`);
   }
 
-  // get max sessions to deep clean from config based on device type
-  const maxSessions = await ConfigRepository.getDeviceSessionsToDeepClean(DeviceType.PICOBREW_C);
+  // get max sessions to deep clean from config based on this device's own registered type
+  const maxSessions = await ConfigRepository.getDeviceSessionsToDeepClean(device.deviceType as DeviceType);
   const lastDeepClean = device.lastDeepCleanSession ?? 0;
 
   // check if cleaning is needed

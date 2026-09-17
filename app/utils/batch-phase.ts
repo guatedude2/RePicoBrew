@@ -66,6 +66,23 @@ export function batchNeedsAttention(batch: {
   return false;
 }
 
+// Short, human-readable reason a batch showed up as needing attention — used by the notification
+// bell and (eventually) browser notifications, so both stay worded consistently.
+export function attentionMessage(phase: string): string {
+  switch (phase) {
+    case BatchPhase.COOLING:
+      return 'is ready for fermentation';
+    case BatchPhase.BOTTLING:
+      return 'is ready for carbonation';
+    case BatchPhase.FERMENTING:
+      return 'has finished its fermentation window';
+    case BatchPhase.CARBONATING:
+      return 'needs carbonation attention';
+    default:
+      return 'needs your attention';
+  }
+}
+
 const clampPct = (start: number, totalMs: number) =>
   totalMs > 0 ? Math.max(0, Math.min(99, Math.round(((Date.now() - start) / totalMs) * 100))) : 0;
 

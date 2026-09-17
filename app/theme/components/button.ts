@@ -11,6 +11,17 @@ export const buttonStyles = {
         _active: {
           boxShadow: 'none',
         },
+        // pointerEvents: 'none' stops :hover from ever activating while disabled, so this always
+        // wins over each variant's own _hover — relying on opacity/specificity alone doesn't,
+        // since _hover and _disabled are equal-specificity pseudo-classes.
+        _disabled: {
+          pointerEvents: 'none',
+          opacity: 1,
+          boxShadow: 'none',
+          bg: 'ink.borderStrong',
+          color: 'ink.textFaint',
+          borderColor: 'ink.borderStrong',
+        },
       },
       variants: {
         solid: {

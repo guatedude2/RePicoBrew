@@ -2,13 +2,17 @@ import { z } from 'zod';
 import type { PayloadAction } from '~/utils/use-tiny-reducer';
 import { createTinyReducer, useTinyReducer } from '~/utils/use-tiny-reducer';
 
+// Accepts an IPv4 address, a fully-qualified domain name, or a single-label hostname (the common
+// case for a Pi — e.g. "repicobrew-01", resolvable via mDNS as "repicobrew-01.local").
 const hostnameValidator = z
   .string()
   .min(1)
   .regex(
-    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$/,
+    /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/,
     'Invalid hostname',
   );
+
+export type SaveState = 'idle' | 'saving' | 'restarting';
 
 interface ReducerState {
   isGeneralSectionDirty: boolean;
@@ -26,9 +30,20 @@ interface ReducerState {
   wifiPassword: string;
   wifiPasswordError: string | null;
   showWifiPassword: boolean;
+  generalSaveState: SaveState;
+  apSaveState: SaveState;
+  wifiSaveState: SaveState;
 }
 
-const initialState: ReducerState = {
+export interface SettingsInitialValues {
+  hostName?: string;
+  apNetworkName?: string;
+  apPassword?: string;
+  wifiNetworkName?: string;
+  wifiPassword?: string;
+}
+
+const baseInitialState: ReducerState = {
   isGeneralSectionDirty: false,
   isAPSectionDirty: false,
   isWifiSectionDirty: false,
@@ -44,11 +59,49 @@ const initialState: ReducerState = {
   wifiPassword: '',
   wifiPasswordError: null,
   showWifiPassword: false,
+  generalSaveState: 'idle',
+  apSaveState: 'idle',
+  wifiSaveState: 'idle',
 };
 
 const tinyReducer = createTinyReducer({
-  initialState,
+  initialState: baseInitialState,
   reducers: {
+    hydrate(state, { payload }: PayloadAction<SettingsInitialValues>) {
+      if (payload.hostName !== undefined) {
+        state.hostName = payload.hostName;
+      }
+      if (payload.apNetworkName !== undefined) {
+        state.apNetworkName = payload.apNetworkName;
+      }
+      if (payload.apPassword !== undefined) {
+        state.apPassword = payload.apPassword;
+      }
+      if (payload.wifiNetworkName !== undefined) {
+        state.wifiNetworkName = payload.wifiNetworkName;
+      }
+      if (payload.wifiPassword !== undefined) {
+        state.wifiPassword = payload.wifiPassword;
+      }
+    },
+    setGeneralSaveState(state, { payload }: PayloadAction<SaveState>) {
+      state.generalSaveState = payload;
+      if (payload === 'idle') {
+        state.isGeneralSectionDirty = false;
+      }
+    },
+    setApSaveState(state, { payload }: PayloadAction<SaveState>) {
+      state.apSaveState = payload;
+      if (payload === 'idle') {
+        state.isAPSectionDirty = false;
+      }
+    },
+    setWifiSaveState(state, { payload }: PayloadAction<SaveState>) {
+      state.wifiSaveState = payload;
+      if (payload === 'idle') {
+        state.isWifiSectionDirty = false;
+      }
+    },
     setHostName(state, { payload }: PayloadAction<string>) {
       state.hostName = payload;
       state.isHostNameError = null;

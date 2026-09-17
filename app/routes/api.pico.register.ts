@@ -3,7 +3,7 @@ import { getClientIPAddress } from 'remix-utils';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
-import { DeviceLogType, DeviceType } from '~/types';
+import { DeviceLogType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -28,10 +28,14 @@ export const loader = async ({ request }: LoaderArgs) => {
 
     // log device register event
     await DeviceRepository.createDeviceLog(device.id, { type: DeviceLogType.REGISTER, ip: deviceIP });
+  } else {
+    // Pico S/C/Pro all hit this same endpoint, so the model is ambiguous until claimed —
+    // record the sighting so it shows up in the Devices page's Discovered list.
+    await DeviceRepository.upsertDiscoveredDevice(body.data.uid, null, { ipAddress: deviceIP });
   }
 
   // publish existing device detected event
-  pubsub.publish('device-detected', { uid: body.data.uid, type: DeviceType.PICOBREW_C, isRegistered });
+  pubsub.publish('device-detected', { uid: body.data.uid, deviceType: null, isRegistered });
 
   return new Response(`#${isRegistered ? 'T' : 'F'}#\r\n`);
 };

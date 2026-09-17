@@ -5,27 +5,50 @@ import { DeviceType } from '~/types';
 const TILT_ONLINE_WINDOW_MS = 10 * 60 * 1000;
 
 export class DeviceRepository {
-  public static async createDevice(
+  // Claiming turns a passively-seen uid into a real, named Device — used by the Devices settings
+  // page's pairing dialog, whether the uid came from the Discovered list or was typed in manually.
+  public static async claimDevice(
     uid: string,
     name: string,
-    deviceType: DeviceType = DeviceType.PICOBREW_C,
+    deviceType: DeviceType,
     options?: { color?: string; metadata?: Record<string, unknown> },
   ) {
-    return await prisma.device.create({
-      data: {
-        uid,
-        name,
-        deviceType,
-        state: 0,
-        color: options?.color,
-        metadata: options?.metadata ? JSON.stringify(options.metadata) : null,
-      },
+    const [device] = await prisma.$transaction([
+      prisma.device.create({
+        data: {
+          uid,
+          name,
+          deviceType,
+          state: 0,
+          color: options?.color,
+          metadata: options?.metadata ? JSON.stringify(options.metadata) : null,
+        },
+      }),
+      prisma.discoveredDevice.deleteMany({ where: { uid } }),
+    ]);
+    return device;
+  }
+
+  // Upserts a "seen but not yet claimed" uid. `deviceType` is null when the wire protocol can't
+  // disambiguate the model (Pico S/C/Pro all hit the same endpoint) — the admin picks it at claim time.
+  public static async upsertDiscoveredDevice(
+    uid: string,
+    deviceType: DeviceType | null,
+    metadata?: Record<string, unknown>,
+  ) {
+    return await prisma.discoveredDevice.upsert({
+      where: { uid },
+      create: { uid, deviceType, metadata: metadata ? JSON.stringify(metadata) : null },
+      update: { deviceType, metadata: metadata ? JSON.stringify(metadata) : undefined },
     });
   }
 
-  public static async createTiltDevice(uid: string, color: string, alias?: string) {
-    const name = alias || `Tilt ${color}`;
-    return await this.createDevice(uid, name, DeviceType.TILT, { color });
+  public static async listDiscoveredDevices() {
+    return await prisma.discoveredDevice.findMany({ orderBy: { lastSeenAt: 'desc' } });
+  }
+
+  public static async dismissDiscoveredDevice(uid: string) {
+    await prisma.discoveredDevice.deleteMany({ where: { uid } });
   }
 
   public static async listDevices() {

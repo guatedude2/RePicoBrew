@@ -27,11 +27,13 @@ export enum DeviceState {
 
 export enum DeviceType {
   PICOBREW_C = 'PICOBREW_C',
-  // PICOBREW_PRO_S = 'PICOBREW_PRO_S',
-  // ZYMATIC = 'ZYMATIC',
-  // ZSERIES = 'ZSERIES',
-  // PICOFERM = 'PICOFERM',
-  // PICOSTILL_ISPINDEL = 'PICOSTILL_ISPINDEL',
+  // Pico S / Pico Pro — the reference server treats these as the same base "PicoBrew" model,
+  // sharing the PicoBrew C wire protocol rather than having their own.
+  PICOBREW = 'PICOBREW',
+  ZYMATIC = 'ZYMATIC',
+  ZSERIES = 'ZSERIES',
+  PICOFERM = 'PICOFERM',
+  ISPINDEL = 'ISPINDEL',
   TILT = 'TILT',
 }
 

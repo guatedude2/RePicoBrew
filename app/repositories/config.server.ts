@@ -18,4 +18,12 @@ export class ConfigRepository {
     const config = await this.getConfig<DeviceConfig<number>>('DEVICE_MAX_SESSIONS_TO_DEEP_CLEAN');
     return (config && config[deviceType]) || null;
   }
+
+  public static async setConfig<T = any>(key: string, value: T) {
+    return await prisma.config.upsert({
+      where: { key },
+      create: { key, value: JSON.stringify(value) },
+      update: { value: JSON.stringify(value) },
+    });
+  }
 }

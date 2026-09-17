@@ -1,5 +1,6 @@
 import prisma from '~/services/prisma.server';
 import { BatchPhase, SessionState, SessionType } from '~/types';
+import { batchNeedsAttention } from '~/utils/batch-phase';
 
 export class BatchRepository {
   public static async createBatch(
@@ -102,6 +103,32 @@ export class BatchRepository {
         recipe: { include: { steps: true } },
       },
     });
+  }
+
+  // All ongoing batches currently sitting on a manual step — cooling/bottling awaiting
+  // confirmation, fermentation past its estimated window, or carbonation unconfigured/finished.
+  // Feeds the notification bell, so it isn't capped like listOngoing's dashboard page size.
+  public static async listNeedingAttention() {
+    const batches = await prisma.batch.findMany({
+      where: {
+        phase: {
+          in: [
+            BatchPhase.BREWING,
+            BatchPhase.COOLING,
+            BatchPhase.FERMENTING,
+            BatchPhase.BOTTLING,
+            BatchPhase.CARBONATING,
+          ],
+        },
+        archived: false,
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        sessions: { orderBy: { createdAt: 'desc' }, take: 1 },
+        recipe: { select: { fermentDays: true } },
+      },
+    });
+    return batches.filter((batch) => batchNeedsAttention(batch));
   }
 
   public static async listRecentCompleted(limit = 5) {

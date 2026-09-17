@@ -15,13 +15,42 @@ import {
   FormControl,
   FormLabel,
   Input,
-  VStack,
 } from '@chakra-ui/react';
 import { useFetcher } from '@remix-run/react';
 import { useState, type FC } from 'react';
-import { MdCheckCircle, MdDevices } from 'react-icons/md';
+import { MdDevices } from 'react-icons/md';
 import Card from '~/components/card/Card';
-import { DeviceState } from '~/types';
+import { DEFAULT_ICON_FOR_TYPE, DeviceTypeIcon, type DeviceIconKind } from '~/components/settings/DeviceTypeIcon';
+import { DeviceState, DeviceType } from '~/types';
+
+type ModelOption = { id: DeviceIconKind; label: string; deviceType: DeviceType; disabled?: boolean };
+
+const BREWING_OPTIONS: ModelOption[] = [
+  { id: 'picoS', label: 'Pico S', deviceType: DeviceType.PICOBREW },
+  { id: 'picoC', label: 'Pico C', deviceType: DeviceType.PICOBREW_C },
+  { id: 'picoPro', label: 'Pico Pro', deviceType: DeviceType.PICOBREW },
+  { id: 'zymatic', label: 'Zymatic', deviceType: DeviceType.ZYMATIC, disabled: true },
+  { id: 'zseries', label: 'Z Series', deviceType: DeviceType.ZSERIES, disabled: true },
+];
+
+const FERMENTATION_OPTIONS: ModelOption[] = [
+  { id: 'picoFerm', label: 'PicoFerm', deviceType: DeviceType.PICOFERM },
+  { id: 'ispindel', label: 'iSpindel', deviceType: DeviceType.ISPINDEL },
+  { id: 'tilt', label: 'Tilt', deviceType: DeviceType.TILT },
+];
+
+const ALL_OPTIONS = [...BREWING_OPTIONS, ...FERMENTATION_OPTIONS];
+
+function parseJSON(value: string | null): Record<string, unknown> {
+  if (!value) {
+    return {};
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
 
 type Device = {
   id: number;
@@ -41,8 +70,17 @@ type Device = {
   };
 };
 
+type DiscoveredDevice = {
+  uid: string;
+  deviceType: string | null;
+  metadata: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
 interface DevicesCardProps {
   devices: Device[];
+  discoveredDevices: DiscoveredDevice[];
 }
 
 const ACCENT_COLOR = {
@@ -65,37 +103,177 @@ const getStateLabel = (state: number, isTilt: boolean): { label: string; accent:
   }
 };
 
-export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const [pendingUid, setPendingUid] = useState('');
-  const [deviceName, setDeviceName] = useState('');
-  const fetcher = useFetcher();
+function deviceIconKind(device: Device): DeviceIconKind {
+  const metadata = parseJSON(device.metadata);
+  const modelIcon = metadata.modelIcon;
+  if (typeof modelIcon === 'string' && ALL_OPTIONS.some((o) => o.id === modelIcon)) {
+    return modelIcon as DeviceIconKind;
+  }
+  return DEFAULT_ICON_FOR_TYPE[device.deviceType as DeviceType] ?? 'picoC';
+}
 
-  const handleApprove = () => {
-    fetcher.submit(
+const ModelGrid: FC<{
+  title: string;
+  options: ModelOption[];
+  selected: DeviceIconKind | null;
+  onSelect: (option: ModelOption) => void;
+}> = ({ title, options, selected, onSelect }) => (
+  <Box>
+    <Text
+      fontSize="11px"
+      fontWeight="700"
+      letterSpacing="0.5px"
+      color="ink.textFaint"
+      textTransform="uppercase"
+      mb="8px"
+    >
+      {title}
+    </Text>
+    <Flex gap="10px" wrap="wrap">
+      {options.map((option) => {
+        const isSelected = selected === option.id;
+        return (
+          <Flex
+            key={option.id}
+            direction="column"
+            align="center"
+            gap="6px"
+            px="10px"
+            py="10px"
+            w="76px"
+            borderRadius="10px"
+            bg={isSelected ? 'brand.100' : 'ink.bg'}
+            border="1px solid"
+            borderColor={isSelected ? 'brand.500' : 'ink.cardBorder'}
+            cursor={option.disabled ? 'not-allowed' : 'pointer'}
+            opacity={option.disabled ? 0.4 : 1}
+            onClick={() => !option.disabled && onSelect(option)}
+          >
+            <DeviceTypeIcon kind={option.id} size={30} color={isSelected ? 'brand.500' : 'ink.textSecondary'} />
+            <Text
+              fontSize="11px"
+              fontWeight="600"
+              color={isSelected ? 'ink.text' : 'ink.textSecondary'}
+              textAlign="center"
+            >
+              {option.label}
+            </Text>
+          </Flex>
+        );
+      })}
+    </Flex>
+    {options.some((o) => o.disabled) && (
+      <Text fontSize="11px" color="ink.textFaintest" mt="6px">
+        Zymatic and Z Series aren&apos;t supported yet.
+      </Text>
+    )}
+  </Box>
+);
+
+export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }) => {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [pairingTarget, setPairingTarget] = useState<DiscoveredDevice | null>(null);
+  const [name, setName] = useState('');
+  const [selected, setSelected] = useState<ModelOption | null>(null);
+  const pairFetcher = useFetcher();
+  const dismissFetcher = useFetcher();
+
+  const openPairModal = (discovered: DiscoveredDevice) => {
+    setPairingTarget(discovered);
+    const metadata = parseJSON(discovered.metadata);
+    setSelected(ALL_OPTIONS.find((o) => o.deviceType === discovered.deviceType) ?? null);
+    setName(typeof metadata.name === 'string' ? metadata.name : '');
+    onOpen();
+  };
+
+  const handlePair = () => {
+    if (!pairingTarget || !name || !selected) {
+      return;
+    }
+    const metadata = parseJSON(pairingTarget.metadata);
+    pairFetcher.submit(
       {
-        intent: 'approve-device',
-        uid: pendingUid,
-        name: deviceName,
+        intent: 'pair-device',
+        uid: pairingTarget.uid,
+        name,
+        deviceType: selected.deviceType,
+        modelIcon: selected.id,
+        ...(typeof metadata.color === 'string' ? { color: metadata.color } : {}),
       },
       { method: 'post' },
     );
     onClose();
-    setPendingUid('');
-    setDeviceName('');
+  };
+
+  const handleDismiss = (discoveredUid: string) => {
+    dismissFetcher.submit({ intent: 'dismiss-discovered-device', uid: discoveredUid }, { method: 'post' });
   };
 
   return (
     <>
       <Card p="24px">
-        <Flex justify="space-between" align="center" mb="14px">
-          <Text fontSize="17px" fontWeight="700">
-            Devices
-          </Text>
-          <Button leftIcon={<Icon as={MdCheckCircle} />} variant="brand" size="sm" onClick={() => onOpen()}>
-            Add Device
-          </Button>
-        </Flex>
+        <Text fontSize="17px" fontWeight="700">
+          Devices
+        </Text>
+        <Text fontSize="13px" color="ink.textDim" mt="4px" mb="14px">
+          Devices show up here automatically as they connect to your network — pair each one manually to give it a name
+          before it can be used.
+        </Text>
+
+        {discoveredDevices.length > 0 && (
+          <Box mb="18px" pb="18px" borderBottom="1px solid" borderColor="ink.divider">
+            <Text fontSize="12px" fontWeight="700" color="ink.textFaint" textTransform="uppercase" mb="10px">
+              Discovered Devices
+            </Text>
+            <Flex direction="column" gap="10px">
+              {discoveredDevices.map((discovered) => (
+                <Flex
+                  key={discovered.uid}
+                  align="center"
+                  gap="14px"
+                  p="14px"
+                  borderRadius="10px"
+                  border="1px dashed"
+                  borderColor="brand.500"
+                >
+                  <Flex
+                    align="center"
+                    justify="center"
+                    w="32px"
+                    h="32px"
+                    borderRadius="8px"
+                    bg="ink.bg"
+                    border="1px solid"
+                    borderColor="ink.cardBorder"
+                    flexShrink={0}
+                  >
+                    <DeviceTypeIcon
+                      kind={
+                        discovered.deviceType ? DEFAULT_ICON_FOR_TYPE[discovered.deviceType as DeviceType] : 'picoC'
+                      }
+                      size={20}
+                      color="ink.textSecondary"
+                    />
+                  </Flex>
+                  <Box flex="1" minW="0">
+                    <Text fontSize="14px" fontWeight="700">
+                      Discovered Device
+                    </Text>
+                    <Text fontSize="12px" color="ink.textFaint" fontFamily="mono" noOfLines={1}>
+                      {discovered.uid}
+                    </Text>
+                  </Box>
+                  <Button size="xs" w="76px" variant="outline" onClick={() => handleDismiss(discovered.uid)}>
+                    Dismiss
+                  </Button>
+                  <Button size="xs" w="76px" variant="brand" onClick={() => openPairModal(discovered)}>
+                    Pair
+                  </Button>
+                </Flex>
+              ))}
+            </Flex>
+          </Box>
+        )}
 
         {devices.length === 0 ? (
           <Flex direction="column" align="center" gap="8px" py="32px">
@@ -109,22 +287,23 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
           devices.map((device) => {
             const isTilt = device.deviceType === 'TILT';
             const stateInfo = getStateLabel(device.state, isTilt);
-            let metadata: any = {};
-            try {
-              metadata = device.metadata ? JSON.parse(device.metadata) : {};
-            } catch {
-              // ignore malformed metadata
-            }
+            const metadata = parseJSON(device.metadata);
 
             return (
               <Flex key={device.id} align="center" gap="14px" py="12px" borderTop="1px solid" borderColor="ink.divider">
-                <Box
-                  w="9px"
-                  h="9px"
-                  borderRadius="full"
-                  bg={ACCENT_COLOR[stateInfo.accent]}
-                  boxShadow={`0 0 8px ${ACCENT_COLOR[stateInfo.accent]}`}
-                />
+                <Flex
+                  align="center"
+                  justify="center"
+                  w="32px"
+                  h="32px"
+                  borderRadius="8px"
+                  bg="ink.bg"
+                  border="1px solid"
+                  borderColor="ink.cardBorder"
+                  flexShrink={0}
+                >
+                  <DeviceTypeIcon kind={deviceIconKind(device)} size={20} color="ink.textSecondary" />
+                </Flex>
                 <Box flex="1">
                   <Text fontSize="14px" fontWeight="600">
                     {device.name}
@@ -136,6 +315,13 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
                     {!isTilt && device.ipAddress ? ` · ${device.ipAddress}` : ''}
                   </Text>
                 </Box>
+                <Box
+                  w="9px"
+                  h="9px"
+                  borderRadius="full"
+                  bg={ACCENT_COLOR[stateInfo.accent]}
+                  boxShadow={`0 0 8px ${ACCENT_COLOR[stateInfo.accent]}`}
+                />
                 <Text fontSize="11px" fontWeight="700" color={`${stateInfo.accent}.500`}>
                   {stateInfo.label}
                 </Text>
@@ -145,42 +331,42 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
         )}
       </Card>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} size="lg">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Add Device</ModalHeader>
+          <ModalHeader>
+            Pair Device
+            {pairingTarget && (
+              <Text fontSize="12px" fontWeight="500" fontFamily="mono" color="ink.textFaint" mt="2px">
+                {pairingTarget.uid}
+              </Text>
+            )}
+          </ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Device UID</FormLabel>
-                <Input
-                  placeholder="32-character device ID"
-                  value={pendingUid}
-                  onChange={(e) => setPendingUid(e.target.value)}
-                  fontFamily="mono"
-                  maxLength={32}
-                />
-                <Text fontSize="xs" color="ink.textFaint" mt={1}>
-                  Found in register logs when device first connects
-                </Text>
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Device Name</FormLabel>
-                <Input
-                  placeholder="e.g., Garage Pico"
-                  value={deviceName}
-                  onChange={(e) => setDeviceName(e.target.value)}
-                />
-              </FormControl>
-            </VStack>
+          <ModalBody display="flex" flexDirection="column" gap="16px">
+            <ModelGrid
+              title="Brewing Devices"
+              options={BREWING_OPTIONS}
+              selected={selected?.id ?? null}
+              onSelect={setSelected}
+            />
+            <ModelGrid
+              title="Fermentation Devices"
+              options={FERMENTATION_OPTIONS}
+              selected={selected?.id ?? null}
+              onSelect={setSelected}
+            />
+            <FormControl isRequired>
+              <FormLabel>Device Name</FormLabel>
+              <Input placeholder="e.g., Garage Pico" value={name} onChange={(e) => setName(e.target.value)} />
+            </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handleApprove} isDisabled={!pendingUid || !deviceName}>
-              Approve Device
+            <Button variant="brand" onClick={handlePair} isDisabled={!name || !selected}>
+              Pair Device
             </Button>
           </ModalFooter>
         </ModalContent>

@@ -1069,19 +1069,15 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             wrap="wrap"
             align="center"
           >
-            {batch.recipe?.photoUrl ? (
-              <Box
-                w="80px"
-                h="96px"
-                borderRadius="10px"
-                bgImage={`url(${batch.recipe.photoUrl})`}
-                bgSize="cover"
-                bgPosition="center"
-                flex="0 0 auto"
-              />
-            ) : (
-              <Box w="80px" h="96px" borderRadius="10px" bg="ink.bg" flex="0 0 auto" />
-            )}
+            <Box
+              w="80px"
+              h="96px"
+              borderRadius="10px"
+              bgImage={`url(${batch.recipe?.photoUrl || '/img/no-photo.jpg'})`}
+              bgSize="cover"
+              bgPosition="center"
+              flex="0 0 auto"
+            />
             <Box flex="1" minW="160px">
               <Text fontSize="22px" fontWeight="700">
                 {batch.name}

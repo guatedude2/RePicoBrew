@@ -55,7 +55,8 @@ export async function action({ request }: ActionArgs) {
 
       results.push({
         color,
-        deviceId: result.device.id,
+        deviceId: result.device?.id ?? null,
+        claimed: !!result.device,
         sessionActive: !!result.session,
       });
     }

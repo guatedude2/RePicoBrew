@@ -5,7 +5,8 @@ import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
-import { DeviceLogType, DeviceType } from '~/types';
+import type { DeviceType } from '~/types';
+import { DeviceLogType } from '~/types';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -22,9 +23,9 @@ export const loader = async ({ request }: LoaderArgs) => {
     return new Response(`#F#\r\n`);
   }
 
-  // get the device firmware
-  const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOBREW_C);
-  // compare version with pico brew c version
+  // get the device firmware for this device's own registered model
+  const firmware = await ConfigRepository.getDeviceFirmware(device.deviceType as DeviceType);
+  // compare version with the device's current firmware
   const hadUpdate = Boolean(firmware && device.firmwareVersion && SemVer.lt(device.firmwareVersion, firmware.version));
 
   if (!firmware || !hadUpdate) {

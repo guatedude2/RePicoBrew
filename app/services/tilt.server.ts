@@ -1,5 +1,6 @@
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
+import { DeviceType } from '~/types';
 import pubsub from './pubsub.server';
 
 // Tilt color UUID mapping (iBeacon UUIDs)
@@ -63,12 +64,13 @@ export async function processTiltReading(reading: TiltReading) {
   // Construct device UID: prefer {Color}{MAC}, fallback to color only
   const deviceUID = uid || (mac ? `${color}${mac.replace(/:/g, '')}` : color);
 
-  // Find or create device
-  let device = await DeviceRepository.getDeviceByUID(deviceUID);
+  // Find device — unclaimed uids are recorded as Discovered, not auto-created.
+  const device = await DeviceRepository.getDeviceByUID(deviceUID);
   if (!device) {
     console.log(`[Tilt] New device detected: ${deviceUID} (${color})`);
-    device = await DeviceRepository.createTiltDevice(deviceUID, color);
-    pubsub.publish('device-detected', { uid: deviceUID, color, deviceType: 'TILT' });
+    await DeviceRepository.upsertDiscoveredDevice(deviceUID, DeviceType.TILT, { color });
+    pubsub.publish('device-detected', { uid: deviceUID, deviceType: DeviceType.TILT, isRegistered: false });
+    return { device: null, session: null, temp, gravity };
   }
 
   // Find active session for this device
