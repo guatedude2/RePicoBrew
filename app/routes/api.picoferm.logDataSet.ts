@@ -46,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pubsub.publish('device-detected', { uid: body.data.uid, deviceType: DeviceType.PICOFERM, isRegistered: false });
     return new Response('#2,4#');
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
   const isActive = !!session && session.state === SessionState.IN_PROGRESS;

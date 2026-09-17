@@ -26,6 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // is stripped from the client bundle like the rest of this function; the module-level
   // `global.__aiSchedulerStarted` guard in ai-scheduler.server.ts still only starts the interval once.
   void import('~/services/ai-scheduler.server');
+  void import('~/services/device-monitor.server');
 
   const [deviceStatus, attentionBatches, hasAiKey] = await Promise.all([
     DeviceRepository.getStatus(),

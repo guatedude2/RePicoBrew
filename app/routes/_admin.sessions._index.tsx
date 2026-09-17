@@ -54,8 +54,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { batches, total, page, pageSize: PAGE_SIZE, sort, dir };
 };
 
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-const formatTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const formatDate = (date: Date | string) =>
+  new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const formatTime = (date: Date | string) =>
+  new Date(date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const columns = '1.4fr 1.2fr 1.1fr 1.1fr 60px';
 

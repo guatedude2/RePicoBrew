@@ -39,6 +39,13 @@ model Device {
   lastDeepCleanSession Int?
   color                String? // For Tilt hydrometers: Red, Green, Black, Purple, Orange, Blue, Yellow, Pink
   metadata             String? // JSON for additional device-specific data
+  // Bumped on every inbound check-in from the device itself (register, poll, log, ...) — these
+  // devices only ever call out to us, so this is the "we definitely heard from it recently" signal.
+  lastSeenAt           DateTime?
+  // Resolved via the LAN's ARP/neighbor table (see device-network-monitor.server.ts) the first
+  // time we see this device's IP, then used to re-find it there on later ticks — this survives a
+  // DHCP lease renewal handing the device a new IP, which a stale ipAddress alone would not.
+  macAddress           String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @default(now()) @updatedAt
   deletedAt            DateTime?
@@ -62,6 +69,7 @@ model DiscoveredDevice {
 model Recipe {
   id          Int       @id @default(autoincrement())
   deviceType  String //enum
+  packType    String    @default("zpack") // enum: picopack | zpack — see app/types.ts RecipePackType
   name        String
   abv         Float
   ibu         Float

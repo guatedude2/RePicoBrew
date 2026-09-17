@@ -1,0 +1,338 @@
+import { Form, Link, useNavigate, useNavigation } from 'react-router';
+import { useMemo, useRef, useState, type FC } from 'react';
+import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Textarea } from '~/components/ui/textarea';
+import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
+import { cn } from '~/lib/utils';
+import { PicoLocationMap, RecipePackType } from '~/types';
+import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
+
+const newId = () => Math.random().toString(36).slice(2);
+
+const machineStepToRow = (s: {
+  name: string;
+  temperature: number;
+  stepTime: number;
+  drainTime: number;
+  location: number;
+}): MachineStepRow => ({
+  id: newId(),
+  name: s.name,
+  temperature: s.temperature,
+  stepTime: s.stepTime,
+  drainTime: s.drainTime,
+  location: s.location,
+});
+
+// PicoPacks run a fixed 5L batch — there's no batch-size field to edit, unlike ZPack.
+const PICOPACK_BATCH_SIZE_L = 5;
+export const PICOPACK_BATCH_SIZE_GAL = PICOPACK_BATCH_SIZE_L / 3.78541;
+
+const DEFAULT_MACHINE_STEPS: MachineStepRow[] = [
+  {
+    id: newId(),
+    name: 'Preparing To Brew',
+    location: PicoLocationMap.Prime,
+    temperature: 70,
+    stepTime: 3,
+    drainTime: 0,
+  },
+  { id: newId(), name: 'Heating', location: PicoLocationMap.Mash, temperature: 156, stepTime: 15, drainTime: 0 },
+  { id: newId(), name: 'Dough In', location: PicoLocationMap.Mash, temperature: 152, stepTime: 20, drainTime: 0 },
+];
+
+export type PicoPackEditorData = {
+  id: number;
+  name: string;
+  style: string | null;
+  notes: string | null;
+  photoUrl: string | null;
+  abv: number;
+  ibu: number;
+  steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
+};
+
+export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: string; readOnly?: boolean }> = ({
+  recipe,
+  deviceType,
+  readOnly = false,
+}) => {
+  const navigate = useNavigate();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state !== 'idle';
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [name, setName] = useState(recipe?.name ?? '');
+  const [style, setStyle] = useState(recipe?.style ?? '');
+  const [notes, setNotes] = useState(recipe?.notes ?? '');
+  const [abv, setAbv] = useState(recipe?.abv ?? 5);
+  const [ibu, setIbu] = useState(recipe?.ibu ?? 30);
+  const [photoUrl] = useState(recipe?.photoUrl ?? null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(recipe?.photoUrl ?? null);
+
+  const [machineSteps, setMachineSteps] = useState<MachineStepRow[]>(
+    recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS,
+  );
+  const [modalOpen, setModalOpen] = useState(false);
+  const [stepsExpanded, setStepsExpanded] = useState(true);
+
+  const machineValidation = useMemo(
+    () => validatePicoRecipe(machineSteps.map(({ id: _id, ...rest }) => rest)),
+    [machineSteps],
+  );
+  const errors = useMemo(() => {
+    const errs: string[] = [];
+    if (!name.trim()) {
+      errs.push('Recipe name is required');
+    }
+    errs.push(...machineValidation.errors);
+    return errs;
+  }, [name, machineValidation.errors]);
+  const hasErrors = errors.length > 0;
+
+  const payload = useMemo(
+    () => ({
+      name,
+      deviceType,
+      packType: RecipePackType.PICOPACK,
+      abv,
+      ibu,
+      style,
+      notes,
+      photoUrl: photoUrl ?? undefined,
+      batchSize: PICOPACK_BATCH_SIZE_GAL,
+      steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+      ingredients: [],
+    }),
+    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps],
+  );
+
+  const FormWrapper = readOnly ? 'div' : Form;
+  const formWrapperProps = readOnly ? {} : { method: 'post' as const, encType: 'multipart/form-data' as const };
+
+  return (
+    <>
+      <div className="mb-1 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/recipes')}
+          className="flex size-8 items-center justify-center rounded-[7px] border border-ink-card-border bg-ink-card"
+        >
+          <MdArrowBack className="size-[15px]" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-bold">{name || 'New Recipe'}</p>
+          <p className="text-xs text-ink-text-faint">{style || ' '}</p>
+        </div>
+        {readOnly && recipe && (
+          <Link to={`/recipes/${recipe.id}`}>
+            <Button variant="brand" size="sm">
+              <MdEdit />
+              Edit Recipe
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      <FormWrapper {...formWrapperProps}>
+        {!readOnly && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              name="photo"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setPhotoPreview(URL.createObjectURL(file));
+                }
+              }}
+            />
+            <input type="hidden" name="data" value={JSON.stringify(payload)} />
+          </>
+        )}
+
+        <div className="flex max-w-[720px] flex-col gap-4">
+          {hasErrors && !readOnly && (
+            <div className="flex flex-col gap-1.5 rounded-[10px] border border-danger-500 bg-danger-100 p-3.5">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-danger-500">
+                <MdError className="size-[15px]" />
+                Fix these before saving
+              </div>
+              {errors.map((err) => (
+                <p key={err} className="pl-[23px] text-[13px] text-ink-text-secondary">
+                  {err}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {!readOnly && (
+            <div className="flex justify-end">
+              <Button type="submit" variant="brand" disabled={hasErrors || isSubmitting}>
+                {isSubmitting ? 'Saving…' : 'Save Recipe'}
+              </Button>
+            </div>
+          )}
+
+          <Card className="flex-col gap-[22px] p-[22px] md:flex-row">
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={readOnly ? undefined : () => fileInputRef.current?.click()}
+              className={cn(
+                'flex h-[220px] w-[180px] flex-none items-center justify-center overflow-hidden rounded-xl border border-dashed border-ink-border-strong bg-ink-bg bg-cover bg-center',
+                readOnly ? 'cursor-default' : 'cursor-pointer',
+              )}
+              style={{ backgroundImage: `url(${photoPreview || '/img/no-photo.jpg'})` }}
+            >
+              {!photoPreview && !readOnly && (
+                <div className="flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-2 text-ink-text">
+                  <MdCameraAlt className="size-6" />
+                  <p className="text-xs">Beer glass photo</p>
+                </div>
+              )}
+            </button>
+            <div className="flex min-w-[260px] flex-1 flex-col gap-3.5">
+              {readOnly ? (
+                <div>
+                  <p className="text-xl font-bold">{name}</p>
+                  <p className="mt-0.5 text-[13px] text-ink-text-dim">{style}</p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3.5">
+                  <div className="min-w-[200px] flex-1">
+                    <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Recipe Name *</p>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plinius Maximus DIPA" />
+                  </div>
+                  <div className="min-w-[200px] flex-1">
+                    <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Style</p>
+                    <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Double IPA" />
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">ABV %</p>
+                  {readOnly ? (
+                    <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{abv.toFixed(1)}</p>
+                  ) : (
+                    <Input
+                      type="number"
+                      step={0.1}
+                      value={abv}
+                      onChange={(e) => setAbv(Number(e.target.value))}
+                      className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                    />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">IBU</p>
+                  {readOnly ? (
+                    <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{ibu}</p>
+                  ) : (
+                    <Input
+                      type="number"
+                      value={ibu}
+                      onChange={(e) => setIbu(Number(e.target.value))}
+                      className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                    />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">Batch Size</p>
+                  <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold text-ink-text-muted">
+                    {PICOPACK_BATCH_SIZE_L} L (fixed)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="gap-3.5 p-[22px]">
+            <p className="text-[15px] font-bold">Notes</p>
+            {readOnly ? (
+              <p className="text-sm text-ink-text-secondary">{notes || '—'}</p>
+            ) : (
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+            )}
+          </Card>
+
+          <Card className="gap-3.5 p-[22px]">
+            <div>
+              <button
+                type="button"
+                onClick={() => setStepsExpanded((v) => !v)}
+                className="flex items-center gap-2 text-left"
+              >
+                <MdExpandMore
+                  className={cn(
+                    'size-[18px] text-ink-text-faint transition-transform duration-150',
+                    stepsExpanded ? 'rotate-0' : '-rotate-90',
+                  )}
+                />
+                <p className="text-[15px] font-bold">Steps</p>
+              </button>
+              <p className="mt-1 pl-[26px] text-[12px] text-ink-text-faint">
+                PicoPacks are defined entirely by their step sequence — no separate mash/boil/fermentation science.
+              </p>
+            </div>
+            {stepsExpanded && (
+              <div className="overflow-hidden rounded-[10px] border border-ink-divider">
+                <div
+                  className="grid gap-2.5 bg-ink-bg px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-ink-text-faint"
+                  style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
+                >
+                  <span>Name</span>
+                  <span>Location</span>
+                  <span>Temp °F</span>
+                  <span>Time (min)</span>
+                  <span>Drain (min)</span>
+                </div>
+                {machineSteps.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
+                      index > 0 && 'border-t border-ink-divider',
+                    )}
+                    style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
+                  >
+                    <p>{row.name}</p>
+                    <p className="text-ink-text-muted">{PicoLocationMap[row.location]}</p>
+                    <p className="font-mono">{row.temperature}</p>
+                    <p className="font-mono">{row.stepTime}</p>
+                    <p className="font-mono">{row.drainTime}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="self-start text-[13px] font-semibold text-brand-500"
+              >
+                Edit Steps
+              </button>
+            )}
+          </Card>
+        </div>
+      </FormWrapper>
+
+      {!readOnly && (
+        <MachineStepsModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          steps={machineSteps}
+          onChange={setMachineSteps}
+        />
+      )}
+    </>
+  );
+};

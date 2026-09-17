@@ -72,6 +72,7 @@ export async function processTiltReading(reading: TiltReading) {
     pubsub.publish('device-detected', { uid: deviceUID, deviceType: DeviceType.TILT, isRegistered: false });
     return { device: null, session: null, temp, gravity };
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // Find active session for this device
   const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);

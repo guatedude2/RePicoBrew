@@ -21,6 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // ignore command if not registered
     return new Response(`#F#\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // update the state of the device
   await DeviceRepository.updateDeviceState(device.id, body.data.state);

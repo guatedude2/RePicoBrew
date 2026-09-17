@@ -1,5 +1,6 @@
 /* eslint-disable no-var */
 import { join } from 'node:path';
+import { PrismaBetterSQLite3 } from '@prisma/adapter-better-sqlite3';
 import type { Prisma } from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
 import kebabCase from 'lodash/kebabCase';
@@ -12,8 +13,15 @@ const HARD_DELETE_MODELS: Prisma.ModelName[] = [
   'Batch',
   'DiscoveredDevice',
   'AiAdvice',
+  // Child rows recreated wholesale on every recipe save (see updateRecipe) — no `deletedAt`
+  // column exists on either model.
+  'RecipeStep',
+  'RecipeIngredient',
 ];
-const PRISMA_CLIENT_GEN = 4;
+// Bumped for the Prisma 6 + driver-adapter migration (no more native query-engine binary — see
+// pi-image/README.md, which is why this changed): forces the dev singleton below to rebuild.
+// Bump again whenever HARD_DELETE_MODELS changes, since the extension closes over it.
+const PRISMA_CLIENT_GEN = 6;
 const sqliteUrl = `file:${join(process.cwd(), 'prisma', 'picobrew.db')}`;
 
 function isStaleSqliteError(error: unknown) {
@@ -26,103 +34,111 @@ async function applySqlitePragmas(client: PrismaClient) {
   await client.$queryRawUnsafe('PRAGMA busy_timeout=5000');
 }
 
-function attachMiddleware(client: PrismaClient) {
+const uncapitalize = (model: string) => model.charAt(0).toLowerCase() + model.slice(1);
+
+// Rewrites a query for models not in HARD_DELETE_MODELS: reads filter out soft-deleted rows,
+// and delete/deleteMany become update/updateMany that set `deletedAt` instead of removing the row.
+function rewriteForSoftDelete(
+  model: string,
+  operation: string,
+  args: Record<string, unknown> | undefined,
+): { operation: string; args: Record<string, unknown> } {
+  if (HARD_DELETE_MODELS.includes(model as Prisma.ModelName)) {
+    return { operation, args: args ?? {} };
+  }
+  const safeArgs = args ?? {};
+  switch (operation) {
+    case 'findFirst': {
+      const where = (safeArgs.where as Record<string, unknown>) ?? {};
+      return { operation, args: { ...safeArgs, where: { ...where, deletedAt: null } } };
+    }
+    case 'count':
+    case 'findMany': {
+      const where = safeArgs.where as Record<string, unknown> | undefined;
+      if (where === undefined) {
+        return { operation, args: { ...safeArgs, where: { deletedAt: null } } };
+      }
+      if (where.deletedAt === undefined) {
+        return { operation, args: { ...safeArgs, where: { ...where, deletedAt: null } } };
+      }
+      return { operation, args: safeArgs };
+    }
+    case 'delete': {
+      return { operation: 'update', args: { where: safeArgs.where, data: { deletedAt: new Date() } } };
+    }
+    case 'deleteMany': {
+      return { operation: 'updateMany', args: { where: safeArgs.where, data: { deletedAt: new Date() } } };
+    }
+    default:
+      return { operation, args: safeArgs };
+  }
+}
+
+const PUBLISHED_OPERATIONS = new Set(['create', 'update', 'upsert', 'delete']);
+
+function extendClient(base: PrismaClient) {
   let recovering = false;
 
-  client.$use(async (params, next) => {
-    try {
-      return await next(params);
-    } catch (error) {
-      if (recovering || !isStaleSqliteError(error)) {
-        throw error;
-      }
-      recovering = true;
-      console.warn('[prisma] SQLite handle went stale; reconnecting');
-      try {
-        await client.$disconnect();
-        await client.$connect();
-        await applySqlitePragmas(client);
-        return await next(params);
-      } finally {
-        recovering = false;
-      }
-    }
-  });
+  return base.$extends({
+    query: {
+      $allModels: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async $allOperations({ model, operation, args, query }: any) {
+          const rewritten = rewriteForSoftDelete(model, operation, args);
 
-  client.$use(async (params, next) => {
-    params.args = params.args || { where: {} };
-    // ignore models that are in the hard delete array
-    if (params.model && HARD_DELETE_MODELS.includes(params.model)) {
-      return next(params);
-    }
+          const run = () =>
+            rewritten.operation === operation
+              ? query(rewritten.args)
+              : // delete/deleteMany got rewritten to update/updateMany — `query` is bound to the
+                // original operation, so the rewritten one is run directly against the base
+                // (unextended) client instead.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (base as any)[uncapitalize(model)][rewritten.operation](rewritten.args);
 
-    switch (params.action) {
-      // filter out deleted records
-      case 'findFirst': {
-        params.action = 'findFirst';
-        params.args.where.deletedAt = null;
-        break;
-      }
-      case 'count':
-      case 'findMany': {
-        if (params.args.where === undefined) {
-          params.args.where = { deletedAt: null };
-        } else if (params.args.where && params.args.where.deletedAt === undefined) {
-          params.args.where.deletedAt = null;
-        }
-        break;
-      }
-      // Soft delete a records
-      case 'delete': {
-        params.action = 'update';
-        params.args.data = { deletedAt: new Date(), ...params.args.data };
-        break;
-      }
-      case 'deleteMany': {
-        params.action = 'updateMany';
-        if (params.args.data !== undefined) {
-          params.args.data.deletedAt = new Date();
-        } else {
-          params.args.data = { deletedAt: new Date(), ...params.args.data };
-        }
-        break;
-      }
-    }
-    return next(params);
-  });
+          let result;
+          try {
+            result = await run();
+          } catch (error) {
+            if (recovering || !isStaleSqliteError(error)) {
+              throw error;
+            }
+            recovering = true;
+            console.warn('[prisma] SQLite handle went stale; reconnecting');
+            try {
+              await base.$disconnect();
+              await base.$connect();
+              await applySqlitePragmas(base);
+              result = await run();
+            } finally {
+              recovering = false;
+            }
+          }
 
-  client.$use(async (params, next) => {
-    const data = await next(params);
-    const modelName = kebabCase(params.model);
-    const action = params.action;
-    switch (action) {
-      case 'create':
-      case 'update':
-      case 'upsert':
-      case 'delete': {
-        pubsub.publish(`${modelName}-update`, { action, data });
-        break;
-      }
-    }
-    return data;
+          if (PUBLISHED_OPERATIONS.has(rewritten.operation)) {
+            pubsub.publish(`${kebabCase(model)}-update`, { action: rewritten.operation, data: result });
+          }
+
+          return result;
+        },
+      },
+    },
   });
 }
 
 function createPrismaClient() {
-  const client = new PrismaClient({
-    datasources: { db: { url: sqliteUrl } },
-  });
-  attachMiddleware(client);
-  void applySqlitePragmas(client).catch((error) => {
+  const base = new PrismaClient({ adapter: new PrismaBetterSQLite3({ url: sqliteUrl }) });
+  void applySqlitePragmas(base).catch((error) => {
     console.warn('[prisma] Failed to apply SQLite pragmas', error);
   });
-  return client;
+  return extendClient(base);
 }
 
-let prisma: PrismaClient;
+type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
+
+let prisma: ExtendedPrismaClient;
 
 declare global {
-  var __prisma: PrismaClient | undefined;
+  var __prisma: ExtendedPrismaClient | undefined;
   var __prismaGen: number | undefined;
 }
 

@@ -41,6 +41,7 @@ export async function processISpindelReading(reading: ISpindelReading) {
     pubsub.publish('device-detected', { uid, deviceType: DeviceType.ISPINDEL, isRegistered: false });
     return { device: null, session: null, temp, gravity };
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // Find active session for this device
   const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);

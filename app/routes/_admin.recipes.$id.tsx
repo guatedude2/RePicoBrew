@@ -2,7 +2,9 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { RecipeEditor, type RecipeEditorData } from '~/pages/RecipeEditor';
+import { PicoPackEditor, type PicoPackEditorData } from '~/pages/RecipeEditor/PicoPackEditor';
 import { RecipeRepository, type CreateRecipeInput } from '~/repositories/recipe.server';
+import { RecipePackType } from '~/types';
 import { parseRecipeFormData } from '~/utils/recipe-photo.server';
 
 export const meta = ({ data }: { data?: { readOnly: boolean } }) => [
@@ -51,6 +53,15 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
 export default function RecipeEditPage() {
   const { recipe, readOnly } = useLoaderData<typeof loader>();
+  if (recipe.packType === RecipePackType.PICOPACK) {
+    return (
+      <PicoPackEditor
+        recipe={recipe as unknown as PicoPackEditorData}
+        deviceType={recipe.deviceType}
+        readOnly={readOnly}
+      />
+    );
+  }
   return (
     <RecipeEditor recipe={recipe as unknown as RecipeEditorData} deviceType={recipe.deviceType} readOnly={readOnly} />
   );

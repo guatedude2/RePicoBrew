@@ -19,6 +19,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response(`##\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // get max sessions to deep clean from config based on this device's own registered type
   const maxSessions = await ConfigRepository.getDeviceSessionsToDeepClean(device.deviceType as DeviceType);

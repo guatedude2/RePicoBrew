@@ -20,6 +20,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response(`\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // log device error code
   await DeviceRepository.createDeviceLog(device.id, {

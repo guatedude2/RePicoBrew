@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { useState, type FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { MdDelete, MdDevices } from 'react-icons/md';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
@@ -9,6 +9,7 @@ import { Label } from '~/components/ui/label';
 import { DEFAULT_ICON_FOR_TYPE, DeviceTypeIcon, type DeviceIconKind } from '~/components/settings/DeviceTypeIcon';
 import { cn } from '~/lib/utils';
 import { DeviceState, DeviceType } from '~/types';
+import { useServerSideEvent } from '~/utils/sse';
 
 type ModelOption = { id: DeviceIconKind; label: string; deviceType: DeviceType; disabled?: boolean };
 
@@ -50,6 +51,7 @@ type Device = {
   sessionCount: number;
   color: string | null; // Tilt color
   metadata: string | null; // JSON string
+  online: boolean;
   createdAt: string;
   updatedAt: string;
   _count: {
@@ -73,21 +75,14 @@ interface DevicesCardProps {
 const STATE_STYLES = {
   success: { dot: 'bg-success-500 shadow-[0_0_8px_var(--color-success-500)]', text: 'text-success-500' },
   info: { dot: 'bg-info-500 shadow-[0_0_8px_var(--color-info-500)]', text: 'text-info-500' },
+  neutral: { dot: 'bg-ink-text-faintest', text: 'text-ink-text-faint' },
 } as const;
 
-const getStateLabel = (state: number, isTilt: boolean): { label: string; accent: keyof typeof STATE_STYLES } => {
-  if (isTilt) {
-    return { label: 'ACTIVE', accent: 'success' };
-  }
-  switch (state) {
-    case DeviceState.READY:
-      return { label: 'READY', accent: 'success' };
-    case DeviceState.BREWING:
-      return { label: 'BREWING', accent: 'info' };
-    default:
-      return { label: 'ONLINE', accent: 'success' };
-  }
-};
+// Connectivity (online/offline) is the device's real, network-derived status — see
+// DeviceRepository.isDeviceOnline. "BREWING" is a separate, secondary badge for what an online
+// Pico/Zymatic/Z-Series device is currently doing, not a substitute for connectivity.
+const getConnectivityLabel = (online: boolean): { label: string; accent: keyof typeof STATE_STYLES } =>
+  online ? { label: 'ONLINE', accent: 'success' } : { label: 'OFFLINE', accent: 'neutral' };
 
 function deviceIconKind(device: Device): DeviceIconKind {
   const metadata = parseJSON(device.metadata);
@@ -149,6 +144,17 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
   const dismissFetcher = useFetcher();
   const deleteFetcher = useFetcher();
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
+
+  // The loader's `online` snapshot is only as fresh as the last page load — this fills the gap
+  // between loads with live pushes from device-monitor.server.ts, the same pattern Dashboard
+  // uses for session-update.
+  const [onlineOverrides, setOnlineOverrides] = useState<Record<string, boolean>>({});
+  useServerSideEvent<{ uid: string; online: boolean }>('device-availability-update', (data) => {
+    setOnlineOverrides((prev) => ({ ...prev, [data.uid]: data.online }));
+  });
+  useEffect(() => {
+    setOnlineOverrides({});
+  }, [devices]);
 
   const handleDelete = () => {
     if (!deleteTarget) {
@@ -246,9 +252,11 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
         ) : (
           devices.map((device) => {
             const isTilt = device.deviceType === 'TILT';
-            const stateInfo = getStateLabel(device.state, isTilt);
+            const online = onlineOverrides[device.uid] ?? device.online;
+            const connectivity = getConnectivityLabel(online);
+            const connectivityStyle = STATE_STYLES[connectivity.accent];
+            const isBrewing = !isTilt && online && device.state === DeviceState.BREWING;
             const metadata = parseJSON(device.metadata);
-            const stateStyle = STATE_STYLES[stateInfo.accent];
 
             return (
               <div key={device.id} className="flex items-center gap-3.5 border-t border-ink-divider py-3">
@@ -266,8 +274,11 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
                     {!isTilt && device.ipAddress ? ` · ${device.ipAddress}` : ''}
                   </p>
                 </div>
-                <div className={cn('size-[9px] shrink-0 rounded-full', stateStyle.dot)} />
-                <p className={cn('text-[11px] font-bold', stateStyle.text)}>{stateInfo.label}</p>
+                {isBrewing && (
+                  <p className="rounded-md bg-info-100 px-1.5 py-[2px] text-[10px] font-bold text-info-500">BREWING</p>
+                )}
+                <div className={cn('size-[9px] shrink-0 rounded-full', connectivityStyle.dot)} />
+                <p className={cn('text-[11px] font-bold', connectivityStyle.text)}>{connectivity.label}</p>
                 <button
                   type="button"
                   aria-label={`Remove ${device.name}`}

@@ -51,7 +51,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     AiSettingsRepository.getActiveProviderName(),
   ]);
   return serializeDates({
-    devices,
+    devices: devices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
     discoveredDevices,
     users,
     hostname: hostname ?? '',

@@ -25,6 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response('#2,4#');
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
   const isActive = !!session && session.state === SessionState.IN_PROGRESS && !isPicoFermSessionExpired(session);

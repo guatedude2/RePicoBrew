@@ -31,6 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response(`##\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // decode the pak id
   const { recipeId } = getPakIdData(body.data.rfid);

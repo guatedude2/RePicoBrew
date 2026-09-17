@@ -25,7 +25,9 @@ import { ACCENT, StatCard } from '~/components/ui/StatCard';
 import { cn } from '~/lib/utils';
 import { BatchPhase } from '~/types';
 import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
+import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { formatRelativeTime } from '~/utils/relative-time';
+import { srmSwatchUrl } from '~/utils/srm-swatch';
 import { useServerSideEvent } from '~/utils/sse';
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
@@ -86,7 +88,7 @@ type ApexChartContext = {
   };
 };
 
-const vesselPhaseForBatch = (batchPhase: BatchPhase, brewPhase: Phase): Phase => {
+const vesselPhaseForBatch = (batchPhase: string, brewPhase: Phase): Phase => {
   if (batchPhase === BatchPhase.COOLING) {
     return Phase.CHILLING;
   }
@@ -104,7 +106,7 @@ const vesselPhaseForBatch = (batchPhase: BatchPhase, brewPhase: Phase): Phase =>
   return brewPhase;
 };
 
-const carbBadgeForPhase = (phase: BatchPhase) => {
+const carbBadgeForPhase = (phase: string) => {
   if (phase === BatchPhase.CARBONATING) {
     return 'IN PROGRESS';
   }
@@ -114,7 +116,7 @@ const carbBadgeForPhase = (phase: BatchPhase) => {
   return 'NOT STARTED';
 };
 
-const activeSectionKeyForPhase = (phase: BatchPhase) => {
+const activeSectionKeyForPhase = (phase: string) => {
   if (phase === BatchPhase.BREWING) {
     return 'brew';
   }
@@ -163,8 +165,8 @@ const stepperSwatch = (done: boolean, active: boolean) => {
   return { bg: 'bg-ink-card', color: 'text-ink-text-faint', border: 'border-ink-border-strong' };
 };
 
-const formatDuration = (startIso: string) => {
-  const hours = Math.floor((Date.now() - new Date(startIso).getTime()) / (1000 * 60 * 60));
+const formatDuration = (start: Date | string) => {
+  const hours = Math.floor((Date.now() - new Date(start).getTime()) / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   return days > 0 ? `${days}d ${hours % 24}h` : `${hours}h`;
 };
@@ -1130,7 +1132,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
           <div className="flex flex-1 flex-wrap items-center gap-5 rounded-2xl border border-ink-card-border bg-ink-card p-5">
             <div
               className="h-24 w-20 flex-none rounded-[10px] bg-cover bg-center"
-              style={{ backgroundImage: `url(${batch.recipe?.photoUrl || '/img/no-photo.jpg'})` }}
+              style={{
+                backgroundImage: `url(${
+                  batch.recipe?.photoUrl || srmSwatchUrl(batch.recipe?.colorSRM) || '/img/no-photo.jpg'
+                })`,
+              }}
             />
             <div className="min-w-[160px] flex-1">
               <p className="text-xl font-bold">{batch.name}</p>
@@ -1142,14 +1148,18 @@ export const SessionDetail: FC<SessionDetailData> = ({
                 </div>
                 {batch.recipe && (
                   <>
-                    <div>
-                      <p className="text-[11px] text-ink-text-faint">ABV</p>
-                      <p className="font-mono text-base font-bold">{batch.recipe.abv}%</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-ink-text-faint">IBU</p>
-                      <p className="font-mono text-base font-bold">{batch.recipe.ibu}</p>
-                    </div>
+                    {batch.recipe.abv >= 0 && (
+                      <div>
+                        <p className="text-[11px] text-ink-text-faint">ABV</p>
+                        <p className="font-mono text-base font-bold">{formatAbv(batch.recipe.abv, { unit: false })}</p>
+                      </div>
+                    )}
+                    {batch.recipe.ibu >= 0 && (
+                      <div>
+                        <p className="text-[11px] text-ink-text-faint">IBU</p>
+                        <p className="font-mono text-base font-bold">{formatIbu(batch.recipe.ibu, { unit: false })}</p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

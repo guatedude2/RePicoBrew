@@ -22,6 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response(`#F#\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // get the device firmware for this device's own registered model
   const firmware = await ConfigRepository.getDeviceFirmware(device.deviceType as DeviceType);

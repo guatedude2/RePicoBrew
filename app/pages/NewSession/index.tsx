@@ -7,6 +7,8 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Select } from '~/components/ui/select';
 import { cn } from '~/lib/utils';
+import { formatAbv, formatIbu } from '~/utils/brew-stats';
+import { srmSwatchUrl } from '~/utils/srm-swatch';
 
 const CARB_METHODS = [
   { label: 'Bottle', unit: 'weeks' },
@@ -21,6 +23,7 @@ interface RecipeOption {
   abv: number;
   ibu: number;
   photoUrl: string | null;
+  colorSRM: number | null;
   fermentDays: number | null;
   steps: Array<{ stepTime: number; drainTime: number }>;
 }
@@ -112,7 +115,7 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
             {recipe && (
               <div className="flex items-center gap-3.5 rounded-[10px] bg-ink-bg p-3">
                 <img
-                  src={recipe.photoUrl || '/img/no-photo.jpg'}
+                  src={recipe.photoUrl || srmSwatchUrl(recipe.colorSRM) || '/img/no-photo.jpg'}
                   alt={recipe.name}
                   className="size-14 shrink-0 rounded-lg object-cover"
                 />
@@ -120,14 +123,18 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
                   <p className="truncate text-sm font-bold">{recipe.name}</p>
                   <p className="mb-1.5 text-xs text-ink-text-faint">{recipe.style || 'Unspecified style'}</p>
                   <div className="flex gap-[18px] text-[11px] text-ink-text-secondary">
-                    <div>
-                      <p className="text-ink-text-faint">ABV</p>
-                      <p className="font-bold">{recipe.abv.toFixed(1)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-ink-text-faint">IBU</p>
-                      <p className="font-bold">{recipe.ibu}</p>
-                    </div>
+                    {recipe.abv >= 0 && (
+                      <div>
+                        <p className="text-ink-text-faint">ABV</p>
+                        <p className="font-bold">{formatAbv(recipe.abv, { unit: false })}</p>
+                      </div>
+                    )}
+                    {recipe.ibu >= 0 && (
+                      <div>
+                        <p className="text-ink-text-faint">IBU</p>
+                        <p className="font-bold">{formatIbu(recipe.ibu, { unit: false })}</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-ink-text-faint">Est. Brew Time</p>
                       <p className="font-bold">{formatMinutes(brewMinutes)}</p>

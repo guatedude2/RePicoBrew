@@ -30,6 +30,7 @@ export type IngredientRow = {
 export type CreateRecipeInput = {
   name: string;
   deviceType: string;
+  packType: string;
   abv: number;
   ibu: number;
   style?: string;

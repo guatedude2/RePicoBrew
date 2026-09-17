@@ -19,6 +19,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response(`##\r\n`);
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   const recipes = await RecipeRepository.getAllRecipes();
   return new Response(

@@ -26,7 +26,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     listNearbyNetworks(),
   ]);
 
-  return serializeDates({ devices, discoveredDevices, nearbyNetworks, isRpi: isRaspberryPi() });
+  return serializeDates({
+    devices: devices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
+    discoveredDevices,
+    nearbyNetworks,
+    isRpi: isRaspberryPi(),
+  });
 };
 
 const setupSchema = z

@@ -25,6 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (device) {
     // update the device IP address
     await DeviceRepository.updateDeviceIPAddress(device.id, deviceIP);
+    await DeviceRepository.touchLastSeen(device.id);
 
     // log device register event
     await DeviceRepository.createDeviceLog(device.id, { type: DeviceLogType.REGISTER, ip: deviceIP });

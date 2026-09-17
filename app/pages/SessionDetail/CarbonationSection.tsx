@@ -19,7 +19,7 @@ export type CarbonationData = {
   carbMethod: string | null;
   carbDuration: number | null;
   carbUnit: string | null;
-  carbStartedAt: string | null;
+  carbStartedAt: Date | string | null;
   carbStatus: string | null;
   carbExtendMinutes: number | null;
   isCompleted: boolean;

@@ -130,6 +130,16 @@ systemctl unmask hostapd
 systemctl enable hostapd
 systemctl enable dnsmasq
 
+# The pi-image build customizes a disk image offline (via libguestfs/virt-customize, no live
+# systemd or wlan0 hardware present) — everything above (packages, config files, `enable`) works
+# fine there since it's just filesystem/symlink changes, but actually starting the services below
+# only makes sense on a real running system. `pi-image/build.sh` sets this so the exact same script
+# configures both a live Pi (the normal path) and a fresh image at build time.
+if [ "${SKIP_SERVICE_START:-0}" = "1" ]; then
+  echo "SKIP_SERVICE_START=1 — services enabled but left stopped (image-build mode)."
+  exit 0
+fi
+
 # Restart dhcpcd to apply static IP
 echo "Restarting dhcpcd..."
 systemctl restart dhcpcd

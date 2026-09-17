@@ -10,8 +10,9 @@ import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
-import { IngredientSection, PicoLocationMap } from '~/types';
+import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
+import { srmSwatchUrl } from '~/utils/srm-swatch';
 
 type Row = {
   id: string;
@@ -349,6 +350,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     () => ({
       name,
       deviceType,
+      packType: RecipePackType.ZPACK,
       abv,
       ibu,
       style,
@@ -490,7 +492,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 'flex h-[220px] w-[180px] flex-none items-center justify-center overflow-hidden rounded-xl border border-dashed border-ink-border-strong bg-ink-bg bg-cover bg-center',
                 readOnly ? 'cursor-default' : 'cursor-pointer',
               )}
-              style={{ backgroundImage: `url(${photoPreview || '/img/no-photo.jpg'})` }}
+              style={{ backgroundImage: `url(${photoPreview || srmSwatchUrl(srm) || '/img/no-photo.jpg'})` }}
             >
               {!photoPreview && !readOnly && (
                 <div className="flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-2 text-ink-text">

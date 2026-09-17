@@ -19,7 +19,8 @@ type SessionUpdate = {
   timeLeft: number;
 };
 
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const formatDate = (date: Date | string) =>
+  new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 export const Dashboard: FC = () => {
   const { ongoingBrews, fermentingCount, recentBatches } =

@@ -30,6 +30,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     await DeviceRepository.upsertDiscoveredDevice(body.data.uid, DeviceType.PICOFERM);
     pubsub.publish('device-detected', { uid: body.data.uid, deviceType: DeviceType.PICOFERM, isRegistered: false });
+  } else {
+    await DeviceRepository.touchLastSeen(device.id);
   }
 
   return new Response('#1#');

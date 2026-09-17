@@ -70,6 +70,14 @@ export enum IngredientSection {
   DRY_HOP = 'DRY_HOP',
 }
 
+// PicoBrew's own two recipe file formats: PicoPak (steps-only, fixed 5L batch — what the base
+// Pico/Pico C machines actually run) vs ZPAK (the Zymatic/Z Series full brew-science format —
+// mash/fermentables/boil/hops/yeast/fermentation science, plus the machine step sequence).
+export enum RecipePackType {
+  PICOPACK = 'picopack',
+  ZPACK = 'zpack',
+}
+
 // A Batch's overall lifecycle stage (brew -> ferment -> carbonate -> done), independent of the
 // underlying Session.state values for its individual Brewing/Fermentation legs.
 export enum BatchPhase {

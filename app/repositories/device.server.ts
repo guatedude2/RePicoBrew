@@ -2,7 +2,9 @@ import prisma from '~/services/prisma.server';
 import type { DeviceLogData, DeviceState } from '~/types';
 import { DeviceType } from '~/types';
 
-const TILT_ONLINE_WINDOW_MS = 10 * 60 * 1000;
+// How long a device can go without a check-in (an inbound poll, or a confirmed LAN sighting from
+// device-monitor.server.ts) before we call it offline.
+const DEVICE_ONLINE_WINDOW_MS = 10 * 60 * 1000;
 
 export class DeviceRepository {
   // Claiming turns a passively-seen uid into a real, named Device — used by the Devices settings
@@ -79,6 +81,17 @@ export class DeviceRepository {
     return await prisma.device.update({ where: { id }, data: { ipAddress } });
   }
 
+  public static async updateDeviceMacAddress(id: number, macAddress: string) {
+    return await prisma.device.update({ where: { id }, data: { macAddress } });
+  }
+
+  // Bumped on every inbound check-in (register, poll, log, ...) and on a confirmed LAN sighting
+  // from device-monitor.server.ts — the single "we definitely heard from it recently" signal
+  // isDeviceOnline reads.
+  public static async touchLastSeen(id: number) {
+    return await prisma.device.update({ where: { id }, data: { lastSeenAt: new Date() } });
+  }
+
   public static async updateDeviceFirmwareVersion(id: number, firmwareVersion: string) {
     return await prisma.device.update({ where: { id }, data: { firmwareVersion } });
   }
@@ -119,19 +132,11 @@ export class DeviceRepository {
     });
   }
 
-  public static isDeviceOnline(device: { deviceType: string; ipAddress: string | null; metadata: string | null }) {
-    if (device.deviceType === DeviceType.TILT) {
-      try {
-        const metadata = device.metadata ? JSON.parse(device.metadata) : {};
-        return (
-          typeof metadata.lastSeen === 'string' &&
-          Date.now() - new Date(metadata.lastSeen).getTime() < TILT_ONLINE_WINDOW_MS
-        );
-      } catch {
-        return false;
-      }
+  public static isDeviceOnline(device: { lastSeenAt: Date | null }) {
+    if (!device.lastSeenAt) {
+      return false;
     }
-    return Boolean(device.ipAddress);
+    return Date.now() - device.lastSeenAt.getTime() < DEVICE_ONLINE_WINDOW_MS;
   }
 
   public static async getStatus() {

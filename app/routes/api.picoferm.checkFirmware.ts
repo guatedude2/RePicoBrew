@@ -26,6 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     return new Response('#0#');
   }
+  await DeviceRepository.touchLastSeen(device.id);
 
   // No firmware config for PICOFERM is fine — just means no update available.
   const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOFERM);
