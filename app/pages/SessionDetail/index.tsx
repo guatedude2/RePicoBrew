@@ -16,8 +16,7 @@ import {
   Text,
   VStack,
 } from '@chakra-ui/react';
-import type { SerializeFrom } from '@remix-run/node';
-import { useFetcher, useNavigate } from '@remix-run/react';
+import { useFetcher, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   MdArrowBack,
@@ -33,7 +32,7 @@ import {
 import Card from '~/components/card/Card';
 import { BrewingAnimation, Phase } from '~/components/BrewingAnimation/BrewingAnimation';
 import { Chart } from '~/components/charts/Chart.client';
-import { ClientOnly } from 'remix-utils';
+import { ClientOnly } from 'remix-utils/client-only';
 import type { loader as sessionDetailLoader } from '~/routes/_admin.sessions.$id';
 import { ACCENT, StatCard } from '~/components/ui/StatCard';
 import { BatchPhase } from '~/types';
@@ -42,7 +41,7 @@ import { useServerSideEvent } from '~/utils/sse';
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
-type SessionDetailData = SerializeFrom<typeof sessionDetailLoader>;
+type SessionDetailData = Awaited<ReturnType<typeof sessionDetailLoader>>;
 
 const THERMO_COLOR = '#EAB308';
 const WORT_COLOR = '#22C55E';
@@ -71,8 +70,105 @@ const mapStepToPhase = (stepName: string): Phase => {
   return Phase.PREPARING;
 };
 
-const fermentationTypeLabel = (t: number | null | undefined) =>
-  t === 0 ? 'Ale' : t === 1 ? 'Lager' : t === 2 ? 'Advanced/Custom' : 'Standard Fermentation';
+const fermentationTypeLabel = (t: number | null | undefined) => {
+  if (t === 0) {
+    return 'Ale';
+  }
+  if (t === 1) {
+    return 'Lager';
+  }
+  if (t === 2) {
+    return 'Advanced/Custom';
+  }
+  return 'Standard Fermentation';
+};
+
+type ApexChartContext = {
+  w?: {
+    globals?: {
+      gridWidth?: number;
+      minX?: number | null;
+      maxX?: number | null;
+    };
+  };
+};
+
+const vesselPhaseForBatch = (batchPhase: BatchPhase, brewPhase: Phase): Phase => {
+  if (batchPhase === BatchPhase.COOLING) {
+    return Phase.CHILLING;
+  }
+  if (batchPhase === BatchPhase.FERMENTING) {
+    return Phase.FERMENTING;
+  }
+  if (
+    batchPhase === BatchPhase.BOTTLING ||
+    batchPhase === BatchPhase.CARBONATING ||
+    batchPhase === BatchPhase.COMPLETED ||
+    batchPhase === BatchPhase.CANCELED
+  ) {
+    return Phase.CARBONATING;
+  }
+  return brewPhase;
+};
+
+const carbBadgeForPhase = (phase: BatchPhase) => {
+  if (phase === BatchPhase.CARBONATING) {
+    return 'IN PROGRESS';
+  }
+  if (phase === BatchPhase.COMPLETED) {
+    return 'DONE';
+  }
+  return 'NOT STARTED';
+};
+
+const activeSectionKeyForPhase = (phase: BatchPhase) => {
+  if (phase === BatchPhase.BREWING) {
+    return 'brew';
+  }
+  if (phase === BatchPhase.COOLING) {
+    return 'cool';
+  }
+  if (phase === BatchPhase.FERMENTING) {
+    return 'ferm';
+  }
+  if (phase === BatchPhase.BOTTLING) {
+    return 'bottle';
+  }
+  if (phase === BatchPhase.CARBONATING) {
+    return 'carb';
+  }
+  return null;
+};
+
+const phaseTitle = (p: BatchPhase) => {
+  if (p === BatchPhase.CARBONATING) {
+    return 'Carbonation';
+  }
+  if (p === BatchPhase.FERMENTING) {
+    return 'Fermentation';
+  }
+  return p;
+};
+
+const tiltAvailability = (device: { inUse?: boolean; online?: boolean }) => {
+  if (device.inUse) {
+    return 'in use';
+  }
+  if (!device.online) {
+    return 'offline';
+  }
+  return null;
+};
+
+const stepperSwatch = (done: boolean, active: boolean) => {
+  if (done) {
+    return { bg: 'success.100', color: 'success.500', borderColor: 'success.500' };
+  }
+  if (active) {
+    return { bg: 'brand.500', color: 'ink.onBrand', borderColor: 'brand.500' };
+  }
+  return { bg: 'ink.card', color: 'ink.textFaint', borderColor: 'ink.borderStrong' };
+};
 
 const formatDuration = (startIso: string) => {
   const hours = Math.floor((Date.now() - new Date(startIso).getTime()) / (1000 * 60 * 60));
@@ -355,7 +451,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   const brewChartBoxHeight = 250 + stepLabelAreaPx;
   const stepLabelBaseline = useRef<{ rectY: number; textY: number } | null>(null);
 
-  const onChartScaleChange = (chartContext: any) => {
+  const onChartScaleChange = (chartContext: ApexChartContext) => {
     const g = chartContext?.w?.globals;
     if (!g || !g.gridWidth || g.minX == null || g.maxX == null || g.maxX <= g.minX) {
       return;
@@ -404,25 +500,16 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   const lastLoggedWort = brewChart.wort.length > 0 ? brewChart.wort[brewChart.wort.length - 1].y : null;
   const fallbackStep = brewSession?.statusText ?? lastLoggedStep;
 
-  const phase = liveBrew
-    ? mapStepToPhase(liveBrew.step)
-    : fallbackStep
-    ? mapStepToPhase(fallbackStep)
-    : Phase.PREPARING;
+  let phase = Phase.PREPARING;
+  if (liveBrew) {
+    phase = mapStepToPhase(liveBrew.step);
+  } else if (fallbackStep) {
+    phase = mapStepToPhase(fallbackStep);
+  }
   const temperature = liveBrew?.wort ?? lastLoggedWort ?? 70;
   // The vessel graphic is one continuous animated illustration for the whole session — it just
   // switches scenes (kettle / chiller / fermenter / bottles) rather than swapping to a different image.
-  const vesselPhase =
-    batch.phase === BatchPhase.COOLING
-      ? Phase.CHILLING
-      : batch.phase === BatchPhase.FERMENTING
-      ? Phase.FERMENTING
-      : batch.phase === BatchPhase.BOTTLING ||
-        batch.phase === BatchPhase.CARBONATING ||
-        batch.phase === BatchPhase.COMPLETED ||
-        batch.phase === BatchPhase.CANCELED
-      ? Phase.CARBONATING
-      : phase;
+  const vesselPhase = vesselPhaseForBatch(batch.phase, phase);
 
   const coolingAvailable = phaseReached(BatchPhase.COOLING);
   const fermentationAvailable = phaseReached(BatchPhase.FERMENTING);
@@ -433,12 +520,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   const coolBadge = sectionBadge(BatchPhase.COOLING);
   const fermBadge = sectionBadge(BatchPhase.FERMENTING);
   const bottleBadge = sectionBadge(BatchPhase.BOTTLING);
-  const carbBadge =
-    batch.phase === BatchPhase.CARBONATING
-      ? 'IN PROGRESS'
-      : batch.phase === BatchPhase.COMPLETED
-      ? 'DONE'
-      : 'NOT STARTED';
+  const carbBadge = carbBadgeForPhase(batch.phase);
 
   // Reorder the section cards so whichever is currently active surfaces first.
   const sectionCurrentIdx = currentIdx >= 0 && currentIdx < LIVE_PHASE_COUNT ? currentIdx : 0;
@@ -576,10 +658,10 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                           },
                         },
                         events: {
-                          mounted: (chartContext: any) => onChartScaleChange(chartContext),
-                          updated: (chartContext: any) => onChartScaleChange(chartContext),
-                          zoomed: (chartContext: any) => onChartScaleChange(chartContext),
-                          scrolled: (chartContext: any) => onChartScaleChange(chartContext),
+                          mounted: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
+                          updated: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
+                          zoomed: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
+                          scrolled: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
                         },
                       },
                       colors: [THERMO_COLOR, WORT_COLOR],
@@ -655,6 +737,60 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
     </Card>
   );
 
+  let coolingBody: ReactNode = (
+    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+      Cooling starts automatically once brewing finishes.
+    </Text>
+  );
+  if (coolingAvailable && batch.phase === BatchPhase.COOLING) {
+    coolingBody = (
+      <Box
+        bg="ink.bg"
+        border="1px solid"
+        borderColor="brand.500"
+        borderRadius="10px"
+        p="16px"
+        display="flex"
+        flexDirection="column"
+        gap="10px"
+      >
+        <Text fontSize="13px" fontWeight="700">
+          Start Wort Cooling
+        </Text>
+        <Text fontSize="13px" color="ink.textSecondary">
+          Let the Brew Keg cool to room temperature — this can take up to 24 hours depending on ambient temperature.
+          Once it&apos;s cool to the touch, apply the Fermentation Temperature Decal to the outside of the keg and pitch
+          your yeast.{' '}
+          <Link
+            href="https://picobrewcontent.blob.core.windows.net/content/picoc/PicoC_Manual.pdf"
+            isExternal
+            color="brand.500"
+            fontWeight="600"
+          >
+            View full instructions
+          </Link>
+        </Text>
+        <Text fontSize="12px" color="ink.textFaint">
+          Once you&apos;re ready to start fermentation, confirm below to move on.
+        </Text>
+        <Button
+          variant="brand"
+          alignSelf="flex-start"
+          isLoading={startFermentationFetcher.state !== 'idle'}
+          onClick={startFermentation}
+        >
+          Start Fermentation
+        </Button>
+      </Box>
+    );
+  } else if (coolingAvailable) {
+    coolingBody = (
+      <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+        Wort cooled — fermentation started {new Date(fermStart).toLocaleString()}.
+      </Text>
+    );
+  }
+
   const coolingCard = (
     <Card key="cool" p="22px" gap="16px">
       <SectionHeader
@@ -664,57 +800,183 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
         expanded={coolExpanded}
         onToggle={() => setCoolExpanded((v) => !v)}
       />
-      {coolExpanded &&
-        (!coolingAvailable ? (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-            Cooling starts automatically once brewing finishes.
-          </Text>
-        ) : batch.phase === BatchPhase.COOLING ? (
-          <Box
-            bg="ink.bg"
-            border="1px solid"
-            borderColor="brand.500"
-            borderRadius="10px"
-            p="16px"
-            display="flex"
-            flexDirection="column"
-            gap="10px"
-          >
-            <Text fontSize="13px" fontWeight="700">
-              Start Wort Cooling
-            </Text>
-            <Text fontSize="13px" color="ink.textSecondary">
-              Let the Brew Keg cool to room temperature — this can take up to 24 hours depending on ambient temperature.
-              Once it&apos;s cool to the touch, apply the Fermentation Temperature Decal to the outside of the keg and
-              pitch your yeast.{' '}
-              <Link
-                href="https://picobrewcontent.blob.core.windows.net/content/picoc/PicoC_Manual.pdf"
-                isExternal
-                color="brand.500"
-                fontWeight="600"
-              >
-                View full instructions
-              </Link>
-            </Text>
-            <Text fontSize="12px" color="ink.textFaint">
-              Once you&apos;re ready to start fermentation, confirm below to move on.
-            </Text>
-            <Button
-              variant="brand"
-              alignSelf="flex-start"
-              isLoading={startFermentationFetcher.state !== 'idle'}
-              onClick={startFermentation}
-            >
-              Start Fermentation
-            </Button>
-          </Box>
-        ) : (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-            Wort cooled — fermentation started {new Date(fermStart).toLocaleString()}.
-          </Text>
-        ))}
+      {coolExpanded ? coolingBody : null}
     </Card>
   );
+
+  let fermentationBody: ReactNode = (
+    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+      Fermentation tracking starts once cooling is done and a Tilt is dropped in the fermenter.
+    </Text>
+  );
+  if (fermentationAvailable && fermSession) {
+    fermentationBody = (
+      <VStack align="stretch" spacing="16px">
+        {!liveFerm && (
+          <Flex
+            align="center"
+            gap="8px"
+            bg="danger.100"
+            border="1px solid"
+            borderColor="danger.500"
+            borderRadius="8px"
+            px="14px"
+            py="10px"
+          >
+            <Icon as={MdWifi} boxSize="16px" color="danger.500" />
+            <Text fontSize="13px" fontWeight="600" color="danger.500">
+              No signal from {fermSession.device?.name ?? 'Tilt'}
+            </Text>
+          </Flex>
+        )}
+        <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} gap="14px">
+          <StatCard
+            label="Specific Gravity"
+            value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
+            sub="Current reading"
+            icon={MdScience}
+            accent={ACCENT.purple}
+          />
+          <StatCard
+            label="Temperature"
+            value={liveFerm?.temp?.toFixed(1) ?? '--'}
+            unit="°F"
+            sub="Fermentation temp"
+            icon={MdThermostat}
+            accent={ACCENT.danger}
+          />
+          <StatCard
+            label="Signal Strength"
+            value={liveFerm?.rssi !== undefined ? String(liveFerm.rssi) : '--'}
+            unit=" dBm"
+            sub="RSSI"
+            icon={MdWifi}
+            accent={ACCENT.info}
+          />
+          <StatCard
+            label="Duration"
+            value={formatDuration(fermSession.createdAt)}
+            sub={fermSession.device?.name ?? 'Tilt'}
+            icon={MdTimer}
+            accent={ACCENT.brand}
+          />
+        </SimpleGrid>
+        <Box>
+          <HStack justify="flex-end" spacing="14px" fontSize="12px" mb="8px">
+            <HStack spacing="6px">
+              <Box w="10px" h="2px" bg="info.500" />
+              <Text>Gravity</Text>
+            </HStack>
+            <HStack spacing="6px">
+              <Box w="10px" h="2px" bg="brand.500" />
+              <Text>Temp</Text>
+            </HStack>
+          </HStack>
+          <FermentationChart sessionId={fermSession.id} />
+        </Box>
+        {batch.phase === BatchPhase.FERMENTING && (
+          <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+            {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+          </Button>
+        )}
+      </VStack>
+    );
+  } else if (fermentationAvailable) {
+    fermentationBody = (
+      <VStack align="stretch" spacing="16px">
+        {batch.phase === BatchPhase.FERMENTING && fermPercent < 20 && tiltDevices.length > 0 && (
+          <VStack align="stretch" spacing="8px">
+            <HStack spacing="10px" wrap="wrap">
+              <Select
+                size="sm"
+                w="auto"
+                minW="180px"
+                placeholder="Select a Tilt"
+                value={selectedTiltId}
+                onChange={(e) => setSelectedTiltId(e.target.value)}
+              >
+                {tiltDevices.map((d) => {
+                  const label = `Tilt · ${d.color || d.name}`;
+                  const unavailable = tiltAvailability(d);
+                  return (
+                    <option key={d.id} value={d.id} disabled={!!unavailable}>
+                      {unavailable ? `${label} - ${unavailable}` : label}
+                    </option>
+                  );
+                })}
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                isDisabled={!selectedTiltId}
+                isLoading={startTrackingFetcher.state !== 'idle'}
+                onClick={() =>
+                  startTrackingFetcher.submit(
+                    { action: 'start', deviceId: selectedTiltId, batchId: String(batch.id) },
+                    { method: 'post', action: '/api/fermentation/session', encType: 'application/json' },
+                  )
+                }
+              >
+                Start Tracking
+              </Button>
+            </HStack>
+            {startTrackingFetcher.data?.error && (
+              <Text fontSize="12px" color="danger.500">
+                {startTrackingFetcher.data.error}
+              </Text>
+            )}
+          </VStack>
+        )}
+        <Flex justify="space-between" align="center" wrap="wrap" gap="24px">
+          <Box>
+            <Text
+              fontSize="11px"
+              fontWeight="700"
+              letterSpacing="0.5px"
+              color="ink.textFaint"
+              textTransform="uppercase"
+            >
+              Total Fermentation Time Left
+            </Text>
+            <Text fontFamily="mono" fontSize="38px" fontWeight="300" mt="4px">
+              {fermDays}d {fermHours}h
+            </Text>
+          </Box>
+          <Ring percent={fermPercent} label="Complete" color={FERM_RING_COLOR} />
+        </Flex>
+        <Box
+          display="flex"
+          flexDirection="column"
+          border="1px solid"
+          borderColor="ink.divider"
+          borderRadius="10px"
+          overflow="hidden"
+        >
+          {fermInfoRows.map((row) => (
+            <Flex
+              key={row.label}
+              justify="space-between"
+              px="16px"
+              py="12px"
+              bg="ink.bg"
+              borderTop="1px solid"
+              borderColor="ink.divider"
+              fontSize="13px"
+              _first={{ borderTop: 'none' }}
+            >
+              <Text color="ink.textFaint">{row.label}</Text>
+              <Text color="ink.text">{row.value}</Text>
+            </Flex>
+          ))}
+        </Box>
+        {batch.phase === BatchPhase.FERMENTING && (
+          <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+            {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+          </Button>
+        )}
+      </VStack>
+    );
+  }
 
   const fermentationCard = (
     <Card key="ferm" ref={fermSectionRef} p="22px" gap="18px">
@@ -725,177 +987,36 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
         expanded={fermExpanded}
         onToggle={() => setFermExpanded((v) => !v)}
       />
-      {fermExpanded &&
-        (!fermentationAvailable ? (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-            Fermentation tracking starts once cooling is done and a Tilt is dropped in the fermenter.
-          </Text>
-        ) : fermSession ? (
-          <VStack align="stretch" spacing="16px">
-            {!liveFerm && (
-              <Flex
-                align="center"
-                gap="8px"
-                bg="danger.100"
-                border="1px solid"
-                borderColor="danger.500"
-                borderRadius="8px"
-                px="14px"
-                py="10px"
-              >
-                <Icon as={MdWifi} boxSize="16px" color="danger.500" />
-                <Text fontSize="13px" fontWeight="600" color="danger.500">
-                  No signal from {fermSession.device?.name ?? 'Tilt'}
-                </Text>
-              </Flex>
-            )}
-            <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} gap="14px">
-              <StatCard
-                label="Specific Gravity"
-                value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
-                sub="Current reading"
-                icon={MdScience}
-                accent={ACCENT.purple}
-              />
-              <StatCard
-                label="Temperature"
-                value={liveFerm?.temp?.toFixed(1) ?? '--'}
-                unit="°F"
-                sub="Fermentation temp"
-                icon={MdThermostat}
-                accent={ACCENT.danger}
-              />
-              <StatCard
-                label="Signal Strength"
-                value={liveFerm?.rssi !== undefined ? String(liveFerm.rssi) : '--'}
-                unit=" dBm"
-                sub="RSSI"
-                icon={MdWifi}
-                accent={ACCENT.info}
-              />
-              <StatCard
-                label="Duration"
-                value={formatDuration(fermSession.createdAt)}
-                sub={fermSession.device?.name ?? 'Tilt'}
-                icon={MdTimer}
-                accent={ACCENT.brand}
-              />
-            </SimpleGrid>
-            <Box>
-              <HStack justify="flex-end" spacing="14px" fontSize="12px" mb="8px">
-                <HStack spacing="6px">
-                  <Box w="10px" h="2px" bg="info.500" />
-                  <Text>Gravity</Text>
-                </HStack>
-                <HStack spacing="6px">
-                  <Box w="10px" h="2px" bg="brand.500" />
-                  <Text>Temp</Text>
-                </HStack>
-              </HStack>
-              <FermentationChart sessionId={fermSession.id} />
-            </Box>
-            {batch.phase === BatchPhase.FERMENTING && (
-              <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
-                {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-              </Button>
-            )}
-          </VStack>
-        ) : (
-          <VStack align="stretch" spacing="16px">
-            {batch.phase === BatchPhase.FERMENTING && fermPercent < 20 && tiltDevices.length > 0 && (
-              <VStack align="stretch" spacing="8px">
-                <HStack spacing="10px" wrap="wrap">
-                  <Select
-                    size="sm"
-                    w="auto"
-                    minW="180px"
-                    placeholder="Select a Tilt"
-                    value={selectedTiltId}
-                    onChange={(e) => setSelectedTiltId(e.target.value)}
-                  >
-                    {tiltDevices.map((d) => {
-                      const label = `Tilt · ${d.color || d.name}`;
-                      const unavailable = d.inUse ? 'in use' : !d.online ? 'offline' : null;
-                      return (
-                        <option key={d.id} value={d.id} disabled={!!unavailable}>
-                          {unavailable ? `${label} - ${unavailable}` : label}
-                        </option>
-                      );
-                    })}
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isDisabled={!selectedTiltId}
-                    isLoading={startTrackingFetcher.state !== 'idle'}
-                    onClick={() =>
-                      startTrackingFetcher.submit(
-                        { action: 'start', deviceId: selectedTiltId, batchId: String(batch.id) },
-                        { method: 'post', action: '/api/fermentation/session', encType: 'application/json' },
-                      )
-                    }
-                  >
-                    Start Tracking
-                  </Button>
-                </HStack>
-                {startTrackingFetcher.data?.error && (
-                  <Text fontSize="12px" color="danger.500">
-                    {startTrackingFetcher.data.error}
-                  </Text>
-                )}
-              </VStack>
-            )}
-            <Flex justify="space-between" align="center" wrap="wrap" gap="24px">
-              <Box>
-                <Text
-                  fontSize="11px"
-                  fontWeight="700"
-                  letterSpacing="0.5px"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                >
-                  Total Fermentation Time Left
-                </Text>
-                <Text fontFamily="mono" fontSize="38px" fontWeight="300" mt="4px">
-                  {fermDays}d {fermHours}h
-                </Text>
-              </Box>
-              <Ring percent={fermPercent} label="Complete" color={FERM_RING_COLOR} />
-            </Flex>
-            <Box
-              display="flex"
-              flexDirection="column"
-              border="1px solid"
-              borderColor="ink.divider"
-              borderRadius="10px"
-              overflow="hidden"
-            >
-              {fermInfoRows.map((row) => (
-                <Flex
-                  key={row.label}
-                  justify="space-between"
-                  px="16px"
-                  py="12px"
-                  bg="ink.bg"
-                  borderTop="1px solid"
-                  borderColor="ink.divider"
-                  fontSize="13px"
-                  _first={{ borderTop: 'none' }}
-                >
-                  <Text color="ink.textFaint">{row.label}</Text>
-                  <Text color="ink.text">{row.value}</Text>
-                </Flex>
-              ))}
-            </Box>
-            {batch.phase === BatchPhase.FERMENTING && (
-              <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
-                {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-              </Button>
-            )}
-          </VStack>
-        ))}
+      {fermExpanded ? fermentationBody : null}
     </Card>
   );
+
+  let bottlingBody: ReactNode = (
+    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+      Bottling starts once fermentation is done.
+    </Text>
+  );
+  if (bottlingAvailable && batch.phase === BatchPhase.BOTTLING) {
+    bottlingBody = (
+      <Box display="flex" flexDirection="column" gap="14px">
+        <Text fontSize="13px" color="ink.textSecondary">
+          Rack the beer into bottles (or a keg), then choose how you&apos;re carbonating and start the countdown.
+        </Text>
+        <CarbonationSetupForm
+          batchId={batch.id}
+          initialMethod={batch.carbMethod}
+          initialDuration={batch.carbDuration}
+        />
+      </Box>
+    );
+  } else if (bottlingAvailable) {
+    const carbState = batch.phase === BatchPhase.COMPLETED ? 'complete' : 'in progress';
+    bottlingBody = (
+      <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+        Bottled — carbonation {carbState}.
+      </Text>
+    );
+  }
 
   const bottlingCard = (
     <Card key="bottle" p="22px" gap="16px">
@@ -906,27 +1027,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
         expanded={bottleExpanded}
         onToggle={() => setBottleExpanded((v) => !v)}
       />
-      {bottleExpanded &&
-        (!bottlingAvailable ? (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-            Bottling starts once fermentation is done.
-          </Text>
-        ) : batch.phase === BatchPhase.BOTTLING ? (
-          <Box display="flex" flexDirection="column" gap="14px">
-            <Text fontSize="13px" color="ink.textSecondary">
-              Rack the beer into bottles (or a keg), then choose how you&apos;re carbonating and start the countdown.
-            </Text>
-            <CarbonationSetupForm
-              batchId={batch.id}
-              initialMethod={batch.carbMethod}
-              initialDuration={batch.carbDuration}
-            />
-          </Box>
-        ) : (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-            Bottled — carbonation {batch.phase === BatchPhase.COMPLETED ? 'complete' : 'in progress'}.
-          </Text>
-        ))}
+      {bottleExpanded ? bottlingBody : null}
     </Card>
   );
 
@@ -971,18 +1072,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   ].sort((a, b) => a.order - b.order);
 
   // In fullscreen, only the stage matching the batch's current phase stays visible.
-  const activeSectionKey =
-    batch.phase === BatchPhase.BREWING
-      ? 'brew'
-      : batch.phase === BatchPhase.COOLING
-      ? 'cool'
-      : batch.phase === BatchPhase.FERMENTING
-      ? 'ferm'
-      : batch.phase === BatchPhase.BOTTLING
-      ? 'bottle'
-      : batch.phase === BatchPhase.CARBONATING
-      ? 'carb'
-      : null;
+  const activeSectionKey = activeSectionKeyForPhase(batch.phase);
   const visibleSections =
     fullscreen && activeSectionKey ? orderedSections.filter((s) => s.key === activeSectionKey) : orderedSections;
 
@@ -1128,6 +1218,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                 {PHASES.map((p, i) => {
                   const done = i < currentIdx || batch.phase === BatchPhase.COMPLETED;
                   const active = p === batch.phase;
+                  const swatch = stepperSwatch(done, active);
                   return (
                     <HStack key={p} spacing="8px">
                       <Flex
@@ -1139,10 +1230,10 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                         fontSize="9px"
                         fontWeight="700"
                         flex="0 0 auto"
-                        bg={done ? 'success.100' : active ? 'brand.500' : 'ink.card'}
-                        color={done ? 'success.500' : active ? 'ink.onBrand' : 'ink.textFaint'}
+                        bg={swatch.bg}
+                        color={swatch.color}
                         border="1.5px solid"
-                        borderColor={done ? 'success.500' : active ? 'brand.500' : 'ink.borderStrong'}
+                        borderColor={swatch.borderColor}
                       >
                         {done ? <Icon as={MdCheck} boxSize="10px" /> : i + 1}
                       </Flex>
@@ -1152,11 +1243,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                         color={active ? 'ink.text' : 'ink.textDim'}
                         whiteSpace="nowrap"
                       >
-                        {p === BatchPhase.CARBONATING
-                          ? 'Carbonation'
-                          : p === BatchPhase.FERMENTING
-                          ? 'Fermentation'
-                          : p}
+                        {phaseTitle(p)}
                       </Text>
                     </HStack>
                   );

@@ -1,4 +1,4 @@
-import type { ActionArgs } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
 import { processISpindelReading } from '~/services/ispindel.server';
 
 /**
@@ -22,7 +22,7 @@ import { processISpindelReading } from '~/services/ispindel.server';
  *
  * Response: empty 200 OK, no body, always - real iSpindel firmware expects no wire-format ack.
  */
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   try {
     const data = await request.json();
     const { ID, temperature, temp_units, battery, gravity } = data ?? {};

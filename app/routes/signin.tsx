@@ -1,8 +1,7 @@
-import type { ActionArgs } from '@remix-run/node';
-import { json, redirect } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
+import { redirect } from 'react-router';
 import { z } from 'zod';
-import authenticator from '~/services/auth.server';
-import type { SessionData } from '~/services/session.server';
+import { authenticateUser, sessionKey } from '~/services/auth.server';
 import { rememberMeCookie, sessionStorage } from '~/services/session.server';
 
 const bodyValidator = z.object({
@@ -10,27 +9,27 @@ const bodyValidator = z.object({
   password: z.string(),
 });
 
-export const action = async ({ request }: ActionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   const url = new URL(request.url);
   const redirectTo = url.searchParams.get('redir') ?? '/';
   const formData = await request.formData();
 
   const body = bodyValidator.safeParse(Object.fromEntries(formData));
   if (!body.success) {
-    return json({ error: { ...body.error.flatten().fieldErrors } });
+    return { error: { ...body.error.flatten().fieldErrors } };
   }
 
   try {
-    const data = await authenticator.authenticate('user', request, { throwOnError: true, context: { formData } });
+    const user = await authenticateUser(body.data.email, body.data.password);
+    const remember = formData.get('remember') === 'on';
 
     const cookieHeader = request.headers.get('cookie');
     const session = await sessionStorage.getSession(cookieHeader);
-    const { remember, ...user } = data as SessionData & { remember: boolean };
 
     // and store the user data
-    session.set(authenticator.sessionKey, user);
+    session.set(sessionKey, user);
 
-    // // commit the session
+    // commit the session
     const headers = new Headers({ 'Set-Cookie': await sessionStorage.commitSession(session) });
 
     // commit remember me
@@ -38,7 +37,7 @@ export const action = async ({ request }: ActionArgs) => {
 
     return redirect(redirectTo, { headers });
   } catch (error) {
-    return json({ error: { message: (error as Error).message } });
+    return { error: { message: (error as Error).message } };
   }
 };
 

@@ -1,5 +1,5 @@
 import { Box, Flex, HStack, Icon, Menu, MenuButton, MenuDivider, MenuItem, MenuList, Text } from '@chakra-ui/react';
-import { Link as RemixLink, useFetcher, useLocation, useRouteLoaderData } from '@remix-run/react';
+import { Link as RemixLink, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
 import type { FC } from 'react';
 import { MdCheckCircle, MdLogout, MdNotificationsNone, MdOutlinePerson, MdWarning } from 'react-icons/md';
 import type { NavItem } from '~/layouts/nav';

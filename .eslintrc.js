@@ -3,17 +3,12 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   plugins: ['react', '@typescript-eslint', 'react-hooks', 'prettier'],
   extends: [
-    '@remix-run/eslint-config',
-    '@remix-run/eslint-config/node',
     'eslint:recommended',
-    '@remix-run/eslint-config',
-    '@remix-run/eslint-config/node',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
     'plugin:@typescript-eslint/eslint-recommended',
     'plugin:@typescript-eslint/recommended',
     'prettier',
-    // 'plugin:storybook/recommended',
   ],
   env: {
     browser: true,

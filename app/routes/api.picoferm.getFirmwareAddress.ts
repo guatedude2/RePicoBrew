@@ -1,4 +1,4 @@
-import type { LoaderArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from 'react-router';
 import path from 'path';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
@@ -17,7 +17,7 @@ const bodyValidator = z.object({
   uid: z.string(),
 });
 
-export const loader = async ({ request }: LoaderArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const body = bodyValidator.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
   if (!body.success) {
     throw new Response(`Action payload error: ${JSON.stringify(body.error.flatten().fieldErrors)}`, { status: 400 });

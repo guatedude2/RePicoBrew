@@ -7,11 +7,11 @@ class PubSub {
     this._eventEmitter = new EventEmitter();
   }
 
-  public publish<T = any>(topic: string, data: T) {
+  public publish<T = unknown>(topic: string, data: T) {
     this._eventEmitter.emit(topic, data);
   }
 
-  public subscribe<T = any>(topic: string, callback: (data: T) => void) {
+  public subscribe<T = unknown>(topic: string, callback: (data: T) => void) {
     const callbackWrapper = (data: T) => callback(data);
     this._eventEmitter.addListener(topic, callbackWrapper);
     return callbackWrapper;

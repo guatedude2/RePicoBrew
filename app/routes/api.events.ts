@@ -1,8 +1,8 @@
-import type { LoaderArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from 'react-router';
 import pubsub from '~/services/pubsub.server';
 import { ServerSideResponse } from '~/utils/sse';
 
-const wrapPubSubSignal = <T = any>(
+const wrapPubSubSignal = <T = unknown>(
   response: ServerSideResponse,
   options: { topic: string; eventName?: string; middleware?: (data: T) => T },
 ) => {
@@ -15,7 +15,7 @@ const wrapPubSubSignal = <T = any>(
   });
 };
 
-export const loader = ({ request }: LoaderArgs) => {
+export const loader = ({ request }: LoaderFunctionArgs) => {
   const response = new ServerSideResponse(request);
 
   wrapPubSubSignal(response, { topic: 'device-detected' });

@@ -1,5 +1,5 @@
 const Card = {
-  baseStyle: (_props: any) => ({
+  baseStyle: () => ({
     p: '20px',
     display: 'flex',
     flexDirection: 'column',

@@ -1,4 +1,4 @@
-import type { LoaderArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from 'react-router';
 import fs from 'fs/promises';
 import path from 'path';
 import { ConfigRepository } from '~/repositories/config.server';
@@ -12,7 +12,7 @@ import { DeviceType } from '~/types';
  *
  * Response: raw firmware file contents.
  */
-export const loader = async ({ params }: LoaderArgs) => {
+export const loader = async ({ params }: LoaderFunctionArgs) => {
   const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOFERM);
   if (!firmware || path.basename(firmware.file) !== params.file) {
     throw new Response('Not found', { status: 404 });

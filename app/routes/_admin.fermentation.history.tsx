@@ -1,17 +1,17 @@
-import type { LoaderArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
-import { useLoaderData, Link } from '@remix-run/react';
+import type { LoaderFunctionArgs } from 'react-router';
+import { useLoaderData, Link } from 'react-router';
 import { Box, Flex, Grid, Icon, Text } from '@chakra-ui/react';
 import { MdScience, MdHistory } from 'react-icons/md';
 import Card from '~/components/card/Card';
 import { SessionRepository } from '~/repositories/session.server';
 import { SessionState } from '~/types';
+import { serializeDates } from '~/utils/serialize.server';
 
-export async function loader(_args: LoaderArgs) {
+export async function loader(_args: LoaderFunctionArgs) {
   const sessions = await SessionRepository.listSessions({ limit: 100 });
   const fermentationSessions = sessions.filter((s) => s.type === 3 && s.state === SessionState.COMPLETED);
 
-  return json({ sessions: fermentationSessions });
+  return serializeDates({ sessions: fermentationSessions });
 }
 
 const columns = '1.4fr 1.4fr 1.4fr 1fr 1fr 1fr';

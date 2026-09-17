@@ -1,5 +1,5 @@
-import type { ActionArgs, LoaderArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { data } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
@@ -14,7 +14,7 @@ const FERMENTATION_DEVICE_TYPES: DeviceType[] = [DeviceType.TILT, DeviceType.PIC
  * List all fermentation-tracking devices (Tilt, PicoFerm, iSpindel), plus batches currently
  * fermenting without a tracker yet
  */
-export async function loader(_args: LoaderArgs) {
+export async function loader(_args: LoaderFunctionArgs) {
   const devices = await DeviceRepository.listDevices();
   const tiltDevices = devices.filter((d) => FERMENTATION_DEVICE_TYPES.includes(d.deviceType as DeviceType));
 
@@ -30,7 +30,7 @@ export async function loader(_args: LoaderArgs) {
 
   const awaitingBatches = await BatchRepository.listAwaitingFermentationTracker();
 
-  return json({ devices: devicesWithSessions, awaitingBatches });
+  return { devices: devicesWithSessions, awaitingBatches };
 }
 
 /**
@@ -42,21 +42,21 @@ export async function loader(_args: LoaderArgs) {
  * - deviceId: number
  * - batchId?: number — batch to attach this tracking session to (start only)
  */
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   const body = await request.json();
   const { action: actionType, deviceId, batchId } = body;
 
   if (!actionType || !deviceId) {
-    return json({ error: 'Missing required fields: action, deviceId' }, { status: 400 });
+    return data({ error: 'Missing required fields: action, deviceId' }, { status: 400 });
   }
 
   const device = await DeviceRepository.getDeviceById(Number(deviceId));
   if (!device) {
-    return json({ error: 'Device not found' }, { status: 404 });
+    return data({ error: 'Device not found' }, { status: 404 });
   }
 
   if (!FERMENTATION_DEVICE_TYPES.includes(device.deviceType as DeviceType)) {
-    return json({ error: 'Device is not a fermentation-tracking hydrometer' }, { status: 400 });
+    return data({ error: 'Device is not a fermentation-tracking hydrometer' }, { status: 400 });
   }
 
   try {
@@ -64,7 +64,7 @@ export async function action({ request }: ActionArgs) {
       // Check if there's already an active session
       const existingSession = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
       if (existingSession && existingSession.state === SessionState.IN_PROGRESS) {
-        return json({ error: 'A fermentation session is already active for this device' }, { status: 400 });
+        return data({ error: 'A fermentation session is already active for this device' }, { status: 400 });
       }
 
       // Create a new fermentation session
@@ -88,12 +88,12 @@ export async function action({ request }: ActionArgs) {
           : await BatchRepository.createBatch(`${device.name} tracking`, null);
       await BatchRepository.attachSession(targetBatch.id, session.id);
 
-      return json({ success: true, session, batchId: targetBatch.id });
+      return { success: true, session, batchId: targetBatch.id };
     } else if (actionType === 'stop') {
       // Find the active session
       const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
       if (!session || session.state !== SessionState.IN_PROGRESS) {
-        return json({ error: 'No active session found for this device' }, { status: 404 });
+        return data({ error: 'No active session found for this device' }, { status: 404 });
       }
 
       // Complete the session
@@ -102,11 +102,11 @@ export async function action({ request }: ActionArgs) {
         await BatchRepository.advancePhase(session.batchId, BatchPhase.FERMENTING, BatchPhase.BOTTLING);
       }
 
-      return json({ success: true, session: { ...session, state: SessionState.COMPLETED } });
+      return { success: true, session: { ...session, state: SessionState.COMPLETED } };
     }
-    return json({ error: 'Invalid action. Use "start" or "stop"' }, { status: 400 });
+    return data({ error: 'Invalid action. Use "start" or "stop"' }, { status: 400 });
   } catch (error) {
     console.error('[Fermentation API] Error:', error);
-    return json({ error: 'Failed to process request' }, { status: 500 });
+    return data({ error: 'Failed to process request' }, { status: 500 });
   }
 }

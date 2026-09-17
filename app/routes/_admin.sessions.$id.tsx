@@ -1,6 +1,6 @@
-import type { ActionArgs, LoaderArgs } from '@remix-run/node';
-import { json, redirect } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { data, redirect } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
@@ -9,8 +9,12 @@ import { SessionDetail } from '~/pages/SessionDetail';
 
 export const meta = () => [{ title: 'Session Detail | RePicoBrew' }];
 
-export const loader = async ({ params }: LoaderArgs) => {
-  const id = parseInt(params.id!);
+export const loader = async ({ params }: LoaderFunctionArgs) => {
+  const idParam = params.id;
+  if (!idParam) {
+    throw new Response('Session not found', { status: 404 });
+  }
+  const id = parseInt(idParam, 10);
   const session = await SessionRepository.getSessionById(id);
   if (!session) {
     throw new Response('Session not found', { status: 404 });
@@ -47,11 +51,15 @@ export const loader = async ({ params }: LoaderArgs) => {
       }),
   );
 
-  return json({ batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices });
+  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices };
 };
 
-export const action = async ({ request, params }: ActionArgs) => {
-  const id = parseInt(params.id!);
+export const action = async ({ request, params }: ActionFunctionArgs) => {
+  const idParam = params.id;
+  if (!idParam) {
+    throw new Response('Session not found', { status: 404 });
+  }
+  const id = parseInt(idParam, 10);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -60,7 +68,7 @@ export const action = async ({ request, params }: ActionArgs) => {
     if (batch) {
       await BatchRepository.endBatch(batch.id);
     }
-    return json({ success: true });
+    return { success: true };
   }
 
   if (intent === 'deleteBatch') {
@@ -71,10 +79,10 @@ export const action = async ({ request, params }: ActionArgs) => {
     return redirect('/sessions');
   }
 
-  return json({ error: 'Unknown intent' }, { status: 400 });
+  return data({ error: 'Unknown intent' }, { status: 400 });
 };
 
 export default function SessionDetailRoute() {
-  const data = useLoaderData<typeof loader>();
-  return <SessionDetail {...data} />;
+  const loaderData = useLoaderData<typeof loader>();
+  return <SessionDetail {...loaderData} />;
 }

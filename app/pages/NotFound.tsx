@@ -1,5 +1,5 @@
 import { Button } from '@chakra-ui/react';
-import { Link as ReLink } from '@remix-run/react';
+import { Link as ReLink } from 'react-router';
 import type { FC } from 'react';
 import { GiHops } from 'react-icons/gi';
 import { ErrorPage } from '~/components/ErrorPage';

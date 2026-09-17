@@ -1,8 +1,8 @@
-import type { ActionArgs } from '@remix-run/node';
-import { redirect } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
+import { redirect } from 'react-router';
 import { sessionStorage } from '~/services/session.server';
 
-export const action = async ({ request }: ActionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   const session = await sessionStorage.getSession(request.headers.get('cookie'));
   return redirect('/signin', {
     headers: { 'Set-Cookie': await sessionStorage.destroySession(session) },

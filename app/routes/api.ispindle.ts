@@ -1,4 +1,4 @@
-import type { ActionArgs } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
 import { action as iSpindelAction } from './api.ispindel';
 
 /**
@@ -7,4 +7,4 @@ import { action as iSpindelAction } from './api.ispindel';
  * Real iSpindel firmware historically ships with this typo'd path alongside the correct
  * /API/iSpindel — bind both to the same handler.
  */
-export const action = (args: ActionArgs) => iSpindelAction(args);
+export const action = (args: ActionFunctionArgs) => iSpindelAction(args);

@@ -1,6 +1,6 @@
-import type { ActionArgs, LoaderArgs } from '@remix-run/node';
-import { json, redirect } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { data, redirect } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
@@ -11,17 +11,17 @@ import { NewSession } from '~/pages/NewSession';
 
 export const meta = () => [{ title: 'New Session | RePicoBrew' }];
 
-export const loader = async (_args: LoaderArgs) => {
+export const loader = async (_args: LoaderFunctionArgs) => {
   const [recipes, devices] = await Promise.all([
     RecipeRepository.getAllRecipesWithSteps(),
     DeviceRepository.listDevices(),
   ]);
   const brewDevices = devices.filter((d) => d.deviceType !== DeviceType.TILT);
   const tiltDevices = devices.filter((d) => d.deviceType === DeviceType.TILT);
-  return json({ recipes, brewDevices, tiltDevices });
+  return { recipes, brewDevices, tiltDevices };
 };
 
-export const action = async ({ request }: ActionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const recipeId = Number(formData.get('recipeId'));
   const deviceId = Number(formData.get('deviceId'));
@@ -32,20 +32,20 @@ export const action = async ({ request }: ActionArgs) => {
   const carbUnit = carbMethod === 'Forced (CO2)' ? 'hours' : 'weeks';
 
   if (!recipeId || !deviceId) {
-    return json({ error: 'Recipe and brew device are required' }, { status: 400 });
+    return data({ error: 'Recipe and brew device are required' }, { status: 400 });
   }
 
   const device = await DeviceRepository.getDeviceById(deviceId);
   if (!device) {
-    return json({ error: 'Device not found' }, { status: 404 });
+    return data({ error: 'Device not found' }, { status: 404 });
   }
   if (device.deviceType === DeviceType.TILT) {
-    return json({ error: 'Select a brewing device, not a Tilt hydrometer' }, { status: 400 });
+    return data({ error: 'Select a brewing device, not a Tilt hydrometer' }, { status: 400 });
   }
 
   const recipe = await RecipeRepository.getRecipe(recipeId);
   if (!recipe) {
-    return json({ error: 'Recipe not found' }, { status: 404 });
+    return data({ error: 'Recipe not found' }, { status: 404 });
   }
 
   const uid = `MANUAL-${Date.now()}-${device.uid}`;

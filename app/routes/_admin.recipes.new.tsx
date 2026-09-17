@@ -1,5 +1,5 @@
-import type { ActionArgs } from '@remix-run/node';
-import { redirect } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
+import { redirect } from 'react-router';
 import { RecipeEditor } from '~/pages/RecipeEditor';
 import { RecipeRepository, type CreateRecipeInput } from '~/repositories/recipe.server';
 import { DeviceType } from '~/types';
@@ -7,7 +7,7 @@ import { parseRecipeFormData } from '~/utils/recipe-photo.server';
 
 export const meta = () => [{ title: 'New Recipe | RePicoBrew' }];
 
-export const action = async ({ request }: ActionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   const { data, photoUrl } = await parseRecipeFormData(request);
 
   const input: CreateRecipeInput = {

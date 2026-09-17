@@ -15,12 +15,12 @@ import {
   Text,
 } from '@chakra-ui/react';
 // Assets
-import { Form, Link, useActionData } from '@remix-run/react';
+import { Form, Link, useActionData } from 'react-router';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
 import type { action } from '~/routes/signin';
 
-const getErrorMessage = (message: string) => {
+const getErrorMessage = (message: string | undefined) => {
   if (message === 'BAD_CREDENTIALS' || message === 'NOT_AUTHORIZED') {
     return 'Invalid email and/or password';
   }

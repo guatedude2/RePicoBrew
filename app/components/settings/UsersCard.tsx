@@ -23,7 +23,7 @@ import {
   VStack,
   useDisclosure,
 } from '@chakra-ui/react';
-import { useFetcher } from '@remix-run/react';
+import { useFetcher } from 'react-router';
 import { useEffect, useState, type FC } from 'react';
 import { MdDelete, MdEdit, MdMoreVert, MdPersonAdd } from 'react-icons/md';
 import Card from '~/components/card/Card';

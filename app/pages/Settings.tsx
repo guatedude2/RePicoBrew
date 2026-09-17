@@ -16,7 +16,7 @@ import {
   Tabs,
   Text,
 } from '@chakra-ui/react';
-import { useFetcher, useLoaderData } from '@remix-run/react';
+import { useFetcher, useLoaderData } from 'react-router';
 import { useEffect, useRef, type FC } from 'react';
 import { MdInfoOutline, MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';

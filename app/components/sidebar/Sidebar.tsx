@@ -11,7 +11,7 @@ import {
   Text,
   useDisclosure,
 } from '@chakra-ui/react';
-import { Link, useLocation } from '@remix-run/react';
+import { Link, useLocation } from 'react-router';
 import type { FC } from 'react';
 import { IoMenuOutline } from 'react-icons/io5';
 import type { NavItem } from '~/layouts/nav';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Box } from '@chakra-ui/react';
-import { ClientOnly } from 'remix-utils';
+import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { Chart } from '~/components/charts/Chart.client';
 
@@ -12,6 +12,25 @@ interface DataPoint {
   time: number;
   temp: number;
   gravity: number;
+}
+
+type SessionLogRow = {
+  type: number;
+  data: string;
+};
+
+type FermLogPayload = {
+  time?: number;
+  temp?: number;
+  gravity?: number;
+};
+
+function isSessionLogRow(value: unknown): value is SessionLogRow {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const row = value as Record<string, unknown>;
+  return typeof row.type === 'number' && typeof row.data === 'string';
 }
 
 const TEMP_COLOR = 'oklch(0.78 0.135 65)';
@@ -26,18 +45,22 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
   useEffect(() => {
     fetch(`/api/sessions/${sessionId}/logs`)
       .then((res) => res.json())
-      .then((logs) => {
+      .then((logs: unknown) => {
+        if (!Array.isArray(logs)) {
+          return;
+        }
         const points = logs
-          .filter((log: any) => log.type === 1) // Fermentation logs
-          .map((log: any) => {
-            const logData = JSON.parse(log.data);
+          .filter(isSessionLogRow)
+          .filter((log) => log.type === 1)
+          .map((log) => {
+            const logData = JSON.parse(log.data) as FermLogPayload;
             return {
-              time: logData.time,
-              temp: logData.temp,
-              gravity: logData.gravity,
+              time: logData.time ?? 0,
+              temp: logData.temp ?? 0,
+              gravity: logData.gravity ?? 0,
             };
           })
-          .sort((a: DataPoint, b: DataPoint) => a.time - b.time);
+          .sort((a, b) => a.time - b.time);
         setData(points);
       })
       .catch(console.error);

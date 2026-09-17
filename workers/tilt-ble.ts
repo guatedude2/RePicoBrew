@@ -126,6 +126,14 @@ async function handleTiltReading(beacon: BeaconData) {
 /**
  * Start BLE scanning
  */
+type NoblePeripheral = {
+  rssi: number;
+  address: string;
+  advertisement: {
+    manufacturerData?: Buffer;
+  };
+};
+
 function startScanning() {
   console.log('[Tilt BLE] Starting BLE scan for Tilt hydrometers...');
 
@@ -140,7 +148,7 @@ function startScanning() {
     }
   });
 
-  noble.on('discover', (peripheral: any) => {
+  noble.on('discover', (peripheral: NoblePeripheral) => {
     const { advertisement, rssi, address } = peripheral;
     const manufacturerData = advertisement.manufacturerData;
 

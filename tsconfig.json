@@ -1,11 +1,12 @@
 {
-  "include": ["remix.env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": ["app/env.d.ts", "**/*.ts", "**/*.tsx"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2019"],
+    "types": ["vite/client"],
     "isolatedModules": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",
-    "moduleResolution": "node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "target": "ES2019",
     "strict": true,
@@ -16,7 +17,7 @@
       "~/*": ["./app/*"]
     },
 
-    // Remix takes care of building everything in `remix build`.
+    // React Router takes care of building everything via Vite.
     "noEmit": true
   }
 }

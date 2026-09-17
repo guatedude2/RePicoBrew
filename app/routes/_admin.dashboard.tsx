@@ -1,12 +1,11 @@
-import type { LoaderArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
+import type { LoaderFunctionArgs } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
 import { BatchPhase } from '~/types';
 import { batchNeedsAttention, batchOverallProgress } from '~/utils/batch-phase';
 
 export const meta = () => [{ title: 'Dashboard | RePicoBrew' }, { name: 'description', content: 'Live brew tracking' }];
 
-export const loader = async (_args: LoaderArgs) => {
+export const loader = async (_args: LoaderFunctionArgs) => {
   const [ongoing, recent] = await Promise.all([BatchRepository.listOngoing(), BatchRepository.listRecentCompleted(5)]);
 
   const ongoingBrews = ongoing.map((batch) => ({
@@ -29,7 +28,7 @@ export const loader = async (_args: LoaderArgs) => {
 
   const fermentingCount = ongoing.filter((b) => b.phase === BatchPhase.FERMENTING).length;
 
-  return json({ ongoingBrews, fermentingCount, recentBatches: recent });
+  return { ongoingBrews, fermentingCount, recentBatches: recent };
 };
 
 export { Dashboard as default } from '~/pages/Dashboard';

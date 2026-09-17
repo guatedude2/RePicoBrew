@@ -1,5 +1,5 @@
 import { Box, Button, Flex, Icon, Image, Input, Select, Text } from '@chakra-ui/react';
-import { Form, useActionData, useNavigate, useNavigation } from '@remix-run/react';
+import { Form, useActionData, useNavigate, useNavigation } from 'react-router';
 import { useMemo, useState, type FC } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 import Card from '~/components/card/Card';

@@ -1,6 +1,6 @@
-import type { ActionArgs, LoaderArgs } from '@remix-run/node';
-import { json, redirect } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { redirect } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { RecipeEditor, type RecipeEditorData } from '~/pages/RecipeEditor';
 import { RecipeRepository, type CreateRecipeInput } from '~/repositories/recipe.server';
 import { parseRecipeFormData } from '~/utils/recipe-photo.server';
@@ -9,8 +9,12 @@ export const meta = ({ data }: { data?: { readOnly: boolean } }) => [
   { title: `${data?.readOnly ? 'View' : 'Edit'} Recipe | RePicoBrew` },
 ];
 
-export const loader = async ({ params, request }: LoaderArgs) => {
-  const id = parseInt(params.id!);
+export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+  const idParam = params.id;
+  if (!idParam) {
+    throw new Response('Recipe not found', { status: 404 });
+  }
+  const id = parseInt(idParam, 10);
   const recipe = await RecipeRepository.getRecipe(id);
 
   if (!recipe) {
@@ -19,11 +23,15 @@ export const loader = async ({ params, request }: LoaderArgs) => {
 
   const readOnly = new URL(request.url).searchParams.get('mode') === 'view';
 
-  return json({ recipe, readOnly });
+  return { recipe, readOnly };
 };
 
-export const action = async ({ request, params }: ActionArgs) => {
-  const id = parseInt(params.id!);
+export const action = async ({ request, params }: ActionFunctionArgs) => {
+  const idParam = params.id;
+  if (!idParam) {
+    throw new Response('Recipe not found', { status: 404 });
+  }
+  const id = parseInt(idParam, 10);
   const existing = await RecipeRepository.getRecipe(id);
   if (!existing) {
     throw new Response('Recipe not found', { status: 404 });

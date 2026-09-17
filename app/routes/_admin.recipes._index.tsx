@@ -1,6 +1,6 @@
-import type { ActionArgs, LoaderArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
-import { useLoaderData, Link, useFetcher, useNavigate, useSearchParams } from '@remix-run/react';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { data } from 'react-router';
+import { useLoaderData, Link, useFetcher, useNavigate, useSearchParams } from 'react-router';
 import {
   Box,
   Button,
@@ -41,7 +41,7 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = {
   type: 'asc',
 };
 
-export const loader = async ({ request }: LoaderArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const sortParam = url.searchParams.get('sort');
   const sort: SortKey = SORT_KEYS.includes(sortParam as SortKey) ? (sortParam as SortKey) : 'name';
@@ -70,26 +70,26 @@ export const loader = async ({ request }: LoaderArgs) => {
     return dir === 'asc' ? cmp : -cmp;
   });
 
-  return json({ recipes: sorted, sort, dir });
+  return { recipes: sorted, sort, dir };
 };
 
-export const action = async ({ request }: ActionArgs) => {
+export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formData.get('intent');
 
   if (intent === 'delete') {
     const id = parseInt(formData.get('id') as string);
     await RecipeRepository.deleteRecipe(id);
-    return json({ success: true });
+    return { success: true };
   }
 
   if (intent === 'duplicate') {
     const id = parseInt(formData.get('id') as string);
     await RecipeRepository.duplicateRecipe(id);
-    return json({ success: true });
+    return { success: true };
   }
 
-  return json({ error: 'Unknown intent' }, { status: 400 });
+  return data({ error: 'Unknown intent' }, { status: 400 });
 };
 
 const columns = '1.6fr 1.1fr 0.8fr 0.8fr 0.9fr 1fr 1fr';
@@ -230,7 +230,10 @@ export default function RecipesPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   const sortHref = (key: SortKey) => {
-    const nextDir: SortDir = sort === key ? (dir === 'asc' ? 'desc' : 'asc') : DEFAULT_DIR[key];
+    let nextDir: SortDir = DEFAULT_DIR[key];
+    if (sort === key) {
+      nextDir = dir === 'asc' ? 'desc' : 'asc';
+    }
     const params = new URLSearchParams(searchParams);
     params.set('sort', key);
     params.set('dir', nextDir);

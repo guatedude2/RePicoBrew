@@ -2,7 +2,7 @@ import prisma from '~/services/prisma.server';
 import type { SessionType } from '~/types';
 import { SessionState } from '~/types';
 
-export type SessionLogData = any;
+export type SessionLogData = Record<string, unknown>;
 
 export class SessionRepository {
   public static async createSession(

@@ -1,6 +1,5 @@
-import type { LoaderArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
-import { useLoaderData, useSearchParams, useFetcher, useNavigate, Link } from '@remix-run/react';
+import type { LoaderFunctionArgs } from 'react-router';
+import { useLoaderData, useSearchParams, useFetcher, useNavigate, Link } from 'react-router';
 import {
   Box,
   Button,
@@ -55,7 +54,7 @@ const LIVE_PHASES: string[] = [
   BatchPhase.CARBONATING,
 ];
 
-export const loader = async ({ request }: LoaderArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const requestedPage = Number(url.searchParams.get('page'));
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
@@ -64,7 +63,7 @@ export const loader = async ({ request }: LoaderArgs) => {
   const dirParam = url.searchParams.get('dir');
   const dir: SortDir = dirParam === 'asc' || dirParam === 'desc' ? dirParam : DEFAULT_DIR[sort];
   const { batches, total } = await BatchRepository.listPaginated(page, PAGE_SIZE, sort, dir);
-  return json({ batches, total, page, pageSize: PAGE_SIZE, sort, dir });
+  return { batches, total, page, pageSize: PAGE_SIZE, sort, dir };
 };
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -209,7 +208,10 @@ export default function SessionsPage() {
   };
 
   const sortHref = (key: SortKey) => {
-    const nextDir: SortDir = sort === key ? (dir === 'asc' ? 'desc' : 'asc') : DEFAULT_DIR[key];
+    let nextDir: SortDir = DEFAULT_DIR[key];
+    if (sort === key) {
+      nextDir = dir === 'asc' ? 'desc' : 'asc';
+    }
     const params = new URLSearchParams(searchParams);
     params.set('sort', key);
     params.set('dir', nextDir);

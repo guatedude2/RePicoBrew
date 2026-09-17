@@ -1,5 +1,5 @@
 import { Box, Button, Flex, HStack, Icon, Select, SimpleGrid, Text, VStack } from '@chakra-ui/react';
-import { useFetcher } from '@remix-run/react';
+import { useFetcher } from 'react-router';
 import { useEffect, useState } from 'react';
 import { MdScience, MdStop, MdThermostat, MdTimer, MdWifi } from 'react-icons/md';
 import Card from '~/components/card/Card';
@@ -28,6 +28,13 @@ interface AwaitingBatch {
   name: string;
 }
 
+interface AvailableTilt {
+  id: number;
+  name: string;
+  color: string | null;
+  activeSession: Session | null;
+}
+
 interface DashboardProps {
   sessions: Session[];
 }
@@ -46,7 +53,7 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
   const [sessions, setSessions] = useState(initialSessions);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(initialSessions[0]?.id || null);
   const [currentReading, setCurrentReading] = useState<TiltUpdate | null>(null);
-  const [availableTilts, setAvailableTilts] = useState<any[]>([]);
+  const [availableTilts, setAvailableTilts] = useState<AvailableTilt[]>([]);
   const [awaitingBatches, setAwaitingBatches] = useState<AwaitingBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
 
@@ -84,12 +91,16 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
   useEffect(() => {
     fetch('/api/fermentation/session')
       .then((res) => res.json())
-      .then((data) => {
-        if (data.devices) {
-          setAvailableTilts(data.devices);
+      .then((data: unknown) => {
+        if (typeof data !== 'object' || data === null) {
+          return;
         }
-        if (data.awaitingBatches) {
-          setAwaitingBatches(data.awaitingBatches);
+        const payload = data as { devices?: AvailableTilt[]; awaitingBatches?: AwaitingBatch[] };
+        if (payload.devices) {
+          setAvailableTilts(payload.devices);
+        }
+        if (payload.awaitingBatches) {
+          setAwaitingBatches(payload.awaitingBatches);
         }
       })
       .catch(console.error);

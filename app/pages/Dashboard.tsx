@@ -1,5 +1,5 @@
 import { Box, Button, Flex, Grid, GridItem, HStack, Icon, Text, Tooltip } from '@chakra-ui/react';
-import { Link, useLoaderData, useRouteLoaderData } from '@remix-run/react';
+import { Link, useLoaderData, useRouteLoaderData } from 'react-router';
 import { useEffect, useState, type FC } from 'react';
 import { GiHops } from 'react-icons/gi';
 import { IoIosBeer } from 'react-icons/io';
@@ -32,7 +32,13 @@ export const Dashboard: FC = () => {
   useEffect(() => {
     const now = new Date();
     const hour = now.getHours();
-    setGreeting(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
+    if (hour < 12) {
+      setGreeting('Good morning');
+    } else if (hour < 18) {
+      setGreeting('Good afternoon');
+    } else {
+      setGreeting('Good evening');
+    }
     setToday(now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }));
   }, []);
 

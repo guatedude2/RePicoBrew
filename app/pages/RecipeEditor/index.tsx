@@ -1,5 +1,5 @@
 import { Box, Button, Checkbox, Flex, Grid, Icon, Input, Select, Text, Textarea } from '@chakra-ui/react';
-import { Form, Link, useNavigate, useNavigation } from '@remix-run/react';
+import { Form, Link, useNavigate, useNavigation } from 'react-router';
 import { useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import Card from '~/components/card/Card';
@@ -388,7 +388,6 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       og,
       fg,
       srm,
-      recipe,
       notes,
       photoUrl,
       batchSize,

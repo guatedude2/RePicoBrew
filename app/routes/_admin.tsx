@@ -1,11 +1,12 @@
-import { json, type LoaderArgs, type SessionData } from '@remix-run/node';
+import type { LoaderFunctionArgs } from 'react-router';
 import { MainLayout } from '~/layouts/MainLayout';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import authenticator from '~/services/auth.server';
+import type { SessionData } from '~/services/session.server';
 import { ServerSideEventsProvider } from '~/utils/sse';
 
-export const loader = async ({ request }: LoaderArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const session = (await authenticator.isAuthenticated(request, {
     failureRedirect: '/signin',
   })) as SessionData;
@@ -15,7 +16,7 @@ export const loader = async ({ request }: LoaderArgs) => {
     BatchRepository.listNeedingAttention(),
   ]);
 
-  return json({
+  return {
     session,
     deviceStatus,
     attentionBatches: attentionBatches.map((batch) => ({
@@ -24,7 +25,7 @@ export const loader = async ({ request }: LoaderArgs) => {
       phase: batch.phase,
       sessionId: batch.sessions[0]?.id ?? null,
     })),
-  });
+  };
 };
 
 export default () => (

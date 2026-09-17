@@ -1,15 +1,6 @@
 import { ChakraProvider } from '@chakra-ui/react';
-import {
-  Links,
-  LiveReload,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-  isRouteErrorResponse,
-  useRouteError,
-} from '@remix-run/react';
 import { StrictMode } from 'react';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useRouteError } from 'react-router';
 import { NotFound } from './pages/NotFound';
 import { ServerError } from './pages/ServerError';
 import theme from './theme/theme';
@@ -34,7 +25,6 @@ function Document({ children, title = 'RePicoBrew' }: { children: React.ReactNod
         {children}
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );

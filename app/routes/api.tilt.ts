@@ -1,5 +1,5 @@
-import type { ActionArgs } from '@remix-run/node';
-import { json } from '@remix-run/node';
+import type { ActionFunctionArgs } from 'react-router';
+import { data } from 'react-router';
 import { processTiltReading } from '~/services/tilt.server';
 
 /**
@@ -19,16 +19,16 @@ import { processTiltReading } from '~/services/tilt.server';
  *   }
  * ]
  */
-export async function action({ request }: ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, { status: 405 });
+    return data({ error: 'Method not allowed' }, { status: 405 });
   }
 
   try {
     const readings = await request.json();
 
     if (!Array.isArray(readings)) {
-      return json({ error: 'Expected array of readings' }, { status: 400 });
+      return data({ error: 'Expected array of readings' }, { status: 400 });
     }
 
     const results = [];
@@ -61,9 +61,9 @@ export async function action({ request }: ActionArgs) {
       });
     }
 
-    return json({ success: true, results });
+    return { success: true, results };
   } catch (error) {
     console.error('[Tilt API] Error processing readings:', error);
-    return json({ error: 'Failed to process readings' }, { status: 500 });
+    return data({ error: 'Failed to process readings' }, { status: 500 });
   }
 }

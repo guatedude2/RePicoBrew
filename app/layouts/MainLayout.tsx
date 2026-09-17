@@ -1,7 +1,7 @@
 // Chakra imports
 import { Box, Flex } from '@chakra-ui/react';
 // Layout components
-import { Outlet } from '@remix-run/react';
+import { Outlet } from 'react-router';
 import { ToastProvider, createToast } from '~/components/Toasts/ToastProvider';
 import { Sidebar } from '~/components/sidebar/Sidebar';
 import { Topbar } from '~/components/navbar/Topbar';

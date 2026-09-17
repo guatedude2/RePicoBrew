@@ -4,7 +4,7 @@ import type { DeviceType } from '~/types';
 type DeviceConfig<K> = Record<DeviceType, K>;
 
 export class ConfigRepository {
-  public static async getConfig<T = any>(key: string) {
+  public static async getConfig<T = unknown>(key: string) {
     const config = await prisma.config.findFirst({ where: { key } });
     return config ? (JSON.parse(config.value) as T) : null;
   }
@@ -19,7 +19,7 @@ export class ConfigRepository {
     return (config && config[deviceType]) || null;
   }
 
-  public static async setConfig<T = any>(key: string, value: T) {
+  public static async setConfig<T = unknown>(key: string, value: T) {
     return await prisma.config.upsert({
       where: { key },
       create: { key, value: JSON.stringify(value) },

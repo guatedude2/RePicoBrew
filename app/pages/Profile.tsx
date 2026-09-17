@@ -10,7 +10,7 @@ import {
   InputRightElement,
   Text,
 } from '@chakra-ui/react';
-import { useFetcher, useRouteLoaderData } from '@remix-run/react';
+import { useFetcher, useRouteLoaderData } from 'react-router';
 import { useState, type FC } from 'react';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';

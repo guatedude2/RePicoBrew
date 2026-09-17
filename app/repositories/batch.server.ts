@@ -62,14 +62,12 @@ export class BatchRepository {
       session.type === SessionType.BREWING ||
       session.type === SessionType.MANUAL_BREW ||
       session.type === SessionType.COLD_BREW;
-    const phase =
-      session.state === SessionState.CANCELED
-        ? BatchPhase.CANCELED
-        : session.state === SessionState.COMPLETED
-        ? isBrewingSession
-          ? BatchPhase.COOLING
-          : BatchPhase.COMPLETED
-        : BatchPhase.BREWING;
+    let phase = BatchPhase.BREWING;
+    if (session.state === SessionState.CANCELED) {
+      phase = BatchPhase.CANCELED;
+    } else if (session.state === SessionState.COMPLETED) {
+      phase = isBrewingSession ? BatchPhase.COOLING : BatchPhase.COMPLETED;
+    }
     const batch = await prisma.batch.create({
       data: {
         name: session.recipe?.name ?? 'Custom Brew',
@@ -169,7 +167,12 @@ export class BatchRepository {
       return { batches: sorted.slice(skip, skip + pageSize), total };
     }
 
-    const orderByField = sort === 'recipe' ? 'name' : sort === 'status' ? 'phase' : 'updatedAt';
+    let orderByField: 'name' | 'phase' | 'updatedAt' = 'updatedAt';
+    if (sort === 'recipe') {
+      orderByField = 'name';
+    } else if (sort === 'status') {
+      orderByField = 'phase';
+    }
     const [batches, total] = await Promise.all([
       prisma.batch.findMany({
         where,
