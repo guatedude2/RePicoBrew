@@ -2,6 +2,8 @@ import prisma from '~/services/prisma.server';
 import type { DeviceLogData, DeviceState } from '~/types';
 import { DeviceType } from '~/types';
 
+const TILT_ONLINE_WINDOW_MS = 10 * 60 * 1000;
+
 export class DeviceRepository {
   public static async createDevice(
     uid: string,
@@ -40,6 +42,10 @@ export class DeviceRepository {
 
   public static async getDeviceByUID(uid: string) {
     return await prisma.device.findFirst({ where: { uid } });
+  }
+
+  public static async getDeviceById(id: number) {
+    return await prisma.device.findFirst({ where: { id } });
   }
 
   public static async updateDeviceIPAddress(id: number, ipAddress: string | null) {
@@ -84,5 +90,28 @@ export class DeviceRepository {
       orderBy: { time: 'desc' },
       take: limit,
     });
+  }
+
+  public static isDeviceOnline(device: { deviceType: string; ipAddress: string | null; metadata: string | null }) {
+    if (device.deviceType === DeviceType.TILT) {
+      try {
+        const metadata = device.metadata ? JSON.parse(device.metadata) : {};
+        return (
+          typeof metadata.lastSeen === 'string' &&
+          Date.now() - new Date(metadata.lastSeen).getTime() < TILT_ONLINE_WINDOW_MS
+        );
+      } catch {
+        return false;
+      }
+    }
+    return Boolean(device.ipAddress);
+  }
+
+  public static async getStatus() {
+    const devices = await this.listDevices();
+    return {
+      total: devices.length,
+      online: devices.filter((device) => this.isDeviceOnline(device)).length,
+    };
   }
 }

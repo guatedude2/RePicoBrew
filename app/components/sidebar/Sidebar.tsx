@@ -1,6 +1,3 @@
-import React from 'react';
-
-// chakra imports
 import {
   Box,
   Drawer,
@@ -9,86 +6,157 @@ import {
   DrawerContent,
   DrawerOverlay,
   Flex,
+  HStack,
   Icon,
-  useColorModeValue,
+  Text,
   useDisclosure,
 } from '@chakra-ui/react';
-import { Scrollbars } from 'react-custom-scrollbars-2';
-import { renderThumb, renderTrack, renderView } from '../scrollbar/Scrollbar';
-import Content from './components/Content';
-
-// Assets
+import { Link, useLocation } from '@remix-run/react';
+import type { FC } from 'react';
 import { IoMenuOutline } from 'react-icons/io5';
 import type { NavItem } from '~/layouts/nav';
 
-function Sidebar(props: { routes: NavItem[]; [x: string]: any }) {
-  const { routes } = props;
+const Logo: FC = () => (
+  <Flex align="center" gap="10px">
+    <Flex
+      w="34px"
+      h="34px"
+      borderRadius="8px"
+      bgGradient="linear(155deg, brand.300, brand.600)"
+      align="center"
+      justify="center"
+      flex="0 0 auto"
+    >
+      <Icon viewBox="0 0 24 24" boxSize="18px" color="ink.onBrand">
+        <path d="M6 3h10l1 4H5l1-4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <path
+          d="M5 7h14l-1.4 12.2A2 2 0 0 1 15.6 21H8.4a2 2 0 0 1-2-1.8L5 7z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+      </Icon>
+    </Flex>
+    <Box lineHeight="1.1">
+      <Text fontWeight="700" fontSize="15px" letterSpacing="0.5px">
+        REPICOBREW
+      </Text>
+      <Text fontSize="11px" color="ink.textFaint" letterSpacing="1px">
+        CONTROL DECK
+      </Text>
+    </Box>
+  </Flex>
+);
+
+const NavSection: FC<{ label: string; items: NavItem[]; pathname: string }> = ({ label, items, pathname }) => (
+  <>
+    <Text fontSize="11px" fontWeight="600" letterSpacing="1px" color="ink.textFaintest" px="12px" pt="16px" pb="6px">
+      {label}
+    </Text>
+    {items.map((item) => {
+      const isActive = pathname.startsWith(item.path);
+      return (
+        <Link key={item.path} to={item.path} style={{ textDecoration: 'none' }}>
+          <HStack
+            spacing="12px"
+            px="12px"
+            py="10px"
+            borderRadius="8px"
+            bg={isActive ? 'brand.100' : 'transparent'}
+            borderLeft="3px solid"
+            borderLeftColor={isActive ? 'brand.500' : 'transparent'}
+            color={isActive ? 'ink.text' : 'ink.textMuted'}
+            fontWeight={isActive ? '600' : '500'}
+            fontSize="14px"
+            _hover={{ color: 'ink.text' }}
+          >
+            {item.icon}
+            <Text>{item.name}</Text>
+          </HStack>
+        </Link>
+      );
+    })}
+  </>
+);
+
+const DevicesFooter: FC<{ online: number; total: number }> = ({ online, total }) => (
+  <Box m="12px" p="14px" borderRadius="10px" bg="ink.card" border="1px solid" borderColor="ink.cardBorder">
+    <HStack spacing="8px" fontSize="12px" color="ink.textMuted">
+      <Box
+        w="7px"
+        h="7px"
+        borderRadius="full"
+        bg={online > 0 ? 'success.500' : 'ink.textFaintest'}
+        sx={online > 0 ? { animation: 'pulse-dot 2s infinite' } : undefined}
+      />
+      <Text>
+        {online} of {total} devices online
+      </Text>
+    </HStack>
+  </Box>
+);
+
+const SidebarBody: FC<{ pathname: string; online: number; total: number; routes: NavItem[] }> = ({
+  pathname,
+  online,
+  total,
+  routes,
+}) => {
+  const brewing = routes.filter((r) => r.section === 'BREWING');
+  const system = routes.filter((r) => r.section === 'SYSTEM');
+  return (
+    <Flex direction="column" h="100%">
+      <Box px="20px" py="24px" borderBottom="1px solid" borderColor="ink.border">
+        <Logo />
+      </Box>
+      <Flex direction="column" flex="1" px="12px" py="16px" gap="2px" overflowY="auto">
+        <NavSection label="BREWING" items={brewing} pathname={pathname} />
+        <NavSection label="SYSTEM" items={system} pathname={pathname} />
+      </Flex>
+      <DevicesFooter online={online} total={total} />
+    </Flex>
+  );
+};
+
+export function Sidebar({ routes, online, total }: { routes: NavItem[]; online: number; total: number }) {
+  const { pathname } = useLocation();
 
   return (
-    <Box display={{ sm: 'none', xl: 'block' }} position="fixed" minH="100%">
-      <Box bg="background.500" transition="0.2s linear" w="300px" h="100vh" m="0px" minH="100%" overflowX="hidden">
-        <Scrollbars
-          autoHide
-          renderTrackVertical={renderTrack}
-          renderThumbVertical={renderThumb}
-          renderView={renderView}
-        >
-          <Content routes={routes} />
-        </Scrollbars>
-      </Box>
+    <Box
+      display={{ base: 'none', md: 'block' }}
+      w="240px"
+      flex="0 0 240px"
+      bg="ink.sidebar"
+      borderRight="1px solid"
+      borderColor="ink.border"
+      position="sticky"
+      top="0"
+      h="100vh"
+    >
+      <SidebarBody pathname={pathname} online={online} total={total} routes={routes} />
     </Box>
   );
 }
 
-// FUNCTIONS
-export function SidebarResponsive(props: { routes: NavItem[] }) {
-  const sidebarBackgroundColor = useColorModeValue('white', 'navy.800');
-  const menuColor = useColorModeValue('gray.400', 'white');
-  // // SIDEBAR
+export function SidebarDrawer({ routes, online, total }: { routes: NavItem[]; online: number; total: number }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const btnRef = React.useRef();
-
-  const { routes } = props;
-  // let isWindows = navigator.platform.startsWith("Win");
-  //  BRAND
+  const { pathname } = useLocation();
 
   return (
-    <Flex display={{ sm: 'flex', xl: 'none' }} alignItems="center">
-      <Flex ref={btnRef} w="max-content" h="max-content" onClick={onOpen}>
-        <Icon
-          as={IoMenuOutline}
-          color={menuColor}
-          my="auto"
-          w="20px"
-          h="20px"
-          me="10px"
-          _hover={{ cursor: 'pointer' }}
-        />
-      </Flex>
-      <Drawer isOpen={isOpen} onClose={onClose} finalFocusRef={btnRef}>
+    <Box display={{ base: 'block', md: 'none' }}>
+      <Icon as={IoMenuOutline} boxSize="24px" color="ink.text" onClick={onOpen} cursor="pointer" />
+      <Drawer isOpen={isOpen} onClose={onClose} placement="left">
         <DrawerOverlay />
-        <DrawerContent w="285px" maxW="285px" bg={sidebarBackgroundColor}>
-          <DrawerCloseButton
-            zIndex="3"
-            onClick={onClose}
-            _focus={{ boxShadow: 'none' }}
-            _hover={{ boxShadow: 'none' }}
-          />
-          <DrawerBody maxW="285px" px="0rem" pb="0">
-            <Scrollbars
-              autoHide
-              renderTrackVertical={renderTrack}
-              renderThumbVertical={renderThumb}
-              renderView={renderView}
-            >
-              <Content routes={routes} />
-            </Scrollbars>
+        <DrawerContent bg="ink.sidebar" maxW="240px">
+          <DrawerCloseButton color="ink.textSecondary" zIndex={2} />
+          <DrawerBody p="0">
+            <SidebarBody pathname={pathname} online={online} total={total} routes={routes} />
           </DrawerBody>
         </DrawerContent>
       </Drawer>
-    </Flex>
+    </Box>
   );
 }
-// PROPS
 
 export default Sidebar;

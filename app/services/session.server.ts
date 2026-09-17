@@ -27,6 +27,7 @@ export const { getSession, commitSession, destroySession } = sessionStorage;
 export type SessionData = {
   email: string;
   name: string;
+  role: string;
   expiresAt: number;
   token: string;
 };

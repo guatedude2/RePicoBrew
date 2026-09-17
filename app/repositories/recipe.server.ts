@@ -1,14 +1,9 @@
+import omit from 'lodash/omit';
 import prisma from '~/services/prisma.server';
+import { IngredientSection, PicoLocationMap } from '~/types';
+import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 
-export enum PicoLocationMap {
-  Prime = 0,
-  Mash = 1,
-  PassThru = 2,
-  Adjunct1 = 3,
-  Adjunct2 = 4,
-  Adjunct3 = 6,
-  Adjunct4 = 5,
-}
+export { IngredientSection, PicoLocationMap };
 
 export type RecipeStep = {
   name: string;
@@ -16,6 +11,20 @@ export type RecipeStep = {
   stepTime: number;
   drainTime: number;
   location: number;
+};
+
+export type IngredientRow = {
+  section: IngredientSection;
+  sortOrder?: number;
+  name: string;
+  amount?: number | null;
+  unit?: string | null;
+  color?: number | null;
+  aa?: number | null;
+  time?: number | null;
+  temp?: number | null;
+  days?: number | null;
+  hours?: number | null;
 };
 
 export type CreateRecipeInput = {
@@ -31,6 +40,29 @@ export type CreateRecipeInput = {
   image: string;
   notes?: string;
   steps: RecipeStep[];
+
+  photoUrl?: string | null;
+  ogMin?: number;
+  ogMax?: number;
+  fgMin?: number;
+  fgMax?: number;
+  ibuMin?: number;
+  ibuMax?: number;
+  srmMin?: number;
+  srmMax?: number;
+  abvMin?: number;
+  abvMax?: number;
+  batchSize?: number;
+  mashType?: number;
+  boilTime?: number;
+  boilTemp?: number;
+  firstWortHopping?: boolean;
+  fermentationType?: number;
+  yeastName?: string;
+  yeastAttenuation?: number;
+  yeastRangeTemp?: string;
+  yeastPitchTemp?: number;
+  ingredients: IngredientRow[];
 };
 
 export class RecipeRepository {
@@ -44,15 +76,31 @@ export class RecipeRepository {
     });
   }
 
+  // Same as getAllRecipes, but with steps included so callers can estimate brew time
+  // (used by the New Session page's recipe preview).
+  public static async getAllRecipesWithSteps(deviceType?: string) {
+    return await prisma.recipe.findMany({
+      where: {
+        deletedAt: null,
+        ...(deviceType && { deviceType }),
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { steps: true },
+    });
+  }
+
   public static async getRecipe(id: number) {
     return await prisma.recipe.findFirst({
       where: { id, deletedAt: null },
-      include: { steps: { orderBy: { id: 'asc' } } },
+      include: {
+        steps: { orderBy: { id: 'asc' } },
+        ingredients: { orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }] },
+      },
     });
   }
 
   public static async createRecipe(data: CreateRecipeInput) {
-    const { steps, ...recipeData } = data;
+    const { steps, ingredients, ...recipeData } = data;
 
     return await prisma.recipe.create({
       data: {
@@ -62,16 +110,20 @@ export class RecipeRepository {
             ...step,
           })),
         },
+        ingredients: {
+          create: ingredients.map((row, index) => ({ ...row, sortOrder: row.sortOrder ?? index })),
+        },
       },
-      include: { steps: true },
+      include: { steps: true, ingredients: true },
     });
   }
 
   public static async updateRecipe(id: number, data: CreateRecipeInput) {
-    const { steps, ...recipeData } = data;
+    const { steps, ingredients, ...recipeData } = data;
 
-    // Delete existing steps and create new ones (simpler than diffing)
+    // Delete existing steps/ingredients and create new ones (simpler than diffing)
     await prisma.recipeStep.deleteMany({ where: { recipeId: id } });
+    await prisma.recipeIngredient.deleteMany({ where: { recipeId: id } });
 
     return await prisma.recipe.update({
       where: { id },
@@ -80,8 +132,11 @@ export class RecipeRepository {
         steps: {
           create: steps.map((step) => ({ ...step })),
         },
+        ingredients: {
+          create: ingredients.map((row, index) => ({ ...row, sortOrder: row.sortOrder ?? index })),
+        },
       },
-      include: { steps: true },
+      include: { steps: true, ingredients: true },
     });
   }
 
@@ -92,46 +147,41 @@ export class RecipeRepository {
     });
   }
 
+  public static async duplicateRecipe(id: number) {
+    const original = await prisma.recipe.findFirst({
+      where: { id, deletedAt: null },
+      include: { steps: true, ingredients: true },
+    });
+
+    if (!original) {
+      throw new Error(`Recipe ${id} not found`);
+    }
+
+    const { steps, ingredients } = original;
+
+    return await prisma.recipe.create({
+      data: {
+        ...omit(original, ['id', 'createdAt', 'updatedAt', 'deletedAt', 'steps', 'ingredients']),
+        name: `${original.name} (Copy)`,
+        steps: {
+          create: steps.map(({ id: _stepId, recipeId: _recipeId, ...step }) => ({ ...step })),
+        },
+        ingredients: {
+          create: ingredients.map(({ id: _ingId, recipeId: _ingRecipeId, ...ingredient }) => ({ ...ingredient })),
+        },
+      },
+      include: { steps: true, ingredients: true },
+    });
+  }
+
   // Generate default OLED image bitmap (1024 bytes hex string for 128x64 OLED)
   public static getDefaultImage(): string {
     // Empty/black image - all zeros
     return '0'.repeat(1024);
   }
 
-  // Validate Pico recipe constraints
+  // Validate Pico recipe constraints (shared implementation, safe to use from client code too)
   public static validatePicoRecipe(steps: RecipeStep[]): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    if (steps.length < 3) {
-      errors.push('Recipe must have at least 3 steps (Preparing, Heating, Dough In)');
-    }
-
-    // First 3 steps must be: Preparing To Brew, Heating, Dough In
-    const requiredSteps = [
-      { name: 'Preparing To Brew', location: PicoLocationMap.Prime },
-      { name: 'Heating', location: PicoLocationMap.Mash },
-      { name: 'Dough In', location: PicoLocationMap.Mash },
-    ];
-
-    requiredSteps.forEach((required, index) => {
-      if (steps[index] && steps[index].name !== required.name) {
-        errors.push(`Step ${index + 1} must be "${required.name}"`);
-      }
-      if (steps[index] && steps[index].location !== required.location) {
-        errors.push(`Step ${index + 1} must use location ${required.location}`);
-      }
-    });
-
-    // Drain times should be 0 except for specific steps
-    steps.forEach((step, index) => {
-      const isMashOut = step.name.toLowerCase().includes('mash out');
-      const isLastHop = step.name.toLowerCase().includes('hop') && index === steps.length - 1;
-
-      if (!isMashOut && !isLastHop && step.drainTime > 0) {
-        errors.push(`${step.name}: drain time should be 0 (except Mash Out and last hop)`);
-      }
-    });
-
-    return { valid: errors.length === 0, errors };
+    return validatePicoRecipe(steps);
   }
 }

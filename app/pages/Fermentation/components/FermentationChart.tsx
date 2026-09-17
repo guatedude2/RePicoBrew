@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Box, useColorModeValue } from '@chakra-ui/react';
-import Chart from 'react-apexcharts';
+import { Box } from '@chakra-ui/react';
+import { ClientOnly } from 'remix-utils';
 import type { ApexOptions } from 'apexcharts';
+import { Chart } from '~/components/charts/Chart.client';
 
 interface FermentationChartProps {
   sessionId: number;
@@ -13,10 +14,13 @@ interface DataPoint {
   gravity: number;
 }
 
+const TEMP_COLOR = 'oklch(0.78 0.135 65)';
+const GRAVITY_COLOR = 'oklch(0.72 0.1 235)';
+const TEXT_COLOR = 'oklch(0.75 0.006 260)';
+const GRID_COLOR = 'oklch(0.24 0.008 260)';
+
 export default function FermentationChart({ sessionId }: FermentationChartProps) {
   const [data, setData] = useState<DataPoint[]>([]);
-  const textColor = useColorModeValue('secondaryGray.900', 'white');
-  const bgChart = useColorModeValue('white', 'navy.900');
 
   // Fetch historical data
   useEffect(() => {
@@ -66,87 +70,42 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
     chart: {
       type: 'line',
       height: 350,
-      zoom: {
-        enabled: true,
-      },
-      background: bgChart,
-      toolbar: {
-        show: true,
-      },
+      zoom: { enabled: true },
+      background: 'transparent',
+      toolbar: { show: true },
     },
-    colors: ['#F6AD55', '#4299E1'], // Orange for temp, blue for gravity
-    dataLabels: {
-      enabled: false,
-    },
-    stroke: {
-      width: [3, 3],
-      curve: 'smooth',
-    },
+    colors: [TEMP_COLOR, GRAVITY_COLOR],
+    dataLabels: { enabled: false },
+    stroke: { width: [3, 3], curve: 'smooth' },
     xaxis: {
       type: 'datetime',
       labels: {
-        style: {
-          colors: textColor,
-          fontSize: '12px',
-        },
+        style: { colors: TEXT_COLOR, fontSize: '12px' },
         datetimeUTC: false,
       },
+      axisBorder: { color: GRID_COLOR },
+      axisTicks: { color: GRID_COLOR },
     },
     yaxis: [
       {
-        title: {
-          text: 'Temperature (°F)',
-          style: {
-            color: '#F6AD55',
-          },
-        },
-        labels: {
-          style: {
-            colors: '#F6AD55',
-          },
-          formatter: (val) => val.toFixed(1),
-        },
+        title: { text: 'Temperature (°F)', style: { color: TEMP_COLOR } },
+        labels: { style: { colors: TEMP_COLOR }, formatter: (val) => val.toFixed(1) },
       },
       {
         opposite: true,
-        title: {
-          text: 'Specific Gravity',
-          style: {
-            color: '#4299E1',
-          },
-        },
-        labels: {
-          style: {
-            colors: '#4299E1',
-          },
-          formatter: (val) => val.toFixed(3),
-        },
+        title: { text: 'Specific Gravity', style: { color: GRAVITY_COLOR } },
+        labels: { style: { colors: GRAVITY_COLOR }, formatter: (val) => val.toFixed(3) },
         min: (min) => Math.floor((min - 0.01) * 1000) / 1000,
         max: (max) => Math.ceil((max + 0.01) * 1000) / 1000,
       },
     ],
     tooltip: {
-      theme: useColorModeValue('light', 'dark'),
-      x: {
-        format: 'MMM dd, HH:mm',
-      },
-      y: [
-        {
-          formatter: (val) => `${val.toFixed(1)}°F`,
-        },
-        {
-          formatter: (val) => `${val.toFixed(3)} SG`,
-        },
-      ],
+      theme: 'dark',
+      x: { format: 'MMM dd, HH:mm' },
+      y: [{ formatter: (val) => `${val.toFixed(1)}°F` }, { formatter: (val) => `${val.toFixed(3)} SG` }],
     },
-    legend: {
-      labels: {
-        colors: textColor,
-      },
-    },
-    grid: {
-      borderColor: useColorModeValue('#E2E8F0', '#2D3748'),
-    },
+    legend: { labels: { colors: TEXT_COLOR } },
+    grid: { borderColor: GRID_COLOR },
   };
 
   const series = [
@@ -165,11 +124,11 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
   return (
     <Box>
       {data.length === 0 ? (
-        <Box textAlign="center" py={8} color="secondaryGray.600">
+        <Box textAlign="center" py={8} color="ink.textFaint">
           Waiting for first reading...
         </Box>
       ) : (
-        <Chart options={chartOptions} series={series} type="line" height={350} />
+        <ClientOnly>{() => <Chart options={chartOptions} series={series} type="line" height={350} />}</ClientOnly>
       )}
     </Box>
   );

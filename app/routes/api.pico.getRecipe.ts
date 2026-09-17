@@ -1,10 +1,11 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
+import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { PicoLocationMap, RecipeRepository } from '~/repositories/recipe.server';
-import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
+import { SessionRepository } from '~/repositories/session.server';
+import { SessionState, SessionType, DeviceLogType, DeviceState } from '~/types';
 import pubSub from '~/services/pubsub.server';
-import { DeviceLogType, DeviceState } from '~/types';
 import { getPakIdData } from '~/utils/pak';
 
 const DEFAULT_IMAGE =
@@ -48,8 +49,10 @@ export const loader = async ({ request }: LoaderArgs) => {
     // update the status if the session exists
     await SessionRepository.updateSessionState(session.id, SessionType.BREWING, SessionState.READY, 'Ready to Brew');
   } else {
-    // create a session
-    await SessionRepository.createSession(body.data.rfid, SessionType.BREWING, device.id, recipe.id);
+    // create a session, and a batch to carry it through brew -> ferment -> carbonate -> done
+    const newSession = await SessionRepository.createSession(body.data.rfid, SessionType.BREWING, device.id, recipe.id);
+    const batch = await BatchRepository.createBatch(recipe.name, recipe.id);
+    await BatchRepository.attachSession(batch.id, newSession.id);
 
     // record the session creation on the device
     await DeviceRepository.updateDeviceSessionCount(device.id, device.sessionCount + 1);

@@ -1,23 +1,8 @@
 import prisma from '~/services/prisma.server';
+import type { SessionType } from '~/types';
+import { SessionState } from '~/types';
 
 export type SessionLogData = any;
-
-// 0 = Brewing, 1 = Deep Clean, 2 = Sous Vide, 3 = Fermentation
-export enum SessionType {
-  BREWING = 0,
-  DEEP_CLEAN = 1,
-  SOUS_VIDE = 2,
-  FERMENTATION = 3,
-  COLD_BREW = 4,
-  MANUAL_BREW = 5,
-}
-
-export enum SessionState {
-  READY = 0,
-  IN_PROGRESS,
-  COMPLETED,
-  CANCELED,
-}
 
 export class SessionRepository {
   public static async createSession(
@@ -78,7 +63,11 @@ export class SessionRepository {
       orderBy: { updatedAt: 'desc' },
       include: {
         device: true,
-        recipe: true,
+        recipe: {
+          include: {
+            steps: true,
+          },
+        },
       },
     });
   }

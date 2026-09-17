@@ -1,31 +1,25 @@
-import { mode } from '@chakra-ui/theme-tools';
 export const badgeStyles = {
   components: {
     Badge: {
       baseStyle: {
-        borderRadius: '10px',
+        borderRadius: '999px',
         lineHeight: '100%',
-        padding: '7px',
-        paddingLeft: '12px',
-        paddingRight: '12px',
+        fontWeight: '700',
+        textTransform: 'none',
+        padding: '5px 12px',
       },
       variants: {
-        outline: () => ({
-          borderRadius: '16px',
-        }),
-        brand: (props: any) => ({
-          bg: mode('brand.500', 'brand.400')(props),
-          color: 'white',
-          _focus: {
-            bg: mode('brand.500', 'brand.400')(props),
-          },
-          _active: {
-            bg: mode('brand.500', 'brand.400')(props),
-          },
-          _hover: {
-            bg: mode('brand.600', 'brand.400')(props),
-          },
-        }),
+        brand: {
+          bg: 'brand.100',
+          color: 'brand.500',
+        },
+        subtle: {
+          bg: 'ink.card',
+          color: 'ink.textSecondary',
+        },
+      },
+      defaultProps: {
+        variant: 'brand',
       },
     },
   },

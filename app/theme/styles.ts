@@ -1,19 +1,65 @@
 export const globalStyles = {
   colors: {
     brand: {
-      100: '#f5ddbf',
-      200: '#f2d2a9',
-      300: '#eec693',
-      400: '#ebba7d',
-      500: '#e4a351',
-      600: '#dd8c25',
-      700: '#c97e1f',
-      800: '#b3701c',
-      900: '#875515',
+      50: 'oklch(0.78 0.135 65 / 0.08)',
+      100: 'oklch(0.78 0.135 65 / 0.15)',
+      200: 'oklch(0.78 0.135 65 / 0.25)',
+      300: 'oklch(0.82 0.13 65)',
+      400: 'oklch(0.8 0.13 65)',
+      500: 'oklch(0.78 0.135 65)',
+      600: 'oklch(0.66 0.15 58)',
+      700: 'oklch(0.58 0.14 58)',
+      800: 'oklch(0.5 0.13 55)',
+      900: 'oklch(0.4 0.11 55)',
     },
     brandScheme: {
       100: '#2c801e',
     },
+    // Status/accent colors used for pills, badges and callouts across the app
+    success: {
+      100: 'oklch(0.72 0.14 145 / 0.18)',
+      500: 'oklch(0.72 0.14 145)',
+      600: 'oklch(0.6 0.13 145)',
+    },
+    info: {
+      100: 'oklch(0.72 0.1 235 / 0.18)',
+      500: 'oklch(0.72 0.1 235)',
+      600: 'oklch(0.6 0.1 235)',
+    },
+    danger: {
+      100: 'oklch(0.65 0.16 25 / 0.18)',
+      500: 'oklch(0.7 0.16 25)',
+      600: 'oklch(0.65 0.16 25)',
+    },
+    accentPurple: {
+      100: 'oklch(0.65 0.15 300 / 0.18)',
+      500: 'oklch(0.65 0.15 300)',
+    },
+    accentLime: {
+      100: 'oklch(0.75 0.13 100 / 0.18)',
+      500: 'oklch(0.75 0.13 100)',
+    },
+    // Neutral "ink" scale for the dark control-room surface (page/sidebar/card backgrounds, borders, text)
+    ink: {
+      bg: 'oklch(0.15 0.004 260)',
+      sidebar: 'oklch(0.13 0.004 260)',
+      card: 'oklch(0.19 0.005 260)',
+      cardHover: 'oklch(0.21 0.005 260)',
+      cardBorder: 'oklch(0.27 0.008 260)',
+      divider: 'oklch(0.24 0.008 260)',
+      border: 'oklch(0.26 0.008 260)',
+      borderStrong: 'oklch(0.32 0.01 260)',
+      inputBg: 'oklch(0.15 0.004 260)',
+      inputBorder: 'oklch(0.3 0.01 260)',
+      text: 'oklch(0.94 0.003 260)',
+      textSecondary: 'oklch(0.75 0.006 260)',
+      textMuted: 'oklch(0.68 0.006 260)',
+      textDim: 'oklch(0.6 0.008 260)',
+      textFaint: 'oklch(0.55 0.008 260)',
+      textFaintest: 'oklch(0.48 0.008 260)',
+      onBrand: 'oklch(0.16 0.03 60)',
+    },
+    // Legacy tokens kept for pages/components not yet migrated to the new "ink" scale
     background: {
       100: '#6e6c75',
       200: '#626068',
@@ -47,23 +93,6 @@ export const globalStyles = {
       800: '#707EAE',
       900: '#1B2559',
     },
-    red: {
-      100: '#FEEFEE',
-      500: '#EE5D50',
-      600: '#E31A1A',
-    },
-    blue: {
-      50: '#EFF4FB',
-      500: '#3965FF',
-    },
-    orange: {
-      100: '#FFF6DA',
-      500: '#FFB547',
-    },
-    green: {
-      100: '#E6FAF5',
-      500: '#01B574',
-    },
     navy: {
       50: '#d0dcfb',
       100: '#aac0fe',
@@ -77,20 +106,31 @@ export const globalStyles = {
       900: '#0b1437',
     },
   },
+  fonts: {
+    heading: `'IBM Plex Sans', sans-serif`,
+    body: `'IBM Plex Sans', sans-serif`,
+    mono: `'IBM Plex Mono', monospace`,
+  },
   styles: {
     global: {
       body: {
-        color: 'white',
+        color: 'ink.text',
         overflowX: 'hidden',
-        bg: 'background.500',
-        fontFamily: 'DM Sans',
-        letterSpacing: '-0.5px',
+        bg: 'ink.bg',
+        fontFamily: `'IBM Plex Sans', sans-serif`,
       },
       input: {
-        color: 'gray.700',
+        color: 'ink.text',
       },
       html: {
-        fontFamily: 'DM Sans',
+        fontFamily: `'IBM Plex Sans', sans-serif`,
+      },
+      '::selection': {
+        background: 'oklch(0.78 0.135 65 / 0.35)',
+      },
+      '@keyframes pulse-dot': {
+        '0%, 100%': { opacity: 1 },
+        '50%': { opacity: 0.35 },
       },
     },
   },

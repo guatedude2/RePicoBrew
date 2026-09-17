@@ -84,7 +84,7 @@ export async function processTiltReading(reading: TiltReading) {
       resolution: rawGravity > 2000 ? 'high' : 'low',
     };
 
-    await SessionRepository.createSessionLogEntry(session.id, 1, logData); // type 1 = ferment log
+    await SessionRepository.createSessionLogEntry(session.id, logData, 1); // type 1 = ferment log
 
     // Publish live update
     pubsub.publish('tilt-update', {

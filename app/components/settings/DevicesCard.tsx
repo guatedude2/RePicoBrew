@@ -1,17 +1,9 @@
 import {
-  Badge,
   Box,
   Button,
   Flex,
   Icon,
-  Table,
-  Tbody,
-  Td,
   Text,
-  Th,
-  Thead,
-  Tr,
-  useColorModeValue,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -24,7 +16,6 @@ import {
   FormLabel,
   Input,
   VStack,
-  HStack,
 } from '@chakra-ui/react';
 import { useFetcher } from '@remix-run/react';
 import { useState, type FC } from 'react';
@@ -54,41 +45,23 @@ interface DevicesCardProps {
   devices: Device[];
 }
 
-const getTiltColorScheme = (color: string | null): string => {
-  if (!color) {
-    return 'gray';
-  }
-  const colorMap: Record<string, string> = {
-    Red: 'red',
-    Green: 'green',
-    Black: 'gray',
-    Purple: 'purple',
-    Orange: 'orange',
-    Blue: 'blue',
-    Yellow: 'yellow',
-    Pink: 'pink',
-  };
-  return colorMap[color] || 'gray';
+const ACCENT_COLOR = {
+  success: 'oklch(0.72 0.14 145)',
+  info: 'oklch(0.72 0.1 235)',
+  danger: 'oklch(0.7 0.16 25)',
 };
 
-const getStateLabel = (state: number): { label: string; color: string } => {
+const getStateLabel = (state: number, isTilt: boolean): { label: string; accent: keyof typeof ACCENT_COLOR } => {
+  if (isTilt) {
+    return { label: 'ACTIVE', accent: 'success' };
+  }
   switch (state) {
     case DeviceState.READY:
-      return { label: 'Ready', color: 'green' };
+      return { label: 'READY', accent: 'success' };
     case DeviceState.BREWING:
-      return { label: 'Brewing', color: 'blue' };
-    case DeviceState.SOUS_VIDE:
-      return { label: 'Sous Vide', color: 'purple' };
-    case DeviceState.RACK_BEER:
-      return { label: 'Rack Beer', color: 'orange' };
-    case DeviceState.RINSE:
-      return { label: 'Rinse', color: 'cyan' };
-    case DeviceState.DEEP_CLEAN:
-      return { label: 'Deep Clean', color: 'yellow' };
-    case DeviceState.DE_SCALE:
-      return { label: 'De-Scale', color: 'red' };
+      return { label: 'BREWING', accent: 'info' };
     default:
-      return { label: 'Unknown', color: 'gray' };
+      return { label: 'ONLINE', accent: 'success' };
   }
 };
 
@@ -97,8 +70,6 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
   const [pendingUid, setPendingUid] = useState('');
   const [deviceName, setDeviceName] = useState('');
   const fetcher = useFetcher();
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
-  const textColor = useColorModeValue('secondaryGray.900', 'white');
 
   const handleApprove = () => {
     fetcher.submit(
@@ -116,134 +87,62 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
 
   return (
     <>
-      <Card alignItems="center" flexDirection="column" w="100%" my={4}>
-        <Flex direction="column" alignItems="flex-start" w="100%" px="15px" py="10px">
-          <Flex w="100%" justify="space-between" align="center" mb={4}>
-            <HStack>
-              <Icon as={MdDevices} w={6} h={6} color="brand.500" />
-              <Text fontSize="xl" fontWeight="700" lineHeight="100%">
-                Devices
-              </Text>
-            </HStack>
-            <Button
-              leftIcon={<Icon as={MdCheckCircle} />}
-              colorScheme="brand"
-              size="sm"
-              onClick={() => {
-                setPendingUid('');
-                setDeviceName('');
-                onOpen();
-              }}
-            >
-              Add Device
-            </Button>
-          </Flex>
-
-          <Text mb={4} color="secondaryGray.600">
-            Manage your PicoBrew and Tilt devices. New devices must be approved before use.
+      <Card p="24px">
+        <Flex justify="space-between" align="center" mb="14px">
+          <Text fontSize="17px" fontWeight="700">
+            Devices
           </Text>
-
-          {devices.length === 0 ? (
-            <Flex w="100%" justify="center" align="center" py={8} direction="column">
-              <Icon as={MdDevices} w={12} h={12} color="gray.400" mb={4} />
-              <Text color="secondaryGray.600">No devices registered yet</Text>
-              <Text fontSize="sm" color="secondaryGray.500" mt={2}>
-                Power on your Pico or Tilt and connect to the network
-              </Text>
-            </Flex>
-          ) : (
-            <Box w="100%" overflowX="auto">
-              <Table variant="simple" color="gray.500" mt={4}>
-                <Thead>
-                  <Tr>
-                    <Th borderColor={borderColor}>Name</Th>
-                    <Th borderColor={borderColor}>Type</Th>
-                    <Th borderColor={borderColor}>Status</Th>
-                    <Th borderColor={borderColor}>Details</Th>
-                    <Th borderColor={borderColor}>Sessions</Th>
-                    <Th borderColor={borderColor}>UID</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {devices.map((device) => {
-                    const stateInfo = getStateLabel(device.state);
-                    const isTilt = device.deviceType === 'TILT';
-                    let metadata: any = {};
-                    try {
-                      metadata = device.metadata ? JSON.parse(device.metadata) : {};
-                    } catch (e) {
-                      // Ignore
-                    }
-
-                    return (
-                      <Tr key={device.id}>
-                        <Td borderColor={borderColor}>
-                          <HStack>
-                            <Text color={textColor} fontSize="sm" fontWeight="700">
-                              {device.name}
-                            </Text>
-                            {isTilt && device.color && (
-                              <Badge colorScheme={getTiltColorScheme(device.color)} fontSize="xs">
-                                {device.color}
-                              </Badge>
-                            )}
-                          </HStack>
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          <Text color={textColor} fontSize="sm">
-                            {device.deviceType}
-                          </Text>
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          {isTilt ? (
-                            <Badge colorScheme="green">Active</Badge>
-                          ) : (
-                            <Badge colorScheme={stateInfo.color}>{stateInfo.label}</Badge>
-                          )}
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          {isTilt ? (
-                            <VStack align="start" spacing={0}>
-                              {metadata.rssi !== undefined && (
-                                <Text color={textColor} fontSize="xs">
-                                  RSSI: {metadata.rssi} dBm
-                                </Text>
-                              )}
-                              {metadata.lastSeen && (
-                                <Text color="secondaryGray.600" fontSize="xs">
-                                  {new Date(metadata.lastSeen).toLocaleString()}
-                                </Text>
-                              )}
-                            </VStack>
-                          ) : (
-                            <VStack align="start" spacing={0}>
-                              <Text color={textColor} fontSize="xs">
-                                {device.ipAddress || '-'}
-                              </Text>
-                              <Text color="secondaryGray.600" fontSize="xs">
-                                {device.firmwareVersion || '-'}
-                              </Text>
-                            </VStack>
-                          )}
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          <Text color={textColor} fontSize="sm">
-                            {device._count.sessions}
-                          </Text>
-                        </Td>
-                        <Td borderColor={borderColor}>
-                          <Text color="secondaryGray.600" fontSize="xs" fontFamily="mono">
-                            {device.uid.substring(0, 12)}...
-                          </Text>
-                        </Td>
-                      </Tr>
-                    );
-                  })}
-                </Tbody>
-              </Table>
-            </Box>
-          )}
+          <Button leftIcon={<Icon as={MdCheckCircle} />} variant="brand" size="sm" onClick={() => onOpen()}>
+            Add Device
+          </Button>
         </Flex>
+
+        {devices.length === 0 ? (
+          <Flex direction="column" align="center" gap="8px" py="32px">
+            <Icon as={MdDevices} boxSize="12" color="ink.textFaintest" />
+            <Text color="ink.textFaint">No devices registered yet</Text>
+            <Text fontSize="13px" color="ink.textFaintest">
+              Power on your Pico or Tilt and connect to the network
+            </Text>
+          </Flex>
+        ) : (
+          devices.map((device) => {
+            const isTilt = device.deviceType === 'TILT';
+            const stateInfo = getStateLabel(device.state, isTilt);
+            let metadata: any = {};
+            try {
+              metadata = device.metadata ? JSON.parse(device.metadata) : {};
+            } catch {
+              // ignore malformed metadata
+            }
+
+            return (
+              <Flex key={device.id} align="center" gap="14px" py="12px" borderTop="1px solid" borderColor="ink.divider">
+                <Box
+                  w="9px"
+                  h="9px"
+                  borderRadius="full"
+                  bg={ACCENT_COLOR[stateInfo.accent]}
+                  boxShadow={`0 0 8px ${ACCENT_COLOR[stateInfo.accent]}`}
+                />
+                <Box flex="1">
+                  <Text fontSize="14px" fontWeight="600">
+                    {device.name}
+                    {isTilt && device.color ? ` · ${device.color}` : ''}
+                  </Text>
+                  <Text fontSize="12px" color="ink.textFaint">
+                    {device.uid.substring(0, 16)}
+                    {isTilt && metadata.rssi !== undefined ? ` · ${metadata.rssi} dBm` : ''}
+                    {!isTilt && device.ipAddress ? ` · ${device.ipAddress}` : ''}
+                  </Text>
+                </Box>
+                <Text fontSize="11px" fontWeight="700" color={`${stateInfo.accent}.500`}>
+                  {stateInfo.label}
+                </Text>
+              </Flex>
+            );
+          })
+        )}
       </Card>
 
       <Modal isOpen={isOpen} onClose={onClose}>
@@ -262,7 +161,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
                   fontFamily="mono"
                   maxLength={32}
                 />
-                <Text fontSize="xs" color="secondaryGray.500" mt={1}>
+                <Text fontSize="xs" color="ink.textFaint" mt={1}>
                   Found in register logs when device first connects
                 </Text>
               </FormControl>
@@ -280,7 +179,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices }) => {
             <Button variant="ghost" mr={3} onClick={onClose}>
               Cancel
             </Button>
-            <Button colorScheme="brand" onClick={handleApprove} isDisabled={!pendingUid || !deviceName}>
+            <Button variant="brand" onClick={handleApprove} isDisabled={!pendingUid || !deviceName}>
               Approve Device
             </Button>
           </ModalFooter>

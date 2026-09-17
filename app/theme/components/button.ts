@@ -1,12 +1,10 @@
-import { mode } from '@chakra-ui/theme-tools';
 export const buttonStyles = {
   components: {
     Button: {
       baseStyle: {
-        borderRadius: '16px',
-        boxShadow: '45px 76px 113px 7px rgba(112, 144, 176, 0.08)',
-        transition: '.25s all ease',
-        boxSizing: 'border-box',
+        borderRadius: '8px',
+        fontWeight: '700',
+        transition: '.2s all ease',
         _focus: {
           boxShadow: 'none',
         },
@@ -16,92 +14,59 @@ export const buttonStyles = {
       },
       variants: {
         solid: {
-          bg: 'gray.100',
-          color: 'gray.800',
+          bg: 'ink.card',
+          color: 'ink.text',
+          border: '1px solid',
+          borderColor: 'ink.borderStrong',
+          _hover: {
+            bg: 'ink.cardHover',
+          },
         },
-        outline: () => ({
-          borderRadius: '16px',
-        }),
+        outline: {
+          bg: 'transparent',
+          border: '1px solid',
+          borderColor: 'ink.borderStrong',
+          color: 'ink.textSecondary',
+          _hover: {
+            bg: 'ink.card',
+          },
+        },
         brand: {
           bg: 'brand.500',
-          color: 'white',
-          _focus: {
-            bg: 'brand.500',
+          color: 'ink.onBrand',
+          boxShadow: '0 8px 20px -8px oklch(0.78 0.135 65 / 0.6)',
+          _hover: {
+            bg: 'brand.600',
           },
           _active: {
-            bg: 'brand.500',
-          },
-          _hover: {
-            bg: 'brand.500',
+            bg: 'brand.600',
           },
         },
-        darkBrand: (props: any) => ({
-          bg: mode('brand.900', 'brand.400')(props),
+        danger: {
+          bg: 'danger.600',
           color: 'white',
-          _focus: {
-            bg: mode('brand.900', 'brand.400')(props),
-          },
-          _active: {
-            bg: mode('brand.900', 'brand.400')(props),
-          },
           _hover: {
-            bg: mode('brand.800', 'brand.400')(props),
+            bg: 'danger.500',
           },
-        }),
-        lightBrand: (props: any) => ({
-          bg: mode('#F2EFFF', 'whiteAlpha.100')(props),
-          color: mode('brand.500', 'white')(props),
-          _focus: {
-            bg: mode('#F2EFFF', 'whiteAlpha.100')(props),
-          },
-          _active: {
-            bg: mode('secondaryGray.300', 'whiteAlpha.100')(props),
-          },
+        },
+        ghost: {
+          color: 'ink.textSecondary',
           _hover: {
-            bg: mode('secondaryGray.400', 'whiteAlpha.200')(props),
+            bg: 'ink.card',
+            color: 'ink.text',
           },
-        }),
-        light: (props: any) => ({
-          bg: mode('secondaryGray.300', 'whiteAlpha.100')(props),
-          color: mode('secondaryGray.900', 'white')(props),
-          _focus: {
-            bg: mode('secondaryGray.300', 'whiteAlpha.100')(props),
-          },
-          _active: {
-            bg: mode('secondaryGray.300', 'whiteAlpha.100')(props),
-          },
+        },
+        link: {
+          color: 'brand.500',
+          fontWeight: '600',
           _hover: {
-            bg: mode('secondaryGray.400', 'whiteAlpha.200')(props),
+            color: 'brand.300',
+            textDecoration: 'none',
           },
-        }),
-        action: (props: any) => ({
-          fontWeight: '500',
-          borderRadius: '50px',
-          bg: mode('secondaryGray.300', 'brand.400')(props),
-          color: mode('brand.500', 'white')(props),
-          _focus: {
-            bg: mode('secondaryGray.300', 'brand.400')(props),
-          },
-          _active: { bg: mode('secondaryGray.300', 'brand.400')(props) },
-          _hover: {
-            bg: mode('secondaryGray.200', 'brand.400')(props),
-          },
-        }),
-        setup: (props: any) => ({
-          fontWeight: '500',
-          borderRadius: '50px',
-          bg: mode('transparent', 'brand.400')(props),
-          border: mode('1px solid', '0px solid')(props),
-          borderColor: mode('secondaryGray.400', 'transparent')(props),
-          color: mode('secondaryGray.900', 'white')(props),
-          _focus: {
-            bg: mode('transparent', 'brand.400')(props),
-          },
-          _active: { bg: mode('transparent', 'brand.400')(props) },
-          _hover: {
-            bg: mode('secondaryGray.100', 'brand.400')(props),
-          },
-        }),
+        },
+      },
+      defaultProps: {
+        variant: 'solid',
       },
     },
   },

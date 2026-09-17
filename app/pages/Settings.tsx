@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Flex,
   FormControl,
   FormErrorMessage,
   FormLabel,
@@ -21,6 +20,23 @@ import { DevicesCard } from '~/components/settings/DevicesCard';
 
 import { useSettingsReducer } from './Settings/settings-reducer';
 
+const SectionHeading: FC<{ title: string; description: string }> = ({ title, description }) => (
+  <>
+    <Text fontSize="17px" fontWeight="700">
+      {title}
+    </Text>
+    <Text fontSize="13px" color="ink.textDim" my="8px" lineHeight="1.5">
+      {description}
+    </Text>
+  </>
+);
+
+const FieldLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
+  <FormLabel fontSize="12px" fontWeight="600" color="ink.textSecondary" mb="6px">
+    {children}
+  </FormLabel>
+);
+
 export const Settings: FC = () => {
   const { devices } = useLoaderData<typeof import('~/routes/_admin.settings').loader>();
   const { state, actions } = useSettingsReducer();
@@ -35,72 +51,61 @@ export const Settings: FC = () => {
   };
 
   return (
-    <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-      <Card alignItems="center" flexDirection="column" w="100%" mb={4}>
-        <Flex direction="column" alignItems="flex-start" w="100%" px="15px" py="10px">
-          <Text me="auto" fontSize="xl" fontWeight="700" lineHeight="100%">
-            General
-          </Text>
-          <Text my={4}>
-            If you want to have a custom hostname for your server you can customize this below. This is useful if you
-            have multiple Raspberry PI devices and/or want to have a more memorable or meaningful hostname for your
-            configuration.
-          </Text>
+    <Box maxW="760px" display="flex" flexDirection="column" gap="18px">
+      <Card p="24px">
+        <SectionHeading
+          title="General"
+          description="Custom hostname for your server — useful with multiple Raspberry Pi devices or a more memorable address."
+        />
+        <FormControl w={{ base: '100%', md: '60%' }} isInvalid={Boolean(state.isHostNameError)}>
+          <FieldLabel>Hostname</FieldLabel>
+          <Input
+            name="hostname"
+            isRequired
+            placeholder="Hostname"
+            value={state.hostName}
+            onKeyDown={(event) => (/[^\w.\-_]/.test(event.key) ? event.preventDefault() : null)}
+            onChange={(event) => actions.setHostName(event.target.value)}
+          />
+          {state.isHostNameError ? <FormErrorMessage>{state.isHostNameError}</FormErrorMessage> : null}
+        </FormControl>
+        {state.isGeneralSectionDirty ? (
+          <Button variant="brand" mt="16px" onClick={saveGeneralSection}>
+            Save
+          </Button>
+        ) : null}
+      </Card>
 
-          <FormControl w="50%" mb={3} isInvalid={Boolean(state.isHostNameError)}>
-            <FormLabel ms="4px" fontWeight="500" display="flex">
-              Hostname<Text color="brand.500">*</Text>
-            </FormLabel>
-            <Input
-              name="hostname"
-              isRequired
-              placeholder="Hostname"
-              value={state.hostName}
-              onKeyDown={(event) => (/[^\w.\-_]/.test(event.key) ? event.preventDefault() : null)}
-              onChange={(event) => actions.setHostName(event.target.value)}
-            />
-            {state.isHostNameError ? <FormErrorMessage ms="4px">{state.isHostNameError}</FormErrorMessage> : null}
-          </FormControl>
-          {state.isGeneralSectionDirty ? <Button onClick={saveGeneralSection}>Save</Button> : null}
-        </Flex>
-        <Flex direction="column" alignItems="flex-start" w="100%" px="15px" py="10px">
-          <Text me="auto" fontSize="xl" fontWeight="700" lineHeight="100%">
-            Access Point
-          </Text>
-          <Text my={4}>
-            This access point is used to broadcast the network for your Picobrew devices to connect to.
-          </Text>
-
-          <FormControl w="50%">
-            <FormLabel ms="4px" fontWeight="500" display="flex">
-              AP Network Name<Text color="brand.500">*</Text>
-            </FormLabel>
+      <Card p="24px">
+        <SectionHeading
+          title="Access Point"
+          description="Broadcasts the network for your Picobrew devices to connect to."
+        />
+        <Box display="flex" flexDirection="column" gap="14px" w={{ base: '100%', md: '60%' }}>
+          <FormControl>
+            <FieldLabel>AP Network Name</FieldLabel>
             <Input
               name="ap-name"
               isRequired
               placeholder="AP Network Name"
-              mb={3}
               value={state.apNetworkName}
               onChange={(event) => actions.setApNetworkName(event.target.value)}
             />
           </FormControl>
-          <FormControl w="50%">
-            <FormLabel ms="4px" fontWeight="500" display="flex">
-              Password (WPA2)<Text color="brand.500">*</Text>
-            </FormLabel>
-            <InputGroup size="md">
+          <FormControl>
+            <FieldLabel>Password (WPA2)</FieldLabel>
+            <InputGroup>
               <Input
                 name="ap-password"
                 isRequired
                 placeholder="Password"
-                mb={3}
                 type={state.showAPPassword ? 'text' : 'password'}
                 value={state.apPassword}
                 onChange={(event) => actions.setApPassword(event.target.value)}
               />
-              <InputRightElement display="flex" alignItems="center" mt="4px">
+              <InputRightElement>
                 <Icon
-                  color="gray.400"
+                  color="ink.textFaint"
                   _hover={{ cursor: 'pointer' }}
                   as={state.showAPPassword ? RiEyeCloseLine : MdOutlineRemoveRedEye}
                   onClick={() => actions.setShowAPPassword(!state.showAPPassword)}
@@ -108,27 +113,27 @@ export const Settings: FC = () => {
               </InputRightElement>
             </InputGroup>
           </FormControl>
-          <Text fontSize="sm" color="secondaryGray.500" mb={3}>
-            Note: AP settings are managed by Pi setup scripts. Changes here are for display only.
-          </Text>
-          {state.isAPSectionDirty ? <Button isDisabled>Save</Button> : null}
-        </Flex>
+        </Box>
+        <Text fontSize="12px" color="ink.textFaintest" mt="12px">
+          Managed by Pi setup scripts. Changes here are for display only.
+        </Text>
+        {state.isAPSectionDirty ? (
+          <Button mt="12px" isDisabled>
+            Save
+          </Button>
+        ) : null}
       </Card>
-      <Card alignItems="center" flexDirection="column" w="100%" my={4}>
-        <Flex direction="column" alignItems="flex-start" w="100%" px="15px" py="10px">
-          <Text me="auto" fontSize="xl" fontWeight="700" lineHeight="100%">
-            Wi-Fi
-          </Text>
-          <Text my={4}>
-            The upstream wireless network is used for connecting the Raspberry PI to your network and to the internet.
-          </Text>
-          <FormControl w="50%">
-            <FormLabel ms="4px" fontWeight="500" display="flex">
-              Network Name<Text color="brand.500">*</Text>
-            </FormLabel>
+
+      <Card p="24px">
+        <SectionHeading
+          title="Wi-Fi"
+          description="Upstream network connecting the Raspberry Pi to your router and the internet."
+        />
+        <Box display="flex" flexDirection="column" gap="14px" w={{ base: '100%', md: '60%' }}>
+          <FormControl>
+            <FieldLabel>Network Name</FieldLabel>
             <Select
               placeholder="Select a network"
-              mb={3}
               value={state.wifiNetworkName}
               onChange={(event) => actions.setWifiNetworkName(event.target.value)}
             >
@@ -137,23 +142,20 @@ export const Settings: FC = () => {
               <option value="option3">Option 3</option>
             </Select>
           </FormControl>
-          <FormControl w="50%">
-            <FormLabel ms="4px" fontWeight="500" display="flex">
-              Password (WPA2)<Text color="brand.500">*</Text>
-            </FormLabel>
-            <InputGroup size="md">
+          <FormControl>
+            <FieldLabel>Password (WPA2)</FieldLabel>
+            <InputGroup>
               <Input
                 name="wifi-password"
                 isRequired
                 placeholder="Password"
-                mb={3}
                 type={state.showWifiPassword ? 'text' : 'password'}
                 value={state.wifiPassword}
                 onChange={(event) => actions.setWifiPassword(event.target.value)}
               />
-              <InputRightElement display="flex" alignItems="center" mt="4px">
+              <InputRightElement>
                 <Icon
-                  color="gray.400"
+                  color="ink.textFaint"
                   _hover={{ cursor: 'pointer' }}
                   as={state.showWifiPassword ? RiEyeCloseLine : MdOutlineRemoveRedEye}
                   onClick={() => actions.setShowWifiPassword(!state.showWifiPassword)}
@@ -161,12 +163,17 @@ export const Settings: FC = () => {
               </InputRightElement>
             </InputGroup>
           </FormControl>
-          <Text fontSize="sm" color="secondaryGray.500" mb={3}>
-            Note: WiFi settings are managed by Pi system configuration. Changes here are for display only.
-          </Text>
-          {state.isWifiSectionDirty ? <Button isDisabled>Save</Button> : null}
-        </Flex>
+        </Box>
+        <Text fontSize="12px" color="ink.textFaintest" mt="12px">
+          Managed by Pi system configuration. Changes here are for display only.
+        </Text>
+        {state.isWifiSectionDirty ? (
+          <Button mt="12px" isDisabled>
+            Save
+          </Button>
+        ) : null}
       </Card>
+
       <DevicesCard devices={devices} />
     </Box>
   );

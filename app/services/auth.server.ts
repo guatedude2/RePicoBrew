@@ -32,6 +32,7 @@ authenticator.use(
       const session: SessionData = {
         email: user.email,
         name: user.name,
+        role: user.role,
         expiresAt: Date.now() + 60 * 1000,
         token: `${Math.floor(Date.now() * Math.random())}`,
       };

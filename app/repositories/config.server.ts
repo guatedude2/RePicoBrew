@@ -1,5 +1,5 @@
 import prisma from '~/services/prisma.server';
-import type { DeviceType } from './device.server';
+import type { DeviceType } from '~/types';
 
 type DeviceConfig<K> = Record<DeviceType, K>;
 

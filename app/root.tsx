@@ -1,4 +1,4 @@
-import { Box, ChakraProvider, Heading, Text } from '@chakra-ui/react';
+import { ChakraProvider } from '@chakra-ui/react';
 import {
   Links,
   LiveReload,
@@ -10,6 +10,8 @@ import {
   useRouteError,
 } from '@remix-run/react';
 import { StrictMode } from 'react';
+import { NotFound } from './pages/NotFound';
+import { ServerError } from './pages/ServerError';
 import theme from './theme/theme';
 
 function Document({ children, title = 'RePicoBrew' }: { children: React.ReactNode; title?: string }) {
@@ -24,7 +26,7 @@ function Document({ children, title = 'RePicoBrew' }: { children: React.ReactNod
         <link rel="preconnect" href="https://fonts.gstatic.com" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
         />
         <Links />
       </head>
@@ -52,41 +54,27 @@ export default function App() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  // Logged here (not shown in the UI) so real error details still reach server/browser logs
+  // even though the rendered page only shows the friendly 404/500 copy.
+  console.error(error);
 
-  if (isRouteErrorResponse(error)) {
+  if (isRouteErrorResponse(error) && error.status === 404) {
     return (
-      <Document title={`${error.status} ${error.statusText}`}>
+      <Document title="404 Not Found">
         <ChakraProvider theme={theme}>
           <StrictMode>
-            <Box>
-              <Heading as="h1" bg="purple.600">
-                [CatchBoundary]: {error.status} {error.statusText}
-              </Heading>
-              <Text as="pre">{error.data.message}</Text>
-            </Box>
+            <NotFound minH="100vh" />
           </StrictMode>
         </ChakraProvider>
       </Document>
     );
   }
 
-  let errorMessage = 'Unknown error';
-  let trace: string | undefined;
-  if (error instanceof Error) {
-    errorMessage = error.message;
-    trace = error.stack;
-  }
-
   return (
-    <Document title="Error!">
+    <Document title="Something went wrong">
       <ChakraProvider theme={theme}>
         <StrictMode>
-          <Box>
-            <Heading as="h1" bg="blue.500">
-              [ErrorBoundary]: There was an error: {errorMessage}
-            </Heading>
-            <Text as="pre">{trace}</Text>
-          </Box>
+          <ServerError minH="100vh" />
         </StrictMode>
       </ChakraProvider>
     </Document>

@@ -12,7 +12,7 @@ export const linkStyles = {
           boxShadow: 'none',
         },
         _hover: {
-          color: 'brand.400',
+          color: 'brand.300',
           textDecoration: 'none',
           border: 'none',
         },

@@ -194,3 +194,152 @@ Acceptance = full **brew + track** loop on hardware:
 ## Suggested build order rationale
 
 Infrastructure and machine path first (0–1), Devices (2) so the Pico can talk, Recipes (3) so there is something to brew, then the **brew process / progress UI** (4) and history (5). Stage 6 is the acceptance gate: a real brew tracked end-to-end on the Pi.
+
+---
+
+---
+
+# Phase 2: Tilt Fermentation Monitoring ✅ COMPLETED
+
+**Product goal:** Float a Tilt hydrometer in the fermenter and track gravity + temperature in RePicoBrew until fermentation is marked complete.
+
+**Locked decisions:**
+
+- Device: Tilt Wireless Hydrometer (all 8 standard colors supported)
+- Ingest: **Built-in BLE scan** on the Pi (iBeacon advertisements)
+- Also expose `POST /API/tilt` for local testing / fallback (pytilt-compatible)
+- Storage: Prisma SQLite (extend Phase 1 Device / Session / SessionLog)
+
+**Out of scope:** iSpindel, PicoFerm, battery voltage, auto-end after N days, cloud Tilt services
+
+---
+
+## Stage 0 — Schema + Device Type ✅
+
+**Goal:** DB accepts Tilt devices.
+
+- Enabled `DeviceType.TILT` in [`app/types.ts`](app/types.ts)
+- Added Prisma migration for `Device.color` and `Device.metadata` fields
+- Extended [`DeviceRepository`](app/repositories/device.server.ts) with `createTiltDevice()` and color/metadata update methods
+- Added `SessionType.FERMENTATION = 3`
+
+**Deliverable:** Database ready for Tilt device registration.
+
+---
+
+## Stage 1 — BLE Scanner + Ingest ✅
+
+**Goal:** Pi radio sees Tilts and writes readings.
+
+- Created [`workers/tilt-ble.ts`](workers/tilt-ble.ts) — BLE scanner worker using `@stoprocent/noble`
+- Implemented [`app/services/tilt.server.ts`](app/services/tilt.server.ts):
+  - Tilt color UUID mapping (Red, Green, Black, Purple, Orange, Blue, Yellow, Pink)
+  - `processTiltReading()` with gravity/temp normalization (Classic vs Pro)
+  - Auto-device registration
+  - Session log creation
+- Created [`app/routes/api.tilt.ts`](app/routes/api.tilt.ts) — HTTP POST endpoint for pytilt compatibility
+- Updated [`app/routes/api.events.ts`](app/routes/api.events.ts) with `tilt-update` and `tilt-seen` SSE events
+
+**Deliverable:** With Tilt powered in range, readings logged when session active.
+
+---
+
+## Stage 2 — Fermentation Session Lifecycle ✅
+
+**Goal:** User starts/stops tracking.
+
+- Created [`app/routes/api.fermentation.session.ts`](app/routes/api.fermentation.session.ts) for start/stop actions
+- Extended [`SessionRepository`](app/repositories/session.server.ts) with:
+  - `startSession()` - mark IN_PROGRESS
+  - `completeSession()` - mark COMPLETED
+- Sessions auto-create on start, persist until manually stopped
+- Readings ignored when no active session (device-seen events still published)
+
+**Deliverable:** Start → readings accumulate → Stop → session archived.
+
+---
+
+## Stage 3 — Settings Devices UI (Tilt) ✅
+
+**Goal:** Tilt devices appear and can be managed.
+
+- Updated [`app/components/settings/DevicesCard.tsx`](app/components/settings/DevicesCard.tsx):
+  - Color badges for Tilt devices (Red, Green, Black, etc.)
+  - RSSI and last-seen metadata display
+  - Unified table for Pico and Tilt devices
+  - Tilt-specific "Active" status indicator
+- Auto-registration on first detection (pending approval)
+
+**Deliverable:** Tilt appears in Settings, can be named/approved.
+
+---
+
+## Stage 4 — Live Fermentation Tracking UI ✅
+
+**Goal:** Real-time fermentation progress monitoring.
+
+- Created [`app/routes/_admin.fermentation.tsx`](app/routes/_admin.fermentation.tsx)
+- Built [`app/pages/Fermentation/index.tsx`](app/pages/Fermentation/index.tsx):
+  - Live session monitoring (SG, temp, RSSI, duration)
+  - Start/Stop session controls
+  - SSE real-time updates
+  - Device selector for multiple Tilts
+- Created [`app/pages/Fermentation/components/FermentationChart.tsx`](app/pages/Fermentation/components/FermentationChart.tsx):
+  - Dual-axis line chart (temperature + specific gravity)
+  - Live data streaming via SSE
+  - ApexCharts integration
+- Added **Fermentation** nav link in [`app/layouts/nav.tsx`](app/layouts/nav.tsx)
+
+**Deliverable:** Live gravity/temp updates without refresh while fermenting.
+
+---
+
+## Stage 5 — Fermentation Session History ✅
+
+**Goal:** Review completed fermentation sessions.
+
+- Created [`app/routes/_admin.fermentation.history.tsx`](app/routes/_admin.fermentation.history.tsx) — completed session list
+- Updated [`app/routes/_admin.sessions.$id.tsx`](app/routes/_admin.sessions.$id.tsx):
+  - Detects fermentation vs. brew sessions (type check)
+  - Renders gravity/temp chart for fermentation
+  - Shows timeline with fermentation-specific labels
+- Created [`app/routes/api.sessions.$id.logs.ts`](app/routes/api.sessions.$id.logs.ts) for chart data
+
+**Deliverable:** Past fermentations reviewable with full data.
+
+---
+
+## Stage 6 — Pi Bluetooth Deploy ✅
+
+**Goal:** Raspberry Pi can scan for Tilts.
+
+- Updated [`DEPLOY_PI.md`](DEPLOY_PI.md) with comprehensive **Phase 2: Tilt Hydrometer Support** section:
+  - Bluetooth enablement steps
+  - Noble BLE library installation
+  - `CAP_NET_RAW` permissions setup
+  - Tilt BLE worker service configuration
+  - Troubleshooting guide for BLE issues
+  - Alternative HTTP POST method (pytilt)
+- Created [`scripts/tilt-ble.service`](scripts/tilt-ble.service) — systemd unit file
+
+**Deliverable:** Documented Pi Bluetooth setup; tilt-ble worker runs on boot.
+
+---
+
+## Suggested build order rationale
+
+Schema first (0), BLE+ingest (1), session lifecycle (2), devices UI (3), live tracking UI (4), history (5), Pi Bluetooth deployment (6). Stage 6 is the acceptance gate: a real Tilt tracked end-to-end on the Pi.
+
+For detailed stage-by-stage implementation notes, see [Phase 2 plan](/.cursor/plans/tilt_phase_2_plan_32fe665d.plan.md).
+
+---
+
+# Phase 3: TBD
+
+**Potential directions:**
+
+- Additional brewing devices (Zymatic, Z Series)
+- iSpindel WiFi hydrometer support
+- Recipe import/export and cloud integration
+- Analytics and reporting dashboard
+- Enhanced UX (PWA, notifications, multi-user)

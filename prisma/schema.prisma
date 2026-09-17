@@ -16,6 +16,7 @@ model User {
   email     String    @unique
   password  String
   salt      String
+  role      String    @default("Regular") // Regular | ReadOnly
   createdAt DateTime  @default(now())
   updatedAt DateTime  @default(now()) @updatedAt
   deletedAt DateTime?
@@ -42,8 +43,9 @@ model Device {
   updatedAt            DateTime  @default(now()) @updatedAt
   deletedAt            DateTime?
 
-  sessions Session[]
-  logs     DeviceLog[]
+  sessions      Session[]
+  logs          DeviceLog[]
+  fermentBatches Batch[]
 }
 
 model Recipe {
@@ -63,21 +65,82 @@ model Recipe {
   updatedAt   DateTime  @default(now()) @updatedAt
   deletedAt   DateTime?
 
+  // Beer-science recipe editor fields (target ranges + brew-day parameters)
+  photoUrl         String?
+  ogMin            Float?
+  ogMax            Float?
+  fgMin            Float?
+  fgMax            Float?
+  ibuMin           Float?
+  ibuMax           Float?
+  srmMin           Float?
+  srmMax           Float?
+  abvMin           Float?
+  abvMax           Float?
+  batchSize        Float? // gallons
+  mashType         Int? // enum: 0=Single Step, 1=High Efficiency Multi Step, 2=Custom, 3=Single Step With Mash Out
+  boilTime         Int? // minutes
+  boilTemp         Int? // °F
+  firstWortHopping Boolean @default(false)
+  fermentationType Int? // enum: 0=Ale, 1=Lager, 2=Advanced/Custom
+  yeastName        String?
+  yeastAttenuation Float?
+  yeastRangeTemp   String?
+  yeastPitchTemp   Int?
+
   steps       RecipeStep[]
   session     Session[]
   ingredients RecipeIngredient[]
+  batches     Batch[]
+}
+
+// A Batch ties together one beer's whole lifecycle — the machine-driven Brewing
+// leg, an optional Tilt-tracked Fermentation leg, and user-tracked Carbonation —
+// so the Session Detail view can show them as one continuous phase stepper.
+// Brewing/Fermentation Sessions point at a Batch via Session.batchId; Carbonation
+// has no device driving it, so its state lives directly on the Batch.
+model Batch {
+  id          Int       @id @default(autoincrement())
+  name        String
+  recipeId    Int?
+  phase       String    @default("Brewing") // Brewing | Cooling | Fermenting | Bottling | Carbonating | Completed | Canceled
+  archived    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  completedAt DateTime?
+
+  carbMethod        String? // Bottle | Keg | Forced (CO2)
+  carbDuration      Float?
+  carbUnit          String? // weeks | hours
+  carbStartedAt     DateTime?
+  carbStatus        String? // setup | counting | extend | finished
+  carbExtendMinutes Int?
+
+  // Tilt hydrometer picked (optionally) when the session was started, so the Fermentation
+  // section can pre-fill "Start Tracking" once the batch actually reaches that phase.
+  fermentDeviceId Int?
+
+  recipe        Recipe?   @relation(fields: [recipeId], references: [id])
+  fermentDevice Device?   @relation(fields: [fermentDeviceId], references: [id])
+  sessions      Session[]
 }
 
 model RecipeIngredient {
-  id       Int     @id @default(autoincrement())
-  name     String
-  location Int? // enum
-  type     Int //enum (0=GRAIN,1=HOP,2=YEAST,3=OTHER)
-  amount   Float
-  unit     String //enum
-  note     String?
+  id        Int    @id @default(autoincrement())
+  recipeId  Int
+  section   String // enum: WATER, MASH_STEP, FERMENTABLE, BOIL_HOP, OTHER_BOIL, FERMENTATION_STEP, DRY_HOP
+  sortOrder Int    @default(0)
+  name      String
+  amount    Float?
+  unit      String?
+  color     Float?
+  aa        Float?
+  time      Int?
+  temp      Int?
+  days      Int?
+  hours     Int?
 
-  recipes Recipe[]
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
 }
 
 model RecipeStep {
@@ -98,6 +161,7 @@ model Session {
   type          Int //enum
   deviceId      Int
   recipeId      Int?
+  batchId       Int?
   state         Int // enum
   statusText    String
   timeRemaining Int?
@@ -107,6 +171,7 @@ model Session {
   device Device       @relation(fields: [deviceId], references: [id])
   logs   SessionLog[]
   recipe Recipe?      @relation(fields: [recipeId], references: [id])
+  batch  Batch?       @relation(fields: [batchId], references: [id])
 }
 
 model SessionLog {

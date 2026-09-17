@@ -3,6 +3,12 @@ node_modules
 /.cache
 /build
 /public/build
+/public/recipe-photos/*
+!/public/recipe-photos/.gitkeep
 .env
 pnpm-debug.log*
 .pnpm-store/**
+public/_proto*
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm

@@ -5,6 +5,7 @@ interface CreateUserDetails {
   name: string;
   email: string;
   password: string;
+  role?: string;
 }
 
 export class UserRepository {
@@ -34,5 +35,17 @@ export class UserRepository {
       data: { ...details, password: encryptedPassword, salt },
     });
     return user;
+  }
+
+  public static async listUsers() {
+    return await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
+  }
+
+  public static async updateUserRole(id: number, role: string) {
+    return await prisma.user.update({ where: { id }, data: { role } });
+  }
+
+  public static async deleteUser(id: number) {
+    return await prisma.user.delete({ where: { id } });
   }
 }

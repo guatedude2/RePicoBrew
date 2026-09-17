@@ -1,12 +1,13 @@
 import type { ActionArgs, LoaderArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
+import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
-import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
-import { DeviceType } from '~/types';
+import { SessionRepository } from '~/repositories/session.server';
+import { BatchPhase, SessionState, SessionType, DeviceType } from '~/types';
 
 /**
  * GET /api/fermentation/devices
- * List all Tilt devices
+ * List all Tilt devices, plus batches currently fermenting without a tracker yet
  */
 export async function loader(_args: LoaderArgs) {
   const devices = await DeviceRepository.listDevices();
@@ -22,7 +23,9 @@ export async function loader(_args: LoaderArgs) {
     }),
   );
 
-  return json({ devices: devicesWithSessions });
+  const awaitingBatches = await BatchRepository.listAwaitingFermentationTracker();
+
+  return json({ devices: devicesWithSessions, awaitingBatches });
 }
 
 /**
@@ -32,16 +35,17 @@ export async function loader(_args: LoaderArgs) {
  * Body:
  * - action: "start" | "stop"
  * - deviceId: number
+ * - batchId?: number — batch to attach this tracking session to (start only)
  */
 export async function action({ request }: ActionArgs) {
   const body = await request.json();
-  const { action: actionType, deviceId } = body;
+  const { action: actionType, deviceId, batchId } = body;
 
   if (!actionType || !deviceId) {
     return json({ error: 'Missing required fields: action, deviceId' }, { status: 400 });
   }
 
-  const device = await DeviceRepository.getDeviceByUID(String(deviceId));
+  const device = await DeviceRepository.getDeviceById(Number(deviceId));
   if (!device) {
     return json({ error: 'Device not found' }, { status: 404 });
   }
@@ -71,7 +75,15 @@ export async function action({ request }: ActionArgs) {
       // Start the session immediately
       await SessionRepository.startSession(session.id);
 
-      return json({ success: true, session });
+      // Attach to the given batch (if it's actually awaiting a tracker), else start a standalone batch
+      const batch = batchId ? await BatchRepository.getBatch(Number(batchId)) : null;
+      const targetBatch =
+        batch && batch.phase === BatchPhase.FERMENTING
+          ? batch
+          : await BatchRepository.createBatch(`${device.name} tracking`, null);
+      await BatchRepository.attachSession(targetBatch.id, session.id);
+
+      return json({ success: true, session, batchId: targetBatch.id });
     } else if (actionType === 'stop') {
       // Find the active session
       const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
@@ -81,6 +93,9 @@ export async function action({ request }: ActionArgs) {
 
       // Complete the session
       await SessionRepository.completeSession(session.id);
+      if (session.batchId) {
+        await BatchRepository.advancePhase(session.batchId, BatchPhase.FERMENTING, BatchPhase.BOTTLING);
+      }
 
       return json({ success: true, session: { ...session, state: SessionState.COMPLETED } });
     }

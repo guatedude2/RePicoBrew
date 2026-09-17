@@ -1,9 +1,10 @@
 import type { LoaderArgs } from '@remix-run/node';
 import { z } from 'zod';
+import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
-import { SessionRepository, SessionState, SessionType } from '~/repositories/session.server';
-import { pubSub } from '~/services/pubsub.server';
-import { DeviceState } from '~/types';
+import { SessionRepository } from '~/repositories/session.server';
+import { BatchPhase, SessionState, SessionType, DeviceState } from '~/types';
+import pubSub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -18,7 +19,7 @@ const bodyValidator = z.object({
   shutScale: z.preprocess((value) => Number.parseFloat(`${value}`), z.number()),
 });
 
-const getStateFromType = (type: SessionType) => {
+const getStateFromType = (type: SessionType): DeviceState => {
   switch (type) {
     case SessionType.BREWING:
     case SessionType.COLD_BREW:
@@ -28,6 +29,10 @@ const getStateFromType = (type: SessionType) => {
       return DeviceState.DEEP_CLEAN;
     case SessionType.SOUS_VIDE:
       return DeviceState.SOUS_VIDE;
+    case SessionType.FERMENTATION:
+      return DeviceState.READY; // Fermentation doesn't change device state
+    default:
+      return DeviceState.READY;
   }
 };
 
@@ -49,7 +54,13 @@ export const loader = async ({ request }: LoaderArgs) => {
 
   // update device state
   if (isComplete) {
+    // The brew itself is done, so the batch moves straight into Cooling — but leaving Cooling for
+    // Fermenting still needs the user to confirm the wort has cooled and yeast has been pitched
+    // (see startFermentation intent), which is a manual, physical step the device can't detect.
     await DeviceRepository.updateDeviceState(session.deviceId, DeviceState.READY);
+    if (session.batchId) {
+      await BatchRepository.advancePhase(session.batchId, BatchPhase.BREWING, BatchPhase.COOLING);
+    }
   } else {
     await DeviceRepository.updateDeviceState(session.deviceId, getStateFromType(body.data.sesType));
   }

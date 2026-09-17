@@ -1,268 +1,265 @@
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  Badge,
-  Icon,
-  Progress,
-  SimpleGrid,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { useLoaderData } from '@remix-run/react';
+import { Box, Button, Flex, Grid, GridItem, HStack, Icon, Text, Tooltip } from '@chakra-ui/react';
+import { Link, useLoaderData, useRouteLoaderData } from '@remix-run/react';
+import { useEffect, useState, type FC } from 'react';
+import { GiHops } from 'react-icons/gi';
+import { IoIosBeer } from 'react-icons/io';
+import { MdAdd, MdChevronRight, MdDevicesOther, MdScience, MdWarning } from 'react-icons/md';
 import Card from '~/components/card/Card';
-
-import { useState, useEffect, useMemo, type FC } from 'react';
-import { MdTimer, MdThermostat, MdCheckCircle } from 'react-icons/md';
-import { BrewingAnimation, Phase } from '~/components/BrewingAnimation/BrewingAnimation';
-import { SessionState } from '~/repositories/session.server';
+import { ACCENT, StatCard } from '~/components/ui/StatCard';
+import { BatchPhase } from '~/types';
+import { phaseAccent, phaseLabel } from '~/utils/batch-phase';
 import { useServerSideEvent } from '~/utils/sse';
 
 type SessionUpdate = {
   sessionId: number;
-  sessionUid: string;
-  deviceId: number;
-  state: SessionState;
   step: string;
-  event?: string;
   wort: number;
   therm: number;
   timeLeft: number;
-  isComplete: boolean;
 };
 
-// Map Pico step names to animation phases
-const mapStepToPhase = (stepName: string): Phase => {
-  const step = stepName.toLowerCase();
-  if (step.includes('preparing')) {
-    return Phase.PREPARING;
-  }
-  if (step.includes('heating')) {
-    return Phase.HEATING;
-  }
-  if (step.includes('dough in') || step.includes('mash')) {
-    return Phase.MASHING;
-  }
-  if (step.includes('boil')) {
-    return Phase.BOILING;
-  }
-  if (step.includes('hop') || step.includes('adjunct')) {
-    return Phase.BITTERING;
-  }
-  if (step.includes('chill')) {
-    return Phase.CHILLING;
-  }
-  if (step.includes('ferment')) {
-    return Phase.FERMENTING;
-  }
-  if (step.includes('carbon')) {
-    return Phase.CARBONATING;
-  }
-  return Phase.PREPARING;
-};
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 export const Dashboard: FC = () => {
-  const { activeSessions } = useLoaderData<typeof import('~/routes/_admin.dashboard').loader>();
-  const textColor = useColorModeValue('secondaryGray.900', 'white');
-  const cardBg = useColorModeValue('white', 'navy.700');
+  const { ongoingBrews, fermentingCount, recentBatches } =
+    useLoaderData<typeof import('~/routes/_admin.dashboard').loader>();
+  const adminData = useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin');
+  const userName = adminData?.session?.name;
+  const deviceStatus = adminData?.deviceStatus ?? { online: 0, total: 0 };
 
-  const [sessionData, setSessionData] = useState<Record<number, SessionUpdate>>({});
-
-  // Initialize with loader data
+  const [greeting, setGreeting] = useState('Welcome back');
+  const [today, setToday] = useState('');
   useEffect(() => {
-    const initial: Record<number, SessionUpdate> = {};
-    activeSessions.forEach((session) => {
-      initial[session.id] = {
-        sessionId: session.id,
-        sessionUid: session.uid,
-        deviceId: session.deviceId,
-        state: session.state,
-        step: session.statusText,
-        wort: 70,
-        therm: 70,
-        timeLeft: session.timeRemaining || 0,
-        isComplete: session.state === SessionState.COMPLETED,
-      };
-    });
-    setSessionData(initial);
-  }, [activeSessions]);
+    const now = new Date();
+    const hour = now.getHours();
+    setGreeting(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
+    setToday(now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }));
+  }, []);
 
-  // Listen for session updates via SSE
+  const [liveBySession, setLiveBySession] = useState<Record<number, SessionUpdate>>({});
   useServerSideEvent<SessionUpdate>('session-update', (data) => {
-    setSessionData((prev) => ({
-      ...prev,
-      [data.sessionId]: data,
-    }));
+    setLiveBySession((prev) => ({ ...prev, [data.sessionId]: data }));
   });
 
-  const activeSession = activeSessions[0];
-  const liveData = activeSession ? sessionData[activeSession.id] : null;
-
-  const phase = useMemo(() => {
-    if (!liveData) {
-      return Phase.PREPARING;
-    }
-    return mapStepToPhase(liveData.step);
-  }, [liveData]);
-
-  const temperature = liveData?.wort || 70;
-
-  if (!activeSession) {
-    return (
-      <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-        <Card alignItems="center" flexDirection="column" w="100%" p={8}>
-          <VStack spacing={4}>
-            <Icon as={MdCheckCircle} w={16} h={16} color="gray.400" />
-            <Text fontSize="xl" fontWeight="700" color={textColor}>
-              No Active Brew
-            </Text>
-            <Text color="secondaryGray.600" textAlign="center">
-              Start a brew on your Pico device to see live tracking here
-            </Text>
-          </VStack>
-        </Card>
-      </Box>
-    );
-  }
-
-  const progressPercent = liveData?.timeLeft ? Math.max(0, Math.min(100, 100 - (liveData.timeLeft / 180) * 100)) : 0;
-
   return (
-    <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-      <SimpleGrid columns={{ base: 1, xl: 2 }} gap="20px" mb="20px">
-        <Card alignItems="center" flexDirection="column" w="100%" p={6}>
-          <VStack spacing={6} w="100%">
-            <Flex w="100%" justify="space-between" align="center">
-              <VStack align="start" spacing={1}>
-                <Text fontSize="xl" fontWeight="700" color={textColor}>
-                  {activeSession.recipe?.name || 'Custom Brew'}
-                </Text>
-                <HStack>
-                  <Badge colorScheme={liveData?.isComplete ? 'green' : 'blue'}>
-                    {liveData?.isComplete ? 'Complete' : 'Brewing'}
-                  </Badge>
-                  <Text fontSize="sm" color="secondaryGray.600">
-                    {activeSession.device?.name || 'Unknown Device'}
-                  </Text>
-                </HStack>
-              </VStack>
-            </Flex>
+    <>
+      <Flex align="flex-end" justify="space-between" gap="16px" wrap="wrap">
+        <Box>
+          <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
+            {greeting}
+            {userName ? `, ${userName}` : ''}
+          </Text>
+          <Text fontSize="14px" color="ink.textDim" mt="4px">
+            {today}
+          </Text>
+        </Box>
+        <HStack spacing="10px">
+          <Link to="/recipes">
+            <Button variant="outline" leftIcon={<Icon as={IoIosBeer} />}>
+              View Recipes
+            </Button>
+          </Link>
+          <Link to="/sessions/new">
+            <Button variant="brand" leftIcon={<Icon as={MdAdd} />}>
+              Start a Brew
+            </Button>
+          </Link>
+        </HStack>
+      </Flex>
 
-            <BrewingAnimation phase={phase} temperature={temperature} w="100%" maxW="300px" />
+      <Grid templateColumns={{ base: '1fr', '2sm': '1fr 1fr', xl: 'repeat(3, 1fr)' }} gap="14px">
+        <StatCard
+          label="Active Sessions"
+          value={String(ongoingBrews.length)}
+          sub={
+            ongoingBrews[0]
+              ? `${ongoingBrews[0].name} ${phaseLabel(ongoingBrews[0].phase).toLowerCase()}`
+              : 'No brews running'
+          }
+          icon={GiHops}
+          accent={ACCENT.brand}
+        />
+        <StatCard
+          label="Devices Online"
+          value={`${deviceStatus.online}/${deviceStatus.total}`}
+          sub={`${deviceStatus.total} device${deviceStatus.total === 1 ? '' : 's'} registered`}
+          icon={MdDevicesOther}
+          accent={ACCENT.success}
+        />
+        <StatCard
+          label="Fermentation"
+          value={String(fermentingCount)}
+          sub={fermentingCount > 0 ? 'Tracking gravity & temp' : 'None tracking'}
+          icon={MdScience}
+          accent={ACCENT.info}
+        />
+      </Grid>
 
-            <VStack w="100%" spacing={3} align="stretch">
-              <HStack justify="space-between">
-                <HStack>
-                  <Icon as={MdCheckCircle} color="brand.500" />
-                  <Text fontSize="md" fontWeight="600" color={textColor}>
-                    Current Step
-                  </Text>
-                </HStack>
-                <Text fontSize="md" color={textColor}>
-                  {liveData?.step || activeSession.statusText}
-                </Text>
-              </HStack>
-
-              <HStack justify="space-between">
-                <HStack>
-                  <Icon as={MdThermostat} color="red.400" />
-                  <Text fontSize="md" fontWeight="600" color={textColor}>
-                    Temperature
-                  </Text>
-                </HStack>
-                <HStack spacing={4}>
-                  <Text fontSize="md" color={textColor}>
-                    Wort: {liveData?.wort || 0}°F
-                  </Text>
-                  <Text fontSize="md" color={textColor}>
-                    Therm: {liveData?.therm || 0}°F
-                  </Text>
-                </HStack>
-              </HStack>
-
-              <HStack justify="space-between">
-                <HStack>
-                  <Icon as={MdTimer} color="blue.400" />
-                  <Text fontSize="md" fontWeight="600" color={textColor}>
-                    Time Remaining
-                  </Text>
-                </HStack>
-                <Text fontSize="md" color={textColor}>
-                  {liveData?.timeLeft ? `${Math.floor(liveData.timeLeft / 60)}m ${liveData.timeLeft % 60}s` : '-'}
-                </Text>
-              </HStack>
-
-              <Progress value={progressPercent} colorScheme="brand" size="sm" borderRadius="md" />
-            </VStack>
-          </VStack>
-        </Card>
-
-        <Card alignItems="center" flexDirection="column" w="100%" p={6}>
-          <VStack w="100%" align="start" spacing={4}>
-            <Text fontSize="xl" fontWeight="700" color={textColor}>
-              Brew Timeline
+      <Grid templateColumns={{ base: '1fr', lg: '1.7fr 1fr' }} gap="18px" alignItems="start">
+        <GridItem>
+          <Card p="6px" gap={0}>
+            <Text
+              px="16px"
+              pt="14px"
+              pb="8px"
+              fontSize="13px"
+              fontWeight="700"
+              color="ink.textMuted"
+              textTransform="uppercase"
+              letterSpacing="0.5px"
+            >
+              Ongoing Brews
             </Text>
-
-            {liveData?.event && (
-              <HStack w="100%" p={3} bg="brand.50" borderRadius="md">
-                <Icon as={MdCheckCircle} color="brand.500" />
-                <Text fontSize="sm" fontWeight="600">
-                  Event: {liveData.event}
+            {ongoingBrews.length === 0 ? (
+              <Box px="16px" pb="18px">
+                <Text fontSize="14px" color="ink.textFaint">
+                  No active brews right now.
                 </Text>
-              </HStack>
-            )}
-
-            <VStack w="100%" align="stretch" spacing={2}>
-              {activeSession.recipe?.steps.map((step, index) => {
-                const isCurrent = liveData?.step === step.name;
+              </Box>
+            ) : (
+              ongoingBrews.map((batch) => {
+                const live = batch.session ? liveBySession[batch.session.id] : undefined;
+                const statusText =
+                  batch.phase === BatchPhase.CARBONATING
+                    ? batch.carbMethod ?? 'Carbonating'
+                    : live?.step ?? batch.session?.statusText ?? phaseLabel(batch.phase);
                 return (
-                  <Flex
-                    key={index}
-                    p={3}
-                    bg={isCurrent ? 'brand.50' : cardBg}
-                    borderRadius="md"
-                    borderWidth={isCurrent ? 2 : 1}
-                    borderColor={isCurrent ? 'brand.500' : 'gray.200'}
-                    align="center"
-                    justify="space-between"
+                  <Link
+                    key={batch.id}
+                    to={`/sessions/${batch.session?.id ?? ''}`}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
                   >
-                    <HStack>
-                      <Box
-                        w={8}
-                        h={8}
-                        borderRadius="full"
-                        bg={isCurrent ? 'brand.500' : 'gray.300'}
-                        color="white"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        fontSize="sm"
-                        fontWeight="700"
-                      >
-                        {index + 1}
-                      </Box>
-                      <VStack align="start" spacing={0}>
-                        <Text fontSize="sm" fontWeight={isCurrent ? '700' : '500'} color={textColor}>
-                          {step.name}
-                        </Text>
-                        <Text fontSize="xs" color="secondaryGray.600">
-                          {step.temperature}°F · {step.stepTime}min
-                        </Text>
-                      </VStack>
-                    </HStack>
-                    {isCurrent && (
-                      <Badge colorScheme="brand" fontSize="xs">
-                        In Progress
-                      </Badge>
-                    )}
-                  </Flex>
+                    <Flex
+                      align="center"
+                      justify="space-between"
+                      gap="14px"
+                      px="16px"
+                      py="14px"
+                      borderTop="1px solid"
+                      borderColor="ink.divider"
+                      wrap="wrap"
+                    >
+                      <HStack spacing="14px" flex="1" minW="0">
+                        <Flex
+                          w="40px"
+                          h="40px"
+                          borderRadius="10px"
+                          bg={`oklch(${phaseAccent(batch.phase)} / 0.15)`}
+                          align="center"
+                          justify="center"
+                          flex="0 0 auto"
+                        >
+                          <Icon as={GiHops} boxSize="20px" color={`oklch(${phaseAccent(batch.phase)})`} />
+                        </Flex>
+                        <Box minW="0" flex="1">
+                          <Text fontSize="16px" fontWeight="700" noOfLines={1}>
+                            {batch.name}
+                          </Text>
+                          <HStack spacing="8px" mt="3px">
+                            <HStack
+                              spacing="6px"
+                              fontSize="11px"
+                              fontWeight="700"
+                              px="9px"
+                              py="2px"
+                              borderRadius="999px"
+                              bg={`oklch(${phaseAccent(batch.phase)} / 0.15)`}
+                              color={`oklch(${phaseAccent(batch.phase)})`}
+                            >
+                              <Box
+                                w="6px"
+                                h="6px"
+                                borderRadius="full"
+                                bg={`oklch(${phaseAccent(batch.phase)})`}
+                                sx={{ animation: 'pulse-dot 1.6s infinite' }}
+                              />
+                              <Text>{phaseLabel(batch.phase)}</Text>
+                            </HStack>
+                            <Text fontSize="12px" color="ink.textFaint" noOfLines={1}>
+                              {statusText}
+                            </Text>
+                          </HStack>
+                        </Box>
+                      </HStack>
+                      <HStack spacing="22px" flex="0 0 auto">
+                        {batch.needsAttention && (
+                          <Tooltip label="Needs your input to continue" fontSize="12px">
+                            <Flex>
+                              <Icon as={MdWarning} boxSize="15px" color="orange.400" />
+                            </Flex>
+                          </Tooltip>
+                        )}
+                        <Box textAlign="right">
+                          <Text fontSize="11px" color="ink.textFaint">
+                            Progress
+                          </Text>
+                          <Text fontFamily="mono" fontSize="20px" fontWeight="700" color="brand.500">
+                            {batch.progress}%
+                          </Text>
+                        </Box>
+                        <Icon as={MdChevronRight} boxSize="16px" color="ink.textFaint" />
+                      </HStack>
+                    </Flex>
+                  </Link>
                 );
-              })}
-            </VStack>
-          </VStack>
-        </Card>
-      </SimpleGrid>
-    </Box>
+              })
+            )}
+          </Card>
+        </GridItem>
+
+        <GridItem>
+          <Card p="20px">
+            <Flex justify="space-between" align="center" mb="14px">
+              <Text fontSize="14px" fontWeight="700">
+                Recent Sessions
+              </Text>
+              <Link to="/sessions">
+                <Text fontSize="12px" color="brand.500" cursor="pointer">
+                  View all
+                </Text>
+              </Link>
+            </Flex>
+            {recentBatches.length === 0 ? (
+              <Text fontSize="13px" color="ink.textFaint">
+                No completed sessions yet
+              </Text>
+            ) : (
+              recentBatches.map((batch) => (
+                <Link key={batch.id} to="/sessions" style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <HStack spacing="12px" py="10px" borderTop="1px solid" borderColor="ink.divider">
+                    <Flex
+                      w="32px"
+                      h="32px"
+                      borderRadius="7px"
+                      bg="ink.bg"
+                      align="center"
+                      justify="center"
+                      flex="0 0 auto"
+                    >
+                      <Icon as={IoIosBeer} boxSize="15px" color="ink.textMuted" />
+                    </Flex>
+                    <Box flex="1" minW="0">
+                      <Text fontSize="13px" fontWeight="600" noOfLines={1}>
+                        {batch.name}
+                      </Text>
+                      <Text fontSize="11px" color="ink.textFaint">
+                        {formatDate(batch.updatedAt)}
+                      </Text>
+                    </Box>
+                    <Text
+                      fontSize="11px"
+                      fontWeight="700"
+                      color={batch.phase === BatchPhase.CANCELED ? 'danger.500' : 'success.500'}
+                    >
+                      {phaseLabel(batch.phase)}
+                    </Text>
+                  </HStack>
+                </Link>
+              ))
+            )}
+          </Card>
+        </GridItem>
+      </Grid>
+    </>
   );
 };
