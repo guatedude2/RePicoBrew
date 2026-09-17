@@ -41,6 +41,11 @@ export class UserRepository {
     return await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
   }
 
+  // Used to gate the first-time setup wizard — a fresh install/disk image has zero rows here.
+  public static async count() {
+    return await prisma.user.count();
+  }
+
   public static async updateUser(id: number, details: { name: string; email: string; role?: string }) {
     return await prisma.user.update({ where: { id }, data: details });
   }

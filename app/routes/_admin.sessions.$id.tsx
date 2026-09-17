@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data, redirect } from 'react-router';
 import { useLoaderData } from 'react-router';
+import { AiAdviceRepository } from '~/repositories/ai-advice.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
@@ -31,10 +32,11 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     ) ?? null;
   const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION) ?? null;
 
-  const [brewLogs, fermLogs, devices] = await Promise.all([
+  const [brewLogs, fermLogs, devices, aiAdvice] = await Promise.all([
     brewSession ? SessionRepository.listSessionLogs(brewSession.id) : Promise.resolve([]),
     fermSession ? SessionRepository.listSessionLogs(fermSession.id) : Promise.resolve([]),
     DeviceRepository.listDevices(),
+    AiAdviceRepository.listForBatch(batch.id),
   ]);
   // Flag each Tilt as in-use (already tracking some other batch) or offline so the picker can
   // show why a device can't be selected instead of silently failing when Start Tracking is clicked.
@@ -51,7 +53,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       }),
   );
 
-  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices };
+  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices, aiAdvice };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {

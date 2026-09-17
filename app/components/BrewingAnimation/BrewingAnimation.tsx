@@ -1,6 +1,4 @@
-import type { BoxProps } from '@chakra-ui/react';
-import { Box } from '@chakra-ui/react';
-import { useMemo, type FC } from 'react';
+import { useMemo, type FC, type SVGProps } from 'react';
 import { BeerBottles } from './BeerBottles';
 import { Chiller } from './Chiller';
 import { Drops } from './Drops';
@@ -26,12 +24,12 @@ export enum Phase {
 
 const HEATING_PHASES: Phase[] = [Phase.HEATING, Phase.MASHING, Phase.BOILING, Phase.BITTERING];
 
-export interface BrewingAnimationProps extends BoxProps {
+export interface BrewingAnimationProps extends SVGProps<SVGSVGElement> {
   phase: Phase;
   temperature: number;
 }
 
-export const BrewingAnimation: FC<BrewingAnimationProps> = ({ phase, temperature, ...props }) => {
+export const BrewingAnimation: FC<BrewingAnimationProps> = ({ phase, temperature, className, ...props }) => {
   const wortColors = useMemo(() => {
     switch (phase) {
       case Phase.PREPARING:
@@ -43,81 +41,117 @@ export const BrewingAnimation: FC<BrewingAnimationProps> = ({ phase, temperature
   }, [phase, temperature]);
 
   return (
-    <Box
-      as="svg"
-      className="eZ1mJQt4wBR1"
+    <svg
+      className={`eZ1mJQt4wBR1${className ? ` ${className}` : ''}`}
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 798 1000"
       shapeRendering="geometricPrecision"
       textRendering="geometricPrecision"
-      sx={{
-        '@keyframes boilingWort': {
-          '0%': {
-            r: '6',
-            transform: 'translateY(10px)',
-            opacity: 1,
-          },
-          '80%': {
-            r: '14',
-            opacity: 0,
-            transform: 'translateY(0)',
-            animationTimingFunction: 'step-end',
-          },
-          '100%': {
-            r: '6',
-            opacity: 1,
-            transform: 'translateY(15px)',
-          },
-        },
-        '@keyframes drops': {
-          '0%': { transform: 'translateY(0)' },
-          '100%': { transform: 'translateY(120px)', opacity: 0 },
-        },
-        '@keyframes soakOut': {
-          '0%': { transform: 'translateY(400px)' },
-          '100%': { transform: 'translateY(-500px)' },
-        },
-        '@keyframes hopsDrop': {
-          '0%': { transform: 'translateY(-450px)' },
-          '30%, 100%': { transform: 'translateY(470px)' },
-          '70%': { transform: 'translateY(470px)' },
-        },
-        '@keyframes flaming': {
-          '0%': { transform: 'scale(1, 1)' },
-          '50%': { transform: 'scale(0.99, 0.99)' },
-          '100%': { transform: 'scale(1, 1)' },
-        },
-        '@keyframes smokeTrail': {
-          '0%': { transform: 'translateY(0) scale(1, 1)', opacity: 1 },
-          '100%': { transform: 'translateY(-500px) scale(1.2, 1.2)', opacity: 0 },
-        },
-        '@keyframes fizz': {
-          '0%': { transform: 'translateY(0)', opacity: 0 },
-          '90%': { transform: 'translateY(-90px)', opacity: 1 },
-          '100%': { transform: 'translateY(-100px)', opacity: 0 },
-        },
-        '& .wort-bubbles': {
-          animation: 'boilingWort 500ms ease-in infinite normal forwards',
-          fill: wortColors.bubbles,
-          transition: '5s fill',
-        },
-        '& .smoke-cloud': {
-          filter: 'blur(20px)',
-          animation: 'smokeTrail 1s linear infinite normal forwards',
-          transformOrigin: 'center center',
-        },
-        '& .flames': {
-          filter: 'blur(5px)',
-          '& > g:first-child > g': {
-            animation: 'flaming 100ms infinite',
-          },
-          '& > g > g': {
-            animation: 'flaming 200ms infinite',
-          },
-        },
-      }}
       {...props}
     >
+      <style>{`
+        .eZ1mJQt4wBR1 .wort-bubbles {
+          animation: boilingWort 500ms ease-in infinite normal forwards;
+          fill: ${wortColors.bubbles};
+          transition: 5s fill;
+        }
+        .eZ1mJQt4wBR1 .smoke-cloud {
+          filter: blur(20px);
+          animation: smokeTrail 1s linear infinite normal forwards;
+          transform-origin: center center;
+        }
+        .eZ1mJQt4wBR1 .flames {
+          filter: blur(5px);
+        }
+        .eZ1mJQt4wBR1 .flames > g:first-child > g {
+          animation: flaming 100ms infinite;
+        }
+        .eZ1mJQt4wBR1 .flames > g > g {
+          animation: flaming 200ms infinite;
+        }
+        @keyframes boilingWort {
+          0% {
+            r: 6;
+            transform: translateY(10px);
+            opacity: 1;
+          }
+          80% {
+            r: 14;
+            opacity: 0;
+            transform: translateY(0);
+            animation-timing-function: step-end;
+          }
+          100% {
+            r: 6;
+            opacity: 1;
+            transform: translateY(15px);
+          }
+        }
+        @keyframes drops {
+          0% {
+            transform: translateY(0);
+          }
+          100% {
+            transform: translateY(120px);
+            opacity: 0;
+          }
+        }
+        @keyframes soakOut {
+          0% {
+            transform: translateY(400px);
+          }
+          100% {
+            transform: translateY(-500px);
+          }
+        }
+        @keyframes hopsDrop {
+          0% {
+            transform: translateY(-450px);
+          }
+          30%,
+          100% {
+            transform: translateY(470px);
+          }
+          70% {
+            transform: translateY(470px);
+          }
+        }
+        @keyframes flaming {
+          0% {
+            transform: scale(1, 1);
+          }
+          50% {
+            transform: scale(0.99, 0.99);
+          }
+          100% {
+            transform: scale(1, 1);
+          }
+        }
+        @keyframes smokeTrail {
+          0% {
+            transform: translateY(0) scale(1, 1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-500px) scale(1.2, 1.2);
+            opacity: 0;
+          }
+        }
+        @keyframes fizz {
+          0% {
+            transform: translateY(0);
+            opacity: 0;
+          }
+          90% {
+            transform: translateY(-90px);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-100px);
+            opacity: 0;
+          }
+        }
+      `}</style>
       <g
         className="fermenter"
         style={{
@@ -158,6 +192,6 @@ export const BrewingAnimation: FC<BrewingAnimationProps> = ({ phase, temperature
       >
         <BeerBottles />
       </g>
-    </Box>
+    </svg>
   );
 };

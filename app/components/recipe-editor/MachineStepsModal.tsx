@@ -1,21 +1,9 @@
-import {
-  Box,
-  Button,
-  Flex,
-  Grid,
-  Icon,
-  Input,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Select,
-  Text,
-} from '@chakra-ui/react';
 import type { FC } from 'react';
 import { MdAdd, MdDeleteOutline } from 'react-icons/md';
+import { Button } from '~/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import { Input } from '~/components/ui/input';
+import { Select } from '~/components/ui/select';
 import { PicoLocationMap } from '~/types';
 
 export type MachineStepRow = {
@@ -33,14 +21,7 @@ const LOCATION_OPTIONS = Object.entries(PicoLocationMap)
 
 const columns = '36px 1.6fr 1fr 0.8fr 0.8fr 0.8fr';
 
-const fieldStyle = {
-  bg: 'ink.bg',
-  border: '1px solid',
-  borderColor: 'ink.cardBorder',
-  borderRadius: '6px',
-  fontSize: '13px',
-  h: '34px',
-};
+const fieldClass = 'h-[34px] rounded-md bg-ink-bg text-[13px]';
 
 export const MachineStepsModal: FC<{
   isOpen: boolean;
@@ -68,58 +49,45 @@ export const MachineStepsModal: FC<{
   const rowTemplateColumns = readOnly ? columns : `${columns} 64px`;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="4xl">
-      <ModalOverlay />
-      <ModalContent maxH="85vh">
-        <ModalHeader>
-          <Text fontSize="16px" fontWeight="700">
-            Advanced Recipe Control Program Editor
-          </Text>
-          <Text fontSize="12px" color="ink.textFaint" fontWeight="400" mt="2px">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
+        <DialogHeader>
+          <DialogTitle>Advanced Recipe Control Program Editor</DialogTitle>
+          <p className="mt-0.5 text-xs font-normal text-ink-text-faint">
             Raw firmware steps run by the Pico — edit with care.
-          </Text>
-        </ModalHeader>
-        <ModalBody overflowY="auto">
-          <Grid
-            templateColumns={rowTemplateColumns}
-            gap="8px"
-            fontSize="11px"
-            fontWeight="700"
-            color="ink.textFaintest"
-            textTransform="uppercase"
-            pb="8px"
+          </p>
+        </DialogHeader>
+        <div className="overflow-y-auto">
+          <div
+            className="grid gap-2 pb-2 text-[11px] font-bold uppercase text-ink-text-faintest"
+            style={{ gridTemplateColumns: rowTemplateColumns }}
           >
-            <Text>#</Text>
-            <Text>Name</Text>
-            <Text>Location</Text>
-            <Text>Temp °F</Text>
-            <Text>Time min</Text>
-            <Text>Drain min</Text>
-            {!readOnly && <Text>Insert/Del</Text>}
-          </Grid>
+            <span>#</span>
+            <span>Name</span>
+            <span>Location</span>
+            <span>Temp °F</span>
+            <span>Time min</span>
+            <span>Drain min</span>
+            {!readOnly && <span>Insert/Del</span>}
+          </div>
           {steps.map((row, index) => (
-            <Grid
+            <div
               key={row.id}
-              templateColumns={rowTemplateColumns}
-              gap="8px"
-              alignItems="center"
-              py="6px"
-              bg={index % 2 ? 'ink.bg' : 'transparent'}
+              className={`grid items-center gap-2 py-1.5 ${index % 2 ? 'bg-ink-bg' : ''}`}
+              style={{ gridTemplateColumns: rowTemplateColumns }}
             >
-              <Text fontFamily="mono" fontSize="12px" color="ink.textFaint" textAlign="center">
-                {index}
-              </Text>
+              <p className="text-center font-mono text-xs text-ink-text-faint">{index}</p>
               <Input
                 value={row.name}
-                isReadOnly={readOnly || index < 3}
+                readOnly={readOnly || index < 3}
                 onChange={(e) => update(row.id, 'name', e.target.value)}
-                {...fieldStyle}
+                className={fieldClass}
               />
               <Select
                 value={row.location}
-                isDisabled={readOnly || index < 3}
+                disabled={readOnly || index < 3}
                 onChange={(e) => update(row.id, 'location', Number(e.target.value))}
-                {...fieldStyle}
+                className={fieldClass}
               >
                 {LOCATION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -130,77 +98,56 @@ export const MachineStepsModal: FC<{
               <Input
                 type="number"
                 value={row.temperature}
-                isReadOnly={readOnly}
+                readOnly={readOnly}
                 onChange={(e) => update(row.id, 'temperature', Number(e.target.value))}
-                fontFamily="mono"
-                {...fieldStyle}
+                className={`${fieldClass} font-mono`}
               />
               <Input
                 type="number"
                 value={row.stepTime}
-                isReadOnly={readOnly}
+                readOnly={readOnly}
                 onChange={(e) => update(row.id, 'stepTime', Number(e.target.value))}
-                fontFamily="mono"
-                {...fieldStyle}
+                className={`${fieldClass} font-mono`}
               />
               <Input
                 type="number"
                 value={row.drainTime}
-                isReadOnly={readOnly}
+                readOnly={readOnly}
                 onChange={(e) => update(row.id, 'drainTime', Number(e.target.value))}
-                fontFamily="mono"
-                {...fieldStyle}
+                className={`${fieldClass} font-mono`}
               />
               {!readOnly && (
-                <Flex gap="4px">
-                  <Box
-                    as="button"
+                <div className="flex gap-1">
+                  <button
                     type="button"
                     onClick={() => insertAfter(index)}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    w="26px"
-                    h="26px"
-                    borderRadius="6px"
-                    bg="ink.card"
-                    color="ink.textSecondary"
-                    _hover={{ bg: 'ink.cardHover' }}
+                    className="flex size-[26px] items-center justify-center rounded-md bg-ink-card text-ink-text-secondary hover:bg-ink-card-hover"
                   >
-                    <Icon as={MdAdd} boxSize="13px" />
-                  </Box>
+                    <MdAdd className="size-[13px]" />
+                  </button>
                   {index >= 3 && (
-                    <Box
-                      as="button"
+                    <button
                       type="button"
                       onClick={() => remove(row.id)}
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      w="26px"
-                      h="26px"
-                      borderRadius="6px"
-                      bg="ink.card"
-                      color="danger.500"
-                      _hover={{ bg: 'ink.cardHover' }}
+                      className="flex size-[26px] items-center justify-center rounded-md bg-ink-card text-danger-500 hover:bg-ink-card-hover"
                     >
-                      <Icon as={MdDeleteOutline} boxSize="13px" />
-                    </Box>
+                      <MdDeleteOutline className="size-[13px]" />
+                    </button>
                   )}
-                </Flex>
+                </div>
               )}
-            </Grid>
+            </div>
           ))}
-        </ModalBody>
-        <ModalFooter gap="10px">
+        </div>
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button variant="brand" onClick={onClose}>
             Done
           </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

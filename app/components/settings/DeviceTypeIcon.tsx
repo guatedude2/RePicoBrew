@@ -19,15 +19,14 @@ export const DEFAULT_ICON_FOR_TYPE: Record<DeviceType, DeviceIconKind> = {
   [DeviceType.TILT]: 'tilt',
 };
 
-// Chakra color props (e.g. "ink.textSecondary") only resolve inside styled-system components —
-// a raw <svg>'s stroke/fill attributes need an actual CSS value, so map the token to Chakra's
-// generated CSS custom property instead of passing the token string straight through (which the
-// browser can't parse and silently falls back to black).
+// A raw <svg>'s stroke/fill attributes need an actual CSS value, not a design-system token name —
+// map dash-separated tokens (e.g. "ink-text-secondary", "brand-500") onto the matching Tailwind
+// theme variable from app/tailwind.css's @theme block (e.g. --color-ink-text-secondary).
 function resolveColor(token: string): string {
   if (token === 'currentColor' || token.startsWith('#') || token.startsWith('oklch') || token.startsWith('var(')) {
     return token;
   }
-  return `var(--chakra-colors-${token.replace(/\./g, '-')})`;
+  return `var(--color-${token})`;
 }
 
 export const DeviceTypeIcon: FC<{ kind: DeviceIconKind; color?: string; size?: number }> = ({

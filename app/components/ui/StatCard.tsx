@@ -1,4 +1,3 @@
-import { Box, Flex, Icon, Text } from '@chakra-ui/react';
 import type { FC } from 'react';
 import type { IconType } from 'react-icons';
 
@@ -18,43 +17,25 @@ export const StatCard: FC<{
   sub: string;
   icon: IconType;
   accent: string;
-}> = ({ label, value, unit, sub, icon, accent }) => (
-  <Box
-    bg="ink.card"
-    border="1px solid"
-    borderColor="ink.cardBorder"
-    borderRadius="12px"
-    p="18px"
-    position="relative"
-    overflow="hidden"
-  >
-    <Box
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      h="2px"
-      bgGradient={`linear(to-r, transparent, oklch(${accent}), transparent)`}
-      opacity={0.7}
+}> = ({ label, value, unit, sub, icon: Icon, accent }) => (
+  <div className="relative overflow-hidden rounded-xl border border-ink-card-border bg-ink-card p-[18px]">
+    <div
+      className="absolute inset-x-0 top-0 h-0.5 opacity-70"
+      style={{ background: `linear-gradient(to right, transparent, oklch(${accent}), transparent)` }}
     />
-    <Flex align="center" justify="space-between">
-      <Text fontSize="12px" fontWeight="600" letterSpacing="0.4px" color="ink.textFaint" textTransform="uppercase">
-        {label}
-      </Text>
-      <Flex w="30px" h="30px" borderRadius="7px" bg={`oklch(${accent} / 0.15)`} align="center" justify="center">
-        <Icon as={icon} boxSize="16px" color={`oklch(${accent})`} />
-      </Flex>
-    </Flex>
-    <Text fontFamily="mono" fontSize="26px" fontWeight="600" mt="10px">
+    <div className="flex items-center justify-between">
+      <p className="text-xs font-semibold uppercase tracking-[0.4px] text-ink-text-faint">{label}</p>
+      <div
+        className="flex size-[30px] items-center justify-center rounded-lg"
+        style={{ backgroundColor: `oklch(${accent} / 0.15)` }}
+      >
+        <Icon className="size-4" style={{ color: `oklch(${accent})` }} />
+      </div>
+    </div>
+    <p className="mt-2.5 font-mono text-[26px] font-semibold">
       {value}
-      {unit && (
-        <Text as="span" fontSize="15px" color="ink.textDim">
-          {unit}
-        </Text>
-      )}
-    </Text>
-    <Text fontSize="12px" color="ink.textFaint" mt="0.5">
-      {sub}
-    </Text>
-  </Box>
+      {unit && <span className="text-[15px] text-ink-text-dim">{unit}</span>}
+    </p>
+    <p className="mt-0.5 text-xs text-ink-text-faint">{sub}</p>
+  </div>
 );

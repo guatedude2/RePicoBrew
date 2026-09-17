@@ -1,11 +1,12 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { data } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
+import { analyzeBatch } from '~/services/ai-advisor.server';
 import { BatchPhase } from '~/types';
 
 /**
  * POST /api/batches/:id
- * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive', ... }
+ * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice', ... }
  */
 export async function action({ request, params }: ActionFunctionArgs) {
   const id = Number(params.id);
@@ -48,6 +49,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     case 'archive': {
       const batch = await BatchRepository.archiveBatch(id);
       return { success: true, batch };
+    }
+    case 'requestAiAdvice': {
+      const result = await analyzeBatch(id, 'manual');
+      if (!result.success) {
+        return data({ error: result.error }, { status: 400 });
+      }
+      return { success: true, advice: result.advice };
     }
     default:
       return data({ error: 'Unknown intent' }, { status: 400 });

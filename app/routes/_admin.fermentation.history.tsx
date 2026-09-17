@@ -1,8 +1,7 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, Link } from 'react-router';
-import { Box, Flex, Grid, Icon, Text } from '@chakra-ui/react';
 import { MdScience, MdHistory } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Card } from '~/components/ui/card';
 import { SessionRepository } from '~/repositories/session.server';
 import { SessionState } from '~/types';
 import { serializeDates } from '~/utils/serialize.server';
@@ -33,81 +32,51 @@ export default function FermentationHistoryRoute() {
 
   return (
     <>
-      <Box>
-        <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
-          Fermentation History
-        </Text>
-        <Text fontSize="14px" color="ink.textDim" mt="4px">
-          Review past fermentation sessions
-        </Text>
-      </Box>
+      <div>
+        <p className="text-[26px] font-bold tracking-[-0.3px]">Fermentation History</p>
+        <p className="mt-1 text-sm text-ink-text-dim">Review past fermentation sessions</p>
+      </div>
 
-      <Card overflow="hidden" p="0">
+      <Card className="overflow-hidden p-0">
         {sessions.length === 0 ? (
-          <Flex direction="column" align="center" gap="14px" py="48px">
-            <Icon as={MdScience} boxSize="40px" color="ink.textFaint" />
-            <Text color="ink.textFaint">No completed fermentation sessions yet</Text>
-          </Flex>
+          <div className="flex flex-col items-center gap-3.5 py-12">
+            <MdScience className="size-10 text-ink-text-faint" />
+            <p className="text-ink-text-faint">No completed fermentation sessions yet</p>
+          </div>
         ) : (
           <>
-            <Grid
-              templateColumns={columns}
-              px="20px"
-              py="14px"
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.5px"
-              color="ink.textFaint"
-              textTransform="uppercase"
-              borderBottom="1px solid"
-              borderColor="ink.divider"
+            <div
+              className="grid border-b border-ink-divider px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.5px] text-ink-text-faint"
+              style={{ gridTemplateColumns: columns }}
             >
-              <Text>Device</Text>
-              <Text>Started</Text>
-              <Text>Completed</Text>
-              <Text>Duration</Text>
-              <Text>Readings</Text>
-              <Text>Status</Text>
-            </Grid>
+              <span>Device</span>
+              <span>Started</span>
+              <span>Completed</span>
+              <span>Duration</span>
+              <span>Readings</span>
+              <span>Status</span>
+            </div>
             {sessions.map((session) => (
-              <Grid
+              <div
                 key={session.id}
-                templateColumns={columns}
-                px="20px"
-                py="16px"
-                alignItems="center"
-                borderBottom="1px solid"
-                borderColor="ink.divider"
+                className="grid items-center border-b border-ink-divider px-5 py-4"
+                style={{ gridTemplateColumns: columns }}
               >
                 <Link to={`/sessions/${session.id}`}>
-                  <Flex align="center" gap="8px">
-                    <Icon as={MdHistory} boxSize="14px" color="brand.500" />
-                    <Text fontSize="13px" fontWeight="700">
-                      {session.device.name}
-                    </Text>
-                    {session.device.color && (
-                      <Text fontSize="11px" color="ink.textFaint">
-                        {session.device.color}
-                      </Text>
-                    )}
-                  </Flex>
+                  <div className="flex items-center gap-2">
+                    <MdHistory className="size-3.5 text-brand-500" />
+                    <p className="text-[13px] font-bold">{session.device.name}</p>
+                    {session.device.color && <p className="text-xs text-ink-text-faint">{session.device.color}</p>}
+                  </div>
                 </Link>
-                <Text fontSize="13px" color="ink.textSecondary">
-                  {new Date(session.createdAt).toLocaleString()}
-                </Text>
-                <Text fontSize="13px" color="ink.textSecondary">
-                  {new Date(session.updatedAt).toLocaleString()}
-                </Text>
-                <Text fontSize="13px" color="ink.textSecondary">
+                <p className="text-[13px] text-ink-text-secondary">{new Date(session.createdAt).toLocaleString()}</p>
+                <p className="text-[13px] text-ink-text-secondary">{new Date(session.updatedAt).toLocaleString()}</p>
+                <p className="text-[13px] text-ink-text-secondary">
                   {formatDuration(session.createdAt, session.updatedAt)}
-                </Text>
-                <Text fontSize="12px" color="ink.textFaint">
-                  {session._count.logs} points
-                </Text>
-                <Text fontSize="11px" fontWeight="700" color="success.500">
-                  {session.statusText}
-                </Text>
-              </Grid>
+                </p>
+                <p className="text-xs text-ink-text-faint">{session._count.logs} points</p>
+                <p className="text-[11px] font-bold text-success-500">{session.statusText}</p>
+              </div>
             ))}
           </>
         )}

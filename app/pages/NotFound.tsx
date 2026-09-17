@@ -1,8 +1,8 @@
-import { Button } from '@chakra-ui/react';
 import { Link as ReLink } from 'react-router';
 import type { FC } from 'react';
 import { GiHops } from 'react-icons/gi';
 import { ErrorPage } from '~/components/ErrorPage';
+import { Button } from '~/components/ui/button';
 
 export const NotFound: FC<{ minH?: string }> = ({ minH }) => (
   <ErrorPage
@@ -13,8 +13,8 @@ export const NotFound: FC<{ minH?: string }> = ({ minH }) => (
     description="The page you're looking for doesn't exist or may have been moved."
     minH={minH}
   >
-    <Button as={ReLink} to="/dashboard" variant="brand">
-      Back to Dashboard
+    <Button asChild variant="brand">
+      <ReLink to="/dashboard">Back to Dashboard</ReLink>
     </Button>
   </ErrorPage>
 );

@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Ports the existing Chakra dark theme's oklch design tokens (app/theme/styles.ts) into Tailwind
+ * v4's CSS-first theme so new shadcn/ui components match pixel-for-pixel without re-deriving a
+ * palette. This app is dark-mode-only (no light theme exists), so these are defined once on
+ * :root rather than gated behind a .dark class.
+ */
+@theme {
+  --color-brand-50: oklch(0.78 0.135 65 / 0.08);
+  --color-brand-100: oklch(0.78 0.135 65 / 0.15);
+  --color-brand-200: oklch(0.78 0.135 65 / 0.25);
+  --color-brand-300: oklch(0.82 0.13 65);
+  --color-brand-400: oklch(0.8 0.13 65);
+  --color-brand-500: oklch(0.78 0.135 65);
+  --color-brand-600: oklch(0.66 0.15 58);
+  --color-brand-700: oklch(0.58 0.14 58);
+  --color-brand-800: oklch(0.5 0.13 55);
+  --color-brand-900: oklch(0.4 0.11 55);
+
+  --color-success-100: oklch(0.72 0.14 145 / 0.18);
+  --color-success-500: oklch(0.72 0.14 145);
+  --color-success-600: oklch(0.6 0.13 145);
+
+  --color-info-100: oklch(0.72 0.1 235 / 0.18);
+  --color-info-500: oklch(0.72 0.1 235);
+  --color-info-600: oklch(0.6 0.1 235);
+
+  --color-danger-100: oklch(0.65 0.16 25 / 0.18);
+  --color-danger-500: oklch(0.7 0.16 25);
+  --color-danger-600: oklch(0.65 0.16 25);
+
+  --color-accent-purple-100: oklch(0.65 0.15 300 / 0.18);
+  --color-accent-purple-500: oklch(0.65 0.15 300);
+  --color-accent-lime-100: oklch(0.75 0.13 100 / 0.18);
+  --color-accent-lime-500: oklch(0.75 0.13 100);
+
+  /* Neutral "ink" scale for the dark control-room surface */
+  --color-ink-bg: oklch(0.15 0.004 260);
+  --color-ink-sidebar: oklch(0.13 0.004 260);
+  --color-ink-card: oklch(0.19 0.005 260);
+  --color-ink-card-hover: oklch(0.21 0.005 260);
+  --color-ink-card-border: oklch(0.27 0.008 260);
+  --color-ink-divider: oklch(0.24 0.008 260);
+  --color-ink-border: oklch(0.26 0.008 260);
+  --color-ink-border-strong: oklch(0.32 0.01 260);
+  --color-ink-input-bg: oklch(0.15 0.004 260);
+  --color-ink-input-border: oklch(0.3 0.01 260);
+  --color-ink-text: oklch(0.94 0.003 260);
+  --color-ink-text-secondary: oklch(0.75 0.006 260);
+  --color-ink-text-muted: oklch(0.68 0.006 260);
+  --color-ink-text-dim: oklch(0.6 0.008 260);
+  --color-ink-text-faint: oklch(0.55 0.008 260);
+  --color-ink-text-faintest: oklch(0.48 0.008 260);
+  --color-ink-on-brand: oklch(0.16 0.03 60);
+
+  /* shadcn/ui's expected semantic tokens, mapped onto the palette above so components built
+     against bg-background/text-foreground/etc. automatically match the existing dark theme. */
+  --color-background: var(--color-ink-bg);
+  --color-foreground: var(--color-ink-text);
+  --color-card: var(--color-ink-card);
+  --color-card-foreground: var(--color-ink-text);
+  --color-popover: var(--color-ink-card);
+  --color-popover-foreground: var(--color-ink-text);
+  --color-primary: var(--color-brand-500);
+  --color-primary-foreground: var(--color-ink-on-brand);
+  --color-secondary: var(--color-ink-card);
+  --color-secondary-foreground: var(--color-ink-text);
+  --color-muted: var(--color-ink-card);
+  --color-muted-foreground: var(--color-ink-text-faint);
+  --color-accent: var(--color-ink-card-hover);
+  --color-accent-foreground: var(--color-ink-text);
+  --color-destructive: var(--color-danger-500);
+  --color-destructive-foreground: white;
+  --color-border: var(--color-ink-border);
+  --color-input: var(--color-ink-input-border);
+  --color-ring: var(--color-brand-500);
+
+  --font-sans: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --radius: 8px;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+@keyframes showToast {
+  from {
+    transform: translateX(50%);
+    opacity: 0.25;
+  }
+  to {
+    transform: translateX(0%);
+    opacity: 1;
+  }
+}
+
+@keyframes hideToast {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

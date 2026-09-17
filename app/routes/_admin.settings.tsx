@@ -1,11 +1,19 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data } from 'react-router';
+import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { UserRepository } from '~/repositories/user.server';
+import {
+  listChatCompletionsModels,
+  listClaudeModels,
+  listOpenAiModels,
+  verifyChatCompletionsAccess,
+} from '~/services/ai-models.server';
 import type { DeviceType } from '~/types';
 import { isRaspberryPi } from '~/utils/platform.server';
 import { serializeDates } from '~/utils/serialize.server';
+import { listNearbyNetworks } from '~/utils/wifi.server';
 
 export const meta = () => [
   { title: 'Settings | RePicoBrew' },
@@ -15,13 +23,32 @@ export const meta = () => [
 type WifiConfig = { name: string; password: string };
 
 export const loader = async (_args: LoaderFunctionArgs) => {
-  const [devices, discoveredDevices, users, hostname, accessPoint, wifi] = await Promise.all([
+  const [
+    devices,
+    discoveredDevices,
+    users,
+    hostname,
+    accessPoint,
+    wifi,
+    nearbyNetworks,
+    openAiSettings,
+    claudeSettings,
+    zenSettings,
+    customSettings,
+    activeProvider,
+  ] = await Promise.all([
     DeviceRepository.listDevices(),
     DeviceRepository.listDiscoveredDevices(),
     UserRepository.listUsers(),
     ConfigRepository.getConfig<string>('SERVER_HOSTNAME'),
     ConfigRepository.getConfig<WifiConfig>('ACCESS_POINT'),
     ConfigRepository.getConfig<WifiConfig>('WIFI'),
+    listNearbyNetworks(),
+    AiSettingsRepository.getOpenAiSettings(),
+    AiSettingsRepository.getClaudeSettings(),
+    AiSettingsRepository.getZenSettings(),
+    AiSettingsRepository.getCustomSettings(),
+    AiSettingsRepository.getActiveProviderName(),
   ]);
   return serializeDates({
     devices,
@@ -30,7 +57,15 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     hostname: hostname ?? '',
     accessPoint: accessPoint ?? { name: '', password: '' },
     wifi: wifi ?? { name: '', password: '' },
+    nearbyNetworks,
     isRpi: isRaspberryPi(),
+    hasAiKey:
+      openAiSettings.configured || claudeSettings.configured || zenSettings.configured || customSettings.configured,
+    openAiSettings,
+    claudeSettings,
+    zenSettings,
+    customSettings,
+    activeProvider,
   });
 };
 
@@ -64,6 +99,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'Missing uid' }, { status: 400 });
     }
     await DeviceRepository.dismissDiscoveredDevice(uid);
+    return { success: true };
+  }
+
+  if (intent === 'delete-device') {
+    const id = parseInt(formData.get('id') as string, 10);
+    if (!id) {
+      return data({ error: 'Missing device id' }, { status: 400 });
+    }
+    await DeviceRepository.deleteDevice(id);
     return { success: true };
   }
 
@@ -128,6 +172,159 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     await ConfigRepository.setConfig<WifiConfig>('WIFI', { name, password });
     // A real Pi deployment would also rewrite wpa_supplicant.conf and restart networking here.
+    return { success: true };
+  }
+
+  if (intent === 'saveOpenAiApiKey') {
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    const model = (formData.get('model') as string)?.trim();
+    if (!apiKey) {
+      return data({ error: 'Missing API key' }, { status: 400 });
+    }
+    try {
+      await listOpenAiModels(apiKey);
+    } catch {
+      return data({ error: 'That API key was rejected — check it and try again.' }, { status: 400 });
+    }
+    await AiSettingsRepository.setOpenAiApiKey(apiKey, model);
+    return { success: true };
+  }
+
+  if (intent === 'clearOpenAiApiKey') {
+    await AiSettingsRepository.clearOpenAiApiKey();
+    return { success: true };
+  }
+
+  if (intent === 'listOpenAiModels') {
+    const typedKey = (formData.get('apiKey') as string)?.trim();
+    const apiKey = typedKey || (await AiSettingsRepository.getOpenAiApiKeyPlain());
+    if (!apiKey) {
+      return data({ error: 'Enter an API key first' }, { status: 400 });
+    }
+    try {
+      const models = await listOpenAiModels(apiKey);
+      return { models };
+    } catch {
+      return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
+    }
+  }
+
+  if (intent === 'saveClaudeApiKey') {
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    const model = (formData.get('model') as string)?.trim();
+    if (!apiKey) {
+      return data({ error: 'Missing API key' }, { status: 400 });
+    }
+    try {
+      await listClaudeModels(apiKey);
+    } catch {
+      return data({ error: 'That API key was rejected — check it and try again.' }, { status: 400 });
+    }
+    await AiSettingsRepository.setClaudeApiKey(apiKey, model);
+    return { success: true };
+  }
+
+  if (intent === 'clearClaudeApiKey') {
+    await AiSettingsRepository.clearClaudeApiKey();
+    return { success: true };
+  }
+
+  if (intent === 'listClaudeModels') {
+    const typedKey = (formData.get('apiKey') as string)?.trim();
+    const apiKey = typedKey || (await AiSettingsRepository.getClaudeApiKeyPlain());
+    if (!apiKey) {
+      return data({ error: 'Enter an API key first' }, { status: 400 });
+    }
+    try {
+      const models = await listClaudeModels(apiKey);
+      return { models };
+    } catch {
+      return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
+    }
+  }
+
+  if (intent === 'saveZenSettings') {
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    const model = (formData.get('model') as string)?.trim();
+    const plan = (formData.get('plan') as string) === 'go' ? 'go' : 'zen';
+    if (!apiKey) {
+      return data({ error: 'Missing API key' }, { status: 400 });
+    }
+    try {
+      await verifyChatCompletionsAccess(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey);
+    } catch (error) {
+      return data(
+        { error: error instanceof Error ? error.message : 'Could not verify that API key.' },
+        { status: 400 },
+      );
+    }
+    await AiSettingsRepository.setZenSettings({ apiKey, model, plan });
+    return { success: true };
+  }
+
+  if (intent === 'listZenModels') {
+    const typedKey = (formData.get('apiKey') as string)?.trim();
+    const plan = (formData.get('plan') as string) === 'go' ? 'go' : 'zen';
+    const apiKey = typedKey || (await AiSettingsRepository.getZenApiKeyPlain());
+    if (!apiKey) {
+      return data({ error: 'Enter an API key first' }, { status: 400 });
+    }
+    try {
+      const models = await listChatCompletionsModels(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey);
+      return { models };
+    } catch {
+      return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
+    }
+  }
+
+  if (intent === 'updateZenModel') {
+    const model = (formData.get('model') as string)?.trim();
+    if (!model) {
+      return data({ error: 'Missing model' }, { status: 400 });
+    }
+    const settings = await AiSettingsRepository.getZenSettings();
+    const apiKey = await AiSettingsRepository.getZenApiKeyPlain();
+    if (!settings.configured || !apiKey) {
+      return data({ error: 'OpenCode is not configured' }, { status: 400 });
+    }
+    try {
+      await verifyChatCompletionsAccess(AiSettingsRepository.zenBaseUrlForPlan(settings.plan), apiKey);
+    } catch (error) {
+      return data(
+        { error: error instanceof Error ? error.message : 'Could not verify that API key.' },
+        { status: 400 },
+      );
+    }
+    await AiSettingsRepository.updateZenModel(model);
+    return { success: true };
+  }
+
+  if (intent === 'clearZenSettings') {
+    await AiSettingsRepository.clearZenSettings();
+    return { success: true };
+  }
+
+  if (intent === 'saveCustomSettings') {
+    const baseUrl = (formData.get('baseUrl') as string)?.trim();
+    const model = (formData.get('model') as string)?.trim();
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    if (!baseUrl || !model) {
+      return data({ error: 'Missing base URL or model' }, { status: 400 });
+    }
+    try {
+      await verifyChatCompletionsAccess(baseUrl, apiKey || null);
+    } catch (error) {
+      return data(
+        { error: error instanceof Error ? error.message : 'Could not verify that endpoint.' },
+        { status: 400 },
+      );
+    }
+    await AiSettingsRepository.setCustomSettings({ baseUrl, model, apiKey: apiKey || undefined });
+    return { success: true };
+  }
+
+  if (intent === 'clearCustomSettings') {
+    await AiSettingsRepository.clearCustomSettings();
     return { success: true };
   }
 

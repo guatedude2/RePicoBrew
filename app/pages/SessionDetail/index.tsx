@@ -1,25 +1,8 @@
-import {
-  Box,
-  Button,
-  Flex,
-  HStack,
-  Icon,
-  Link,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Select,
-  SimpleGrid,
-  Text,
-  VStack,
-} from '@chakra-ui/react';
-import { useFetcher, useNavigate } from 'react-router';
+import { useFetcher, useNavigate, useRouteLoaderData } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   MdArrowBack,
+  MdAutoAwesome,
   MdCheck,
   MdExpandMore,
   MdFullscreen,
@@ -29,19 +12,26 @@ import {
   MdWifi,
   MdTimer,
 } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import type { IconType } from 'react-icons';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import { Select } from '~/components/ui/select';
 import { BrewingAnimation, Phase } from '~/components/BrewingAnimation/BrewingAnimation';
 import { Chart } from '~/components/charts/Chart.client';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { loader as sessionDetailLoader } from '~/routes/_admin.sessions.$id';
 import { ACCENT, StatCard } from '~/components/ui/StatCard';
+import { cn } from '~/lib/utils';
 import { BatchPhase } from '~/types';
 import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
+import { formatRelativeTime } from '~/utils/relative-time';
 import { useServerSideEvent } from '~/utils/sse';
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
 type SessionDetailData = Awaited<ReturnType<typeof sessionDetailLoader>>;
+type AiAdviceRow = SessionDetailData['aiAdvice'][number];
 
 const THERMO_COLOR = '#EAB308';
 const WORT_COLOR = '#22C55E';
@@ -165,12 +155,12 @@ const tiltAvailability = (device: { inUse?: boolean; online?: boolean }) => {
 
 const stepperSwatch = (done: boolean, active: boolean) => {
   if (done) {
-    return { bg: 'success.100', color: 'success.500', borderColor: 'success.500' };
+    return { bg: 'bg-success-100', color: 'text-success-500', border: 'border-success-500' };
   }
   if (active) {
-    return { bg: 'brand.500', color: 'ink.onBrand', borderColor: 'brand.500' };
+    return { bg: 'bg-brand-500', color: 'text-ink-on-brand', border: 'border-brand-500' };
   }
-  return { bg: 'ink.card', color: 'ink.textFaint', borderColor: 'ink.borderStrong' };
+  return { bg: 'bg-ink-card', color: 'text-ink-text-faint', border: 'border-ink-border-strong' };
 };
 
 const formatDuration = (startIso: string) => {
@@ -223,57 +213,98 @@ const SectionHeader: FC<{
   onToggle: () => void;
   right?: ReactNode;
 }> = ({ title, badge, badgeAccent, expanded, onToggle, right }) => (
-  <Flex align="center" justify="space-between" gap="12px" w="100%">
-    <Flex as="button" type="button" onClick={onToggle} align="center" flex="1" gap="10px">
-      <Text fontSize="16px" fontWeight="700">
-        {title}
-      </Text>
-      <Box
-        fontSize="10px"
-        fontWeight="700"
-        px="8px"
-        py="2px"
-        borderRadius="999px"
-        bg={`oklch(${badgeAccent} / 0.18)`}
-        color={`oklch(${badgeAccent})`}
+  <div className="flex w-full items-center justify-between gap-3">
+    <button type="button" onClick={onToggle} className="flex flex-1 items-center gap-2.5">
+      <p className="text-base font-bold">{title}</p>
+      <span
+        className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+        style={{ backgroundColor: `oklch(${badgeAccent} / 0.18)`, color: `oklch(${badgeAccent})` }}
       >
         {badge}
-      </Box>
-    </Flex>
+      </span>
+    </button>
     {right}
-    <Box as="button" type="button" onClick={onToggle}>
-      <Icon
-        as={MdExpandMore}
-        boxSize="20px"
-        color="ink.textFaint"
-        transform={expanded ? 'rotate(180deg)' : undefined}
-        transition="transform 0.2s"
+    <button type="button" onClick={onToggle}>
+      <MdExpandMore
+        className={cn('size-5 text-ink-text-faint transition-transform duration-200', expanded && 'rotate-180')}
       />
-    </Box>
-  </Flex>
+    </button>
+  </div>
 );
 
-const ToolbarIconButton: FC<{ icon: FC; onClick?: () => void; label: string }> = ({ icon, onClick, label }) => (
-  <Box
-    as="button"
+const ToolbarIconButton: FC<{ icon: IconType; onClick?: () => void; label: string }> = ({
+  icon: Icon,
+  onClick,
+  label,
+}) => (
+  <button
     type="button"
     onClick={onClick}
     aria-label={label}
-    display="flex"
-    alignItems="center"
-    justifyContent="center"
-    w="32px"
-    h="28px"
-    borderRadius="6px"
-    border="1px solid"
-    borderColor="ink.border"
-    color="ink.textSecondary"
+    className="flex h-7 w-8 items-center justify-center rounded-md border border-ink-border text-ink-text-secondary"
   >
-    <Icon as={icon} boxSize="14px" />
-  </Box>
+    <Icon className="size-3.5" />
+  </button>
 );
 
-export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermSession, brewLogs, tiltDevices }) => {
+// The "current stage" telemetry cards (Brewing/Fermenting) each embed one of these — shows the
+// latest AI advice for that phase and, only while it's the batch's active phase, an Ask AI button.
+const AiAdviceBlock: FC<{
+  batchId: number;
+  phase: BatchPhase;
+  latest: AiAdviceRow | undefined;
+  canAsk: boolean;
+}> = ({ batchId, phase, latest, canAsk }) => {
+  const fetcher = useFetcher<{ error?: string }>();
+  const isPending = fetcher.state !== 'idle';
+
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] border border-ink-divider bg-ink-bg p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.4px] text-ink-text-faint">
+          <MdAutoAwesome className="size-3.5 text-brand-500" />
+          AI Advice
+        </div>
+        {canAsk && (
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={isPending}
+            onClick={() =>
+              fetcher.submit(JSON.stringify({ intent: 'requestAiAdvice' }), {
+                method: 'post',
+                action: `/api/batches/${batchId}`,
+                encType: 'application/json',
+              })
+            }
+          >
+            {isPending ? 'Asking…' : 'Ask AI'}
+          </Button>
+        )}
+      </div>
+      {fetcher.data?.error ? <p className="text-xs text-danger-500">{fetcher.data.error}</p> : null}
+      {latest ? (
+        <>
+          <p className="text-[13px] text-ink-text-secondary">{latest.content}</p>
+          <p className="text-[11px] text-ink-text-faintest">{formatRelativeTime(latest.createdAt)}</p>
+        </>
+      ) : (
+        <p className="text-[13px] text-ink-text-faint">
+          {canAsk ? 'No advice yet — click Ask AI or check back soon.' : `No advice was generated during ${phase}.`}
+        </p>
+      )}
+    </div>
+  );
+};
+
+export const SessionDetail: FC<SessionDetailData> = ({
+  batch,
+  brewSession,
+  fermSession,
+  brewLogs,
+  tiltDevices,
+  aiAdvice,
+}) => {
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const endFetcher = useFetcher();
@@ -407,6 +438,16 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
       setLiveFerm(data);
     }
   });
+
+  const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
+  const [aiAdviceList, setAiAdviceList] = useState<AiAdviceRow[]>(aiAdvice);
+  useServerSideEvent<{ batchId: number; advice: AiAdviceRow }>('ai-advice-ready', (data) => {
+    if (data.batchId === batch.id) {
+      setAiAdviceList((prev) => [data.advice, ...prev]);
+    }
+  });
+  const latestBrewAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.BREWING);
+  const latestFermAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.FERMENTING);
 
   const brewChart = useMemo(() => {
     const wort: Array<{ x: number; y: number }> = [];
@@ -580,7 +621,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   };
 
   const brewingCard = (
-    <Card key="brew" p="22px" gap="16px">
+    <Card key="brew" className="gap-4 p-[22px]">
       <SectionHeader
         title="Brewing"
         badge={brewBadge}
@@ -589,51 +630,34 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
         onToggle={() => setBrewExpanded((v) => !v)}
       />
       {brewExpanded && brewSession && (
-        <VStack align="stretch" spacing="16px">
+        <div className="flex flex-col gap-4">
           {batch.phase === BatchPhase.BREWING && liveBrew?.timeLeft ? (
-            <Box textAlign="right">
-              <Text
-                fontSize="10px"
-                fontWeight="700"
-                letterSpacing="0.4px"
-                color="ink.textFaint"
-                textTransform="uppercase"
-              >
-                Time Remaining
-              </Text>
-              <Text fontFamily="mono" fontSize="18px" fontWeight="700" color="brand.500">
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-ink-text-faint">Time Remaining</p>
+              <p className="font-mono text-lg font-bold text-brand-500">
                 {Math.floor(liveBrew.timeLeft / 60)}m {liveBrew.timeLeft % 60}s
-              </Text>
-            </Box>
+              </p>
+            </div>
           ) : null}
 
-          <HStack justify="flex-end" spacing="14px" fontSize="12px">
-            <HStack spacing="6px">
-              <Box w="10px" h="10px" borderRadius="full" bg={THERMO_COLOR} />
-              <Text>ThermoBlock</Text>
-            </HStack>
-            <HStack spacing="6px">
-              <Box w="10px" h="10px" borderRadius="full" bg={WORT_COLOR} />
-              <Text>Wort</Text>
-            </HStack>
-          </HStack>
+          <div className="flex items-center justify-end gap-3.5 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full" style={{ backgroundColor: THERMO_COLOR }} />
+              <span>ThermoBlock</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full" style={{ backgroundColor: WORT_COLOR }} />
+              <span>Wort</span>
+            </div>
+          </div>
 
           {combinedWort.length === 0 && (
-            <Flex
-              h="280px"
-              align="center"
-              justify="center"
-              border="1px dashed"
-              borderColor="ink.divider"
-              borderRadius="10px"
-            >
-              <Text fontSize="13px" color="ink.textFaint">
-                Waiting for first reading...
-              </Text>
-            </Flex>
+            <div className="flex h-[280px] items-center justify-center rounded-[10px] border border-dashed border-ink-divider">
+              <p className="text-[13px] text-ink-text-faint">Waiting for first reading...</p>
+            </div>
           )}
           {combinedWort.length > 0 && (
-            <Box h={`${brewChartBoxHeight}px`}>
+            <div style={{ height: `${brewChartBoxHeight}px` }}>
               <ClientOnly>
                 {() => (
                   <Chart
@@ -705,97 +729,85 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                   />
                 )}
               </ClientOnly>
-            </Box>
+            </div>
           )}
 
-          <Flex gap="24px" fontSize="12px" color="ink.textFaint" wrap="wrap">
-            <Text>
-              Machine{' '}
-              <Text as="span" color="ink.text" fontWeight="600">
-                {brewSession.device?.name ?? 'Unknown'}
-              </Text>
-            </Text>
-            <Text>
-              Started{' '}
-              <Text as="span" color="ink.text" fontWeight="600">
-                {new Date(batch.createdAt).toLocaleString()}
-              </Text>
-            </Text>
+          <div className="flex flex-wrap gap-6 text-xs text-ink-text-faint">
+            <p>
+              Machine <span className="font-semibold text-ink-text">{brewSession.device?.name ?? 'Unknown'}</span>
+            </p>
+            <p>
+              Started <span className="font-semibold text-ink-text">{new Date(batch.createdAt).toLocaleString()}</span>
+            </p>
             {batch.phase !== BatchPhase.BREWING && batch.completedAt && (
-              <Text>
+              <p>
                 Completed{' '}
-                <Text as="span" color="ink.text" fontWeight="600">
-                  {new Date(batch.completedAt).toLocaleString()}
-                </Text>
-              </Text>
+                <span className="font-semibold text-ink-text">{new Date(batch.completedAt).toLocaleString()}</span>
+              </p>
             )}
-          </Flex>
-        </VStack>
+          </div>
+
+          {hasAiKey && (
+            <AiAdviceBlock
+              batchId={batch.id}
+              phase={BatchPhase.BREWING}
+              latest={latestBrewAdvice}
+              canAsk={batch.phase === BatchPhase.BREWING}
+            />
+          )}
+        </div>
       )}
       {brewExpanded && !brewSession && (
-        <Text fontSize="13px" color="ink.textFaint">
-          No brewing data for this batch.
-        </Text>
+        <p className="text-[13px] text-ink-text-faint">No brewing data for this batch.</p>
       )}
     </Card>
   );
 
   let coolingBody: ReactNode = (
-    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+    <p className="py-5 text-center text-[13px] text-ink-text-faint">
       Cooling starts automatically once brewing finishes.
-    </Text>
+    </p>
   );
   if (coolingAvailable && batch.phase === BatchPhase.COOLING) {
     coolingBody = (
-      <Box
-        bg="ink.bg"
-        border="1px solid"
-        borderColor="brand.500"
-        borderRadius="10px"
-        p="16px"
-        display="flex"
-        flexDirection="column"
-        gap="10px"
-      >
-        <Text fontSize="13px" fontWeight="700">
-          Start Wort Cooling
-        </Text>
-        <Text fontSize="13px" color="ink.textSecondary">
+      <div className="flex flex-col gap-2.5 rounded-[10px] border border-brand-500 bg-ink-bg p-4">
+        <p className="text-[13px] font-bold">Start Wort Cooling</p>
+        <p className="text-[13px] text-ink-text-secondary">
           Let the Brew Keg cool to room temperature — this can take up to 24 hours depending on ambient temperature.
           Once it&apos;s cool to the touch, apply the Fermentation Temperature Decal to the outside of the keg and pitch
           your yeast.{' '}
-          <Link
+          <a
             href="https://picobrewcontent.blob.core.windows.net/content/picoc/PicoC_Manual.pdf"
-            isExternal
-            color="brand.500"
-            fontWeight="600"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand-500"
           >
             View full instructions
-          </Link>
-        </Text>
-        <Text fontSize="12px" color="ink.textFaint">
+          </a>
+        </p>
+        <p className="text-xs text-ink-text-faint">
           Once you&apos;re ready to start fermentation, confirm below to move on.
-        </Text>
+        </p>
         <Button
           variant="brand"
-          alignSelf="flex-start"
-          isLoading={startFermentationFetcher.state !== 'idle'}
+          className="self-start"
+          disabled={startFermentationFetcher.state !== 'idle'}
           onClick={startFermentation}
         >
-          Start Fermentation
+          {startFermentationFetcher.state !== 'idle' ? 'Starting…' : 'Start Fermentation'}
         </Button>
-      </Box>
+      </div>
     );
   } else if (coolingAvailable) {
     coolingBody = (
-      <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+      <p className="py-5 text-center text-[13px] text-ink-text-faint">
         Wort cooled — fermentation started {new Date(fermStart).toLocaleString()}.
-      </Text>
+      </p>
     );
   }
 
   const coolingCard = (
-    <Card key="cool" p="22px" gap="16px">
+    <Card key="cool" className="gap-4 p-[22px]">
       <SectionHeader
         title="Cooling"
         badge={coolBadge}
@@ -808,31 +820,22 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   );
 
   let fermentationBody: ReactNode = (
-    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+    <p className="py-5 text-center text-[13px] text-ink-text-faint">
       Fermentation tracking starts once cooling is done and a Tilt is dropped in the fermenter.
-    </Text>
+    </p>
   );
   if (fermentationAvailable && fermSession) {
     fermentationBody = (
-      <VStack align="stretch" spacing="16px">
+      <div className="flex flex-col gap-4">
         {!liveFerm && (
-          <Flex
-            align="center"
-            gap="8px"
-            bg="danger.100"
-            border="1px solid"
-            borderColor="danger.500"
-            borderRadius="8px"
-            px="14px"
-            py="10px"
-          >
-            <Icon as={MdWifi} boxSize="16px" color="danger.500" />
-            <Text fontSize="13px" fontWeight="600" color="danger.500">
+          <div className="flex items-center gap-2 rounded-lg border border-danger-500 bg-danger-100 px-3.5 py-2.5">
+            <MdWifi className="size-4 text-danger-500" />
+            <p className="text-[13px] font-semibold text-danger-500">
               No signal from {fermSession.device?.name ?? 'Tilt'}
-            </Text>
-          </Flex>
+            </p>
+          </div>
         )}
-        <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} gap="14px">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1200px]:grid-cols-4">
           <StatCard
             label="Specific Gravity"
             value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
@@ -863,40 +866,46 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             icon={MdTimer}
             accent={ACCENT.brand}
           />
-        </SimpleGrid>
-        <Box>
-          <HStack justify="flex-end" spacing="14px" fontSize="12px" mb="8px">
-            <HStack spacing="6px">
-              <Box w="10px" h="2px" bg="info.500" />
-              <Text>Gravity</Text>
-            </HStack>
-            <HStack spacing="6px">
-              <Box w="10px" h="2px" bg="brand.500" />
-              <Text>Temp</Text>
-            </HStack>
-          </HStack>
+        </div>
+        <div>
+          <div className="mb-2 flex items-center justify-end gap-3.5 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="h-0.5 w-2.5 bg-info-500" />
+              <span>Gravity</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-0.5 w-2.5 bg-brand-500" />
+              <span>Temp</span>
+            </div>
+          </div>
           <FermentationChart sessionId={fermSession.id} />
-        </Box>
+        </div>
+        {hasAiKey && (
+          <AiAdviceBlock
+            batchId={batch.id}
+            phase={BatchPhase.FERMENTING}
+            latest={latestFermAdvice}
+            canAsk={batch.phase === BatchPhase.FERMENTING}
+          />
+        )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
-            {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+          <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+            {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
           </Button>
         )}
-      </VStack>
+      </div>
     );
   } else if (fermentationAvailable) {
     fermentationBody = (
-      <VStack align="stretch" spacing="16px">
+      <div className="flex flex-col gap-4">
         {batch.phase === BatchPhase.FERMENTING && fermPercent < 20 && tiltDevices.length > 0 && (
-          <VStack align="stretch" spacing="8px">
-            <HStack spacing="10px" wrap="wrap">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Select
-                size="sm"
-                w="auto"
-                minW="180px"
                 placeholder="Select a Tilt"
                 value={selectedTiltId}
                 onChange={(e) => setSelectedTiltId(e.target.value)}
+                className="h-8 w-auto min-w-[180px] text-xs"
               >
                 {tiltDevices.map((d) => {
                   const label = `Tilt · ${d.color || d.name}`;
@@ -911,8 +920,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
               <Button
                 variant="outline"
                 size="sm"
-                isDisabled={!selectedTiltId}
-                isLoading={startTrackingFetcher.state !== 'idle'}
+                disabled={!selectedTiltId || startTrackingFetcher.state !== 'idle'}
                 onClick={() =>
                   startTrackingFetcher.submit(
                     { action: 'start', deviceId: selectedTiltId, batchId: String(batch.id) },
@@ -920,69 +928,55 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
                   )
                 }
               >
-                Start Tracking
+                {startTrackingFetcher.state !== 'idle' ? 'Starting…' : 'Start Tracking'}
               </Button>
-            </HStack>
+            </div>
             {startTrackingFetcher.data?.error && (
-              <Text fontSize="12px" color="danger.500">
-                {startTrackingFetcher.data.error}
-              </Text>
+              <p className="text-xs text-danger-500">{startTrackingFetcher.data.error}</p>
             )}
-          </VStack>
+          </div>
         )}
-        <Flex justify="space-between" align="center" wrap="wrap" gap="24px">
-          <Box>
-            <Text
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.5px"
-              color="ink.textFaint"
-              textTransform="uppercase"
-            >
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-ink-text-faint">
               Total Fermentation Time Left
-            </Text>
-            <Text fontFamily="mono" fontSize="38px" fontWeight="300" mt="4px">
+            </p>
+            <p className="mt-1 font-mono text-[38px] font-light">
               {fermDays}d {fermHours}h
-            </Text>
-          </Box>
+            </p>
+          </div>
           <Ring percent={fermPercent} label="Complete" color={FERM_RING_COLOR} />
-        </Flex>
-        <Box
-          display="flex"
-          flexDirection="column"
-          border="1px solid"
-          borderColor="ink.divider"
-          borderRadius="10px"
-          overflow="hidden"
-        >
+        </div>
+        <div className="flex flex-col overflow-hidden rounded-[10px] border border-ink-divider">
           {fermInfoRows.map((row) => (
-            <Flex
+            <div
               key={row.label}
-              justify="space-between"
-              px="16px"
-              py="12px"
-              bg="ink.bg"
-              borderTop="1px solid"
-              borderColor="ink.divider"
-              fontSize="13px"
-              _first={{ borderTop: 'none' }}
+              className="flex justify-between border-t border-ink-divider bg-ink-bg px-4 py-3 text-[13px] first:border-t-0"
             >
-              <Text color="ink.textFaint">{row.label}</Text>
-              <Text color="ink.text">{row.value}</Text>
-            </Flex>
+              <p className="text-ink-text-faint">{row.label}</p>
+              <p className="text-ink-text">{row.value}</p>
+            </div>
           ))}
-        </Box>
+        </div>
+        {hasAiKey && (
+          <AiAdviceBlock
+            batchId={batch.id}
+            phase={BatchPhase.FERMENTING}
+            latest={latestFermAdvice}
+            canAsk={batch.phase === BatchPhase.FERMENTING}
+          />
+        )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button variant="brand" isLoading={fetcher.state !== 'idle'} onClick={handleBottleClick}>
-            {fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+          <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+            {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
           </Button>
         )}
-      </VStack>
+      </div>
     );
   }
 
   const fermentationCard = (
-    <Card key="ferm" ref={fermSectionRef} p="22px" gap="18px">
+    <Card key="ferm" ref={fermSectionRef} className="gap-[18px] p-[22px]">
       <SectionHeader
         title="Fermentation"
         badge={fermBadge}
@@ -995,34 +989,30 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   );
 
   let bottlingBody: ReactNode = (
-    <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-      Bottling starts once fermentation is done.
-    </Text>
+    <p className="py-5 text-center text-[13px] text-ink-text-faint">Bottling starts once fermentation is done.</p>
   );
   if (bottlingAvailable && batch.phase === BatchPhase.BOTTLING) {
     bottlingBody = (
-      <Box display="flex" flexDirection="column" gap="14px">
-        <Text fontSize="13px" color="ink.textSecondary">
+      <div className="flex flex-col gap-3.5">
+        <p className="text-[13px] text-ink-text-secondary">
           Rack the beer into bottles (or a keg), then choose how you&apos;re carbonating and start the countdown.
-        </Text>
+        </p>
         <CarbonationSetupForm
           batchId={batch.id}
           initialMethod={batch.carbMethod}
           initialDuration={batch.carbDuration}
         />
-      </Box>
+      </div>
     );
   } else if (bottlingAvailable) {
     const carbState = batch.phase === BatchPhase.COMPLETED ? 'complete' : 'in progress';
     bottlingBody = (
-      <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
-        Bottled — carbonation {carbState}.
-      </Text>
+      <p className="py-5 text-center text-[13px] text-ink-text-faint">Bottled — carbonation {carbState}.</p>
     );
   }
 
   const bottlingCard = (
-    <Card key="bottle" p="22px" gap="16px">
+    <Card key="bottle" className="gap-4 p-[22px]">
       <SectionHeader
         title="Bottling"
         badge={bottleBadge}
@@ -1035,7 +1025,7 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
   );
 
   const carbonationCard = (
-    <Card key="carb" p="22px" gap="16px">
+    <Card key="carb" className="gap-4 p-[22px]">
       <SectionHeader
         title="Carbonation"
         badge={carbBadge}
@@ -1058,10 +1048,10 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             }}
           />
         ) : (
-          <Text fontSize="13px" color="ink.textFaint" textAlign="center" py="20px">
+          <p className="py-5 text-center text-[13px] text-ink-text-faint">
             Carbonation starts once you&apos;ve bottled and picked a method. There&apos;s no sensor tracking here — just
             a countdown.
-          </Text>
+          </p>
         ))}
     </Card>
   );
@@ -1081,57 +1071,40 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
 
   const content = (
     <>
-      <Flex align="center" justify="space-between" gap="16px" wrap="wrap">
-        <HStack spacing="12px">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
           {!fullscreen && (
-            <Box
-              as="button"
+            <button
               type="button"
               onClick={() => navigate('/sessions')}
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              w="32px"
-              h="32px"
-              borderRadius="7px"
-              bg="ink.card"
-              border="1px solid"
-              borderColor="ink.cardBorder"
+              className="flex size-8 items-center justify-center rounded-[7px] border border-ink-card-border bg-ink-card"
             >
-              <Icon as={MdArrowBack} boxSize="15px" />
-            </Box>
+              <MdArrowBack className="size-[15px]" />
+            </button>
           )}
-          <Box>
-            <Text fontSize="19px" fontWeight="700">
-              {batch.name}
-            </Text>
-            <Text fontSize="12px" color="ink.textFaint">
+          <div>
+            <p className="text-lg font-bold">{batch.name}</p>
+            <p className="text-xs text-ink-text-faint">
               {brewSession?.device?.name ?? fermSession?.device?.name ?? 'Unknown device'}
-            </Text>
-          </Box>
-        </HStack>
-        <HStack spacing="10px">
-          <HStack
-            spacing="6px"
-            fontSize="11px"
-            fontWeight="700"
-            px="10px"
-            py="4px"
-            borderRadius="999px"
-            bg={`oklch(${phaseAccent(batch.phase)} / 0.15)`}
-            color={`oklch(${phaseAccent(batch.phase)})`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+            style={{
+              backgroundColor: `oklch(${phaseAccent(batch.phase)} / 0.15)`,
+              color: `oklch(${phaseAccent(batch.phase)})`,
+            }}
           >
             {isLive && (
-              <Box
-                w="6px"
-                h="6px"
-                borderRadius="full"
-                bg={`oklch(${phaseAccent(batch.phase)})`}
-                sx={{ animation: 'pulse-dot 1.6s infinite' }}
+              <span
+                className="size-1.5 animate-[pulse-dot_1.6s_infinite] rounded-full"
+                style={{ backgroundColor: `oklch(${phaseAccent(batch.phase)})` }}
               />
             )}
-            <Text>{phaseLabel(batch.phase)}</Text>
-          </HStack>
+            <span>{phaseLabel(batch.phase)}</span>
+          </div>
           {batch.phase !== BatchPhase.COMPLETED && batch.phase !== BatchPhase.CANCELED && (
             <Button variant="danger" size="sm" onClick={() => setEndModalOpen(true)}>
               End Session
@@ -1142,141 +1115,97 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             label={fullscreen ? 'Exit full screen' : 'Full screen'}
             onClick={toggleFullscreen}
           />
-        </HStack>
-      </Flex>
+        </div>
+      </div>
 
-      <Box maxW={MAX_W} w="100%" mx="auto" display="flex" flexDirection="column" alignItems="center" gap="18px">
+      <div className="mx-auto flex w-full flex-col items-center gap-[18px]" style={{ maxWidth: MAX_W }}>
         {/* Overview: vessel graphic beside a card with recipe info + phase strip */}
-        <Flex w="100%" gap="16px" align="center" wrap={{ base: 'wrap', md: 'nowrap' }}>
-          <Flex w={{ base: '100%', md: '33%' }} minW="220px" h="260px" flex="0 0 auto" align="center" justify="center">
-            <BrewingAnimation phase={vesselPhase} temperature={temperature} w="220px" />
-          </Flex>
-          <Flex
-            flex="1"
-            bg="ink.card"
-            border="1px solid"
-            borderColor="ink.cardBorder"
-            borderRadius="14px"
-            p="20px"
-            gap="20px"
-            wrap="wrap"
-            align="center"
+        <div className="flex w-full flex-wrap items-center gap-4 md:flex-nowrap">
+          <div
+            className="flex h-[260px] w-full flex-none items-center justify-center md:w-[33%]"
+            style={{ minWidth: '220px' }}
           >
-            <Box
-              w="80px"
-              h="96px"
-              borderRadius="10px"
-              bgImage={`url(${batch.recipe?.photoUrl || '/img/no-photo.jpg'})`}
-              bgSize="cover"
-              bgPosition="center"
-              flex="0 0 auto"
+            <BrewingAnimation phase={vesselPhase} temperature={temperature} style={{ width: '220px' }} />
+          </div>
+          <div className="flex flex-1 flex-wrap items-center gap-5 rounded-2xl border border-ink-card-border bg-ink-card p-5">
+            <div
+              className="h-24 w-20 flex-none rounded-[10px] bg-cover bg-center"
+              style={{ backgroundImage: `url(${batch.recipe?.photoUrl || '/img/no-photo.jpg'})` }}
             />
-            <Box flex="1" minW="160px">
-              <Text fontSize="22px" fontWeight="700">
-                {batch.name}
-              </Text>
-              <Text fontSize="13px" color="ink.textDim" mt="2px">
-                {batch.recipe?.style ?? ' '}
-              </Text>
-              <HStack spacing="18px" mt="10px">
-                <Box>
-                  <Text fontSize="11px" color="ink.textFaint">
-                    Progress
-                  </Text>
-                  <Text fontFamily="mono" fontSize="22px" fontWeight="700" color="brand.500">
-                    {overallProgress}%
-                  </Text>
-                </Box>
+            <div className="min-w-[160px] flex-1">
+              <p className="text-xl font-bold">{batch.name}</p>
+              <p className="mt-0.5 text-[13px] text-ink-text-dim">{batch.recipe?.style ?? ' '}</p>
+              <div className="mt-2.5 flex items-center gap-[18px]">
+                <div>
+                  <p className="text-[11px] text-ink-text-faint">Progress</p>
+                  <p className="font-mono text-xl font-bold text-brand-500">{overallProgress}%</p>
+                </div>
                 {batch.recipe && (
                   <>
-                    <Box>
-                      <Text fontSize="11px" color="ink.textFaint">
-                        ABV
-                      </Text>
-                      <Text fontFamily="mono" fontSize="16px" fontWeight="700">
-                        {batch.recipe.abv}%
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Text fontSize="11px" color="ink.textFaint">
-                        IBU
-                      </Text>
-                      <Text fontFamily="mono" fontSize="16px" fontWeight="700">
-                        {batch.recipe.ibu}
-                      </Text>
-                    </Box>
+                    <div>
+                      <p className="text-[11px] text-ink-text-faint">ABV</p>
+                      <p className="font-mono text-base font-bold">{batch.recipe.abv}%</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-ink-text-faint">IBU</p>
+                      <p className="font-mono text-base font-bold">{batch.recipe.ibu}</p>
+                    </div>
                   </>
                 )}
-              </HStack>
-            </Box>
-            <Box
-              flex="0 0 auto"
-              bg="ink.bg"
-              border="1px solid"
-              borderColor="ink.divider"
-              borderRadius="10px"
-              p="14px 18px"
-            >
-              <VStack align="stretch" spacing="6px">
+              </div>
+            </div>
+            <div className="flex-none rounded-[10px] border border-ink-divider bg-ink-bg px-[18px] py-3.5">
+              <div className="flex flex-col gap-1.5">
                 {PHASES.map((p, i) => {
                   const done = i < currentIdx || batch.phase === BatchPhase.COMPLETED;
                   const active = p === batch.phase;
                   const swatch = stepperSwatch(done, active);
                   return (
-                    <HStack key={p} spacing="8px">
-                      <Flex
-                        w="18px"
-                        h="18px"
-                        borderRadius="full"
-                        align="center"
-                        justify="center"
-                        fontSize="9px"
-                        fontWeight="700"
-                        flex="0 0 auto"
-                        bg={swatch.bg}
-                        color={swatch.color}
-                        border="1.5px solid"
-                        borderColor={swatch.borderColor}
+                    <div key={p} className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          'flex size-[18px] flex-none items-center justify-center rounded-full border-[1.5px] text-[9px] font-bold',
+                          swatch.bg,
+                          swatch.color,
+                          swatch.border,
+                        )}
                       >
-                        {done ? <Icon as={MdCheck} boxSize="10px" /> : i + 1}
-                      </Flex>
-                      <Text
-                        fontSize="12px"
-                        fontWeight="600"
-                        color={active ? 'ink.text' : 'ink.textDim'}
-                        whiteSpace="nowrap"
+                        {done ? <MdCheck className="size-2.5" /> : i + 1}
+                      </div>
+                      <p
+                        className={cn(
+                          'whitespace-nowrap text-xs font-semibold',
+                          active ? 'text-ink-text' : 'text-ink-text-dim',
+                        )}
                       >
                         {phaseTitle(p)}
-                      </Text>
-                    </HStack>
+                      </p>
+                    </div>
                   );
                 })}
-              </VStack>
-            </Box>
-          </Flex>
-        </Flex>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <Box w="100%" display="flex" flexDirection="column" gap="18px">
-          {visibleSections.map((s) => s.node)}
-        </Box>
-      </Box>
+        <div className="flex w-full flex-col gap-[18px]">{visibleSections.map((s) => s.node)}</div>
+      </div>
 
-      <Modal isOpen={endModalOpen} onClose={() => setEndModalOpen(false)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>End this session?</ModalHeader>
-          <ModalBody>
-            <Text fontSize="14px" color="ink.textSecondary">
-              This stops {batch.name} now and marks the session as canceled. This can&apos;t be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap="10px">
+      <Dialog open={endModalOpen} onOpenChange={setEndModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>End this session?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            This stops {batch.name} now and marks the session as canceled. This can&apos;t be undone.
+          </p>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setEndModalOpen(false)}>
               Keep Brewing
             </Button>
             <Button
               variant="danger"
-              isLoading={endFetcher.state !== 'idle'}
+              disabled={endFetcher.state !== 'idle'}
               onClick={() => {
                 endFetcher.submit({ intent: 'endSession' }, { method: 'post' });
                 setEndModalOpen(false);
@@ -1284,27 +1213,26 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             >
               End Session
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <Modal isOpen={skipFermentModalOpen} onClose={() => setSkipFermentModalOpen(false)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Skip the rest of fermentation?</ModalHeader>
-          <ModalBody>
-            <Text fontSize="14px" color="ink.textSecondary">
-              There&apos;s still {fermDays}d {fermHours}h left on the estimated fermentation window. Moving to
-              carbonation now skips the remaining time. This can&apos;t be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap="10px">
+      <Dialog open={skipFermentModalOpen} onOpenChange={setSkipFermentModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skip the rest of fermentation?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            There&apos;s still {fermDays}d {fermHours}h left on the estimated fermentation window. Moving to carbonation
+            now skips the remaining time. This can&apos;t be undone.
+          </p>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setSkipFermentModalOpen(false)}>
               Keep Fermenting
             </Button>
             <Button
               variant="danger"
-              isLoading={fetcher.state !== 'idle'}
+              disabled={fetcher.state !== 'idle'}
               onClick={() => {
                 startBottling();
                 setSkipFermentModalOpen(false);
@@ -1312,33 +1240,19 @@ export const SessionDetail: FC<SessionDetailData> = ({ batch, brewSession, fermS
             >
               Skip Fermentation
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
   if (fullscreen) {
     return (
-      <Box
-        position="fixed"
-        inset={0}
-        zIndex={1300}
-        bg="ink.bg"
-        overflowY="auto"
-        px={{ base: '16px', md: '32px' }}
-        pt="28px"
-        pb="48px"
-        display="flex"
-        flexDirection="column"
-        gap="22px"
-      >
+      <div className="fixed inset-0 z-[1300] flex flex-col gap-[22px] overflow-y-auto bg-ink-bg px-4 pb-12 pt-7 md:px-8">
         {content}
-      </Box>
+      </div>
     );
   }
 
   return content;
 };
-
-export default SessionDetail;

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { redirect } from 'react-router';
 import { z } from 'zod';
+import { UserRepository } from '~/repositories/user.server';
 import { authenticateUser, sessionKey } from '~/services/auth.server';
 import { rememberMeCookie, sessionStorage } from '~/services/session.server';
 
@@ -8,6 +9,14 @@ const bodyValidator = z.object({
   email: z.string().email(),
   password: z.string(),
 });
+
+export const loader = async () => {
+  // No accounts yet means this is a fresh install — there's nothing to sign in with.
+  if ((await UserRepository.count()) === 0) {
+    throw redirect('/setup');
+  }
+  return null;
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const url = new URL(request.url);

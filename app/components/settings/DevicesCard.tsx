@@ -1,26 +1,13 @@
-import {
-  Box,
-  Button,
-  Flex,
-  Icon,
-  Text,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  useDisclosure,
-  FormControl,
-  FormLabel,
-  Input,
-} from '@chakra-ui/react';
 import { useFetcher } from 'react-router';
 import { useState, type FC } from 'react';
-import { MdDevices } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { MdDelete, MdDevices } from 'react-icons/md';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
 import { DEFAULT_ICON_FOR_TYPE, DeviceTypeIcon, type DeviceIconKind } from '~/components/settings/DeviceTypeIcon';
+import { cn } from '~/lib/utils';
 import { DeviceState, DeviceType } from '~/types';
 
 type ModelOption = { id: DeviceIconKind; label: string; deviceType: DeviceType; disabled?: boolean };
@@ -83,13 +70,12 @@ interface DevicesCardProps {
   discoveredDevices: DiscoveredDevice[];
 }
 
-const ACCENT_COLOR = {
-  success: 'oklch(0.72 0.14 145)',
-  info: 'oklch(0.72 0.1 235)',
-  danger: 'oklch(0.7 0.16 25)',
-};
+const STATE_STYLES = {
+  success: { dot: 'bg-success-500 shadow-[0_0_8px_var(--color-success-500)]', text: 'text-success-500' },
+  info: { dot: 'bg-info-500 shadow-[0_0_8px_var(--color-info-500)]', text: 'text-info-500' },
+} as const;
 
-const getStateLabel = (state: number, isTilt: boolean): { label: string; accent: keyof typeof ACCENT_COLOR } => {
+const getStateLabel = (state: number, isTilt: boolean): { label: string; accent: keyof typeof STATE_STYLES } => {
   if (isTilt) {
     return { label: 'ACTIVE', accent: 'success' };
   }
@@ -118,72 +104,66 @@ const ModelGrid: FC<{
   selected: DeviceIconKind | null;
   onSelect: (option: ModelOption) => void;
 }> = ({ title, options, selected, onSelect }) => (
-  <Box>
-    <Text
-      fontSize="11px"
-      fontWeight="700"
-      letterSpacing="0.5px"
-      color="ink.textFaint"
-      textTransform="uppercase"
-      mb="8px"
-    >
-      {title}
-    </Text>
-    <Flex gap="10px" wrap="wrap">
+  <div>
+    <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-text-faint">{title}</p>
+    <div className="flex flex-wrap gap-2.5">
       {options.map((option) => {
         const isSelected = selected === option.id;
         return (
-          <Flex
+          <button
             key={option.id}
-            direction="column"
-            align="center"
-            gap="6px"
-            px="10px"
-            py="10px"
-            w="76px"
-            borderRadius="10px"
-            bg={isSelected ? 'brand.100' : 'ink.bg'}
-            border="1px solid"
-            borderColor={isSelected ? 'brand.500' : 'ink.cardBorder'}
-            cursor={option.disabled ? 'not-allowed' : 'pointer'}
-            opacity={option.disabled ? 0.4 : 1}
-            onClick={() => !option.disabled && onSelect(option)}
+            type="button"
+            disabled={option.disabled}
+            onClick={() => onSelect(option)}
+            className={cn(
+              'flex w-[76px] flex-col items-center gap-1.5 rounded-[10px] border px-2.5 py-2.5 transition-colors',
+              isSelected ? 'border-brand-500 bg-brand-100' : 'border-ink-card-border bg-ink-bg',
+              option.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
+            )}
           >
-            <DeviceTypeIcon kind={option.id} size={30} color={isSelected ? 'brand.500' : 'ink.textSecondary'} />
-            <Text
-              fontSize="11px"
-              fontWeight="600"
-              color={isSelected ? 'ink.text' : 'ink.textSecondary'}
-              textAlign="center"
+            <DeviceTypeIcon kind={option.id} size={30} color={isSelected ? 'brand-500' : 'ink-text-secondary'} />
+            <span
+              className={cn(
+                'text-center text-[11px] font-semibold',
+                isSelected ? 'text-ink-text' : 'text-ink-text-secondary',
+              )}
             >
               {option.label}
-            </Text>
-          </Flex>
+            </span>
+          </button>
         );
       })}
-    </Flex>
+    </div>
     {options.some((o) => o.disabled) && (
-      <Text fontSize="11px" color="ink.textFaintest" mt="6px">
-        Zymatic and Z Series aren&apos;t supported yet.
-      </Text>
+      <p className="mt-1.5 text-[11px] text-ink-text-faintest">Zymatic and Z Series aren&apos;t supported yet.</p>
     )}
-  </Box>
+  </div>
 );
 
 export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }) => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [open, setOpen] = useState(false);
   const [pairingTarget, setPairingTarget] = useState<DiscoveredDevice | null>(null);
   const [name, setName] = useState('');
   const [selected, setSelected] = useState<ModelOption | null>(null);
   const pairFetcher = useFetcher();
   const dismissFetcher = useFetcher();
+  const deleteFetcher = useFetcher();
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
+
+  const handleDelete = () => {
+    if (!deleteTarget) {
+      return;
+    }
+    deleteFetcher.submit({ intent: 'delete-device', id: String(deleteTarget.id) }, { method: 'post' });
+    setDeleteTarget(null);
+  };
 
   const openPairModal = (discovered: DiscoveredDevice) => {
     setPairingTarget(discovered);
     const metadata = parseJSON(discovered.metadata);
     setSelected(ALL_OPTIONS.find((o) => o.deviceType === discovered.deviceType) ?? null);
     setName(typeof metadata.name === 'string' ? metadata.name : '');
-    onOpen();
+    setOpen(true);
   };
 
   const handlePair = () => {
@@ -202,7 +182,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
       },
       { method: 'post' },
     );
-    onClose();
+    setOpen(false);
   };
 
   const handleDismiss = (discoveredUid: string) => {
@@ -211,139 +191,124 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
 
   return (
     <>
-      <Card p="24px">
-        <Text fontSize="17px" fontWeight="700">
-          Devices
-        </Text>
-        <Text fontSize="13px" color="ink.textDim" mt="4px" mb="14px">
+      <Card className="p-6">
+        <p className="text-[17px] font-bold">Devices</p>
+        <p className="mb-3.5 mt-1 text-[13px] text-ink-text-dim">
           Devices show up here automatically as they connect to your network — pair each one manually to give it a name
           before it can be used.
-        </Text>
+        </p>
 
         {discoveredDevices.length > 0 && (
-          <Box mb="18px" pb="18px" borderBottom="1px solid" borderColor="ink.divider">
-            <Text fontSize="12px" fontWeight="700" color="ink.textFaint" textTransform="uppercase" mb="10px">
-              Discovered Devices
-            </Text>
-            <Flex direction="column" gap="10px">
+          <div className="mb-4.5 border-b border-ink-divider pb-4.5">
+            <p className="mb-2.5 text-xs font-bold uppercase text-ink-text-faint">Discovered Devices</p>
+            <div className="flex flex-col gap-2.5">
               {discoveredDevices.map((discovered) => (
-                <Flex
+                <div
                   key={discovered.uid}
-                  align="center"
-                  gap="14px"
-                  p="14px"
-                  borderRadius="10px"
-                  border="1px dashed"
-                  borderColor="brand.500"
+                  className="flex items-center gap-3.5 rounded-[10px] border border-dashed border-brand-500 p-3.5"
                 >
-                  <Flex
-                    align="center"
-                    justify="center"
-                    w="32px"
-                    h="32px"
-                    borderRadius="8px"
-                    bg="ink.bg"
-                    border="1px solid"
-                    borderColor="ink.cardBorder"
-                    flexShrink={0}
-                  >
+                  <div className="flex size-8 flex-none items-center justify-center rounded-lg border border-ink-card-border bg-ink-bg">
                     <DeviceTypeIcon
                       kind={
                         discovered.deviceType ? DEFAULT_ICON_FOR_TYPE[discovered.deviceType as DeviceType] : 'picoC'
                       }
                       size={20}
-                      color="ink.textSecondary"
+                      color="ink-text-secondary"
                     />
-                  </Flex>
-                  <Box flex="1" minW="0">
-                    <Text fontSize="14px" fontWeight="700">
-                      Discovered Device
-                    </Text>
-                    <Text fontSize="12px" color="ink.textFaint" fontFamily="mono" noOfLines={1}>
-                      {discovered.uid}
-                    </Text>
-                  </Box>
-                  <Button size="xs" w="76px" variant="outline" onClick={() => handleDismiss(discovered.uid)}>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold">Discovered Device</p>
+                    <p className="truncate font-mono text-xs text-ink-text-faint">{discovered.uid}</p>
+                  </div>
+                  <Button
+                    size="xs"
+                    className="w-[76px]"
+                    variant="outline"
+                    onClick={() => handleDismiss(discovered.uid)}
+                  >
                     Dismiss
                   </Button>
-                  <Button size="xs" w="76px" variant="brand" onClick={() => openPairModal(discovered)}>
+                  <Button size="xs" className="w-[76px]" variant="brand" onClick={() => openPairModal(discovered)}>
                     Pair
                   </Button>
-                </Flex>
+                </div>
               ))}
-            </Flex>
-          </Box>
+            </div>
+          </div>
         )}
 
         {devices.length === 0 ? (
-          <Flex direction="column" align="center" gap="8px" py="32px">
-            <Icon as={MdDevices} boxSize="12" color="ink.textFaintest" />
-            <Text color="ink.textFaint">No devices registered yet</Text>
-            <Text fontSize="13px" color="ink.textFaintest">
-              Power on your Pico or Tilt and connect to the network
-            </Text>
-          </Flex>
+          <div className="flex flex-col items-center gap-2 py-8">
+            <MdDevices className="size-12 text-ink-text-faintest" />
+            <p className="text-ink-text-faint">No devices registered yet</p>
+            <p className="text-[13px] text-ink-text-faintest">Power on your Pico or Tilt and connect to the network</p>
+          </div>
         ) : (
           devices.map((device) => {
             const isTilt = device.deviceType === 'TILT';
             const stateInfo = getStateLabel(device.state, isTilt);
             const metadata = parseJSON(device.metadata);
+            const stateStyle = STATE_STYLES[stateInfo.accent];
 
             return (
-              <Flex key={device.id} align="center" gap="14px" py="12px" borderTop="1px solid" borderColor="ink.divider">
-                <Flex
-                  align="center"
-                  justify="center"
-                  w="32px"
-                  h="32px"
-                  borderRadius="8px"
-                  bg="ink.bg"
-                  border="1px solid"
-                  borderColor="ink.cardBorder"
-                  flexShrink={0}
-                >
-                  <DeviceTypeIcon kind={deviceIconKind(device)} size={20} color="ink.textSecondary" />
-                </Flex>
-                <Box flex="1">
-                  <Text fontSize="14px" fontWeight="600">
+              <div key={device.id} className="flex items-center gap-3.5 border-t border-ink-divider py-3">
+                <div className="flex size-8 flex-none items-center justify-center rounded-lg border border-ink-card-border bg-ink-bg">
+                  <DeviceTypeIcon kind={deviceIconKind(device)} size={20} color="ink-text-secondary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">
                     {device.name}
                     {isTilt && device.color ? ` · ${device.color}` : ''}
-                  </Text>
-                  <Text fontSize="12px" color="ink.textFaint">
+                  </p>
+                  <p className="text-xs text-ink-text-faint">
                     {device.uid.substring(0, 16)}
                     {isTilt && metadata.rssi !== undefined ? ` · ${metadata.rssi} dBm` : ''}
                     {!isTilt && device.ipAddress ? ` · ${device.ipAddress}` : ''}
-                  </Text>
-                </Box>
-                <Box
-                  w="9px"
-                  h="9px"
-                  borderRadius="full"
-                  bg={ACCENT_COLOR[stateInfo.accent]}
-                  boxShadow={`0 0 8px ${ACCENT_COLOR[stateInfo.accent]}`}
-                />
-                <Text fontSize="11px" fontWeight="700" color={`${stateInfo.accent}.500`}>
-                  {stateInfo.label}
-                </Text>
-              </Flex>
+                  </p>
+                </div>
+                <div className={cn('size-[9px] shrink-0 rounded-full', stateStyle.dot)} />
+                <p className={cn('text-[11px] font-bold', stateStyle.text)}>{stateInfo.label}</p>
+                <button
+                  type="button"
+                  aria-label={`Remove ${device.name}`}
+                  onClick={() => setDeleteTarget(device)}
+                  className="text-ink-text-faint transition-colors hover:text-danger-500"
+                >
+                  <MdDelete className="size-4" />
+                </button>
+              </div>
             );
           })
         )}
       </Card>
 
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            Pair Device
-            {pairingTarget && (
-              <Text fontSize="12px" fontWeight="500" fontFamily="mono" color="ink.textFaint" mt="2px">
-                {pairingTarget.uid}
-              </Text>
-            )}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody display="flex" flexDirection="column" gap="16px">
+      <Dialog open={!!deleteTarget} onOpenChange={(isOpen) => !isOpen && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Device</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            Are you sure you want to remove <span className="font-semibold text-ink-text">{deleteTarget?.name}</span>?
+            Its session history will be kept, but it will need to be re-paired to use again.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleDelete}>
+              Remove Device
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Pair Device</DialogTitle>
+            {pairingTarget && <p className="mt-0.5 font-mono text-xs text-ink-text-faint">{pairingTarget.uid}</p>}
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             <ModelGrid
               title="Brewing Devices"
               options={BREWING_OPTIONS}
@@ -356,21 +321,27 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
               selected={selected?.id ?? null}
               onSelect={setSelected}
             />
-            <FormControl isRequired>
-              <FormLabel>Device Name</FormLabel>
-              <Input placeholder="e.g., Garage Pico" value={name} onChange={(e) => setName(e.target.value)} />
-            </FormControl>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>
+            <div>
+              <Label htmlFor="device-name">Device Name</Label>
+              <Input
+                id="device-name"
+                className="mt-1.5"
+                placeholder="e.g., Garage Pico"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handlePair} isDisabled={!name || !selected}>
+            <Button variant="brand" disabled={!name || !selected} onClick={handlePair}>
               Pair Device
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

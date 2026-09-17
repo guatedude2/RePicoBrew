@@ -5,8 +5,15 @@ import { PrismaClient } from '@prisma/client';
 import kebabCase from 'lodash/kebabCase';
 import pubsub from './pubsub.server';
 
-const HARD_DELETE_MODELS: Prisma.ModelName[] = ['Config', 'Session', 'SessionLog', 'Batch', 'DiscoveredDevice'];
-const PRISMA_CLIENT_GEN = 3;
+const HARD_DELETE_MODELS: Prisma.ModelName[] = [
+  'Config',
+  'Session',
+  'SessionLog',
+  'Batch',
+  'DiscoveredDevice',
+  'AiAdvice',
+];
+const PRISMA_CLIENT_GEN = 4;
 const sqliteUrl = `file:${join(process.cwd(), 'prisma', 'picobrew.db')}`;
 
 function isStaleSqliteError(error: unknown) {

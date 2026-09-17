@@ -1,8 +1,12 @@
-import { Box, Button, Flex, Icon, Image, Input, Select, Text } from '@chakra-ui/react';
 import { Form, useActionData, useNavigate, useNavigation } from 'react-router';
 import { useMemo, useState, type FC } from 'react';
 import { MdArrowBack } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Select } from '~/components/ui/select';
+import { cn } from '~/lib/utils';
 
 const CARB_METHODS = [
   { label: 'Bottle', unit: 'weeks' },
@@ -77,34 +81,21 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
 
   return (
     <>
-      <Flex align="center" gap="12px" mb="4px">
-        <Box
-          as="button"
+      <div className="mb-1 flex items-center gap-3">
+        <button
           type="button"
           onClick={() => navigate('/sessions')}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          w="32px"
-          h="32px"
-          borderRadius="7px"
-          bg="ink.card"
-          border="1px solid"
-          borderColor="ink.cardBorder"
+          className="flex size-8 items-center justify-center rounded-[7px] border border-ink-card-border bg-ink-card"
         >
-          <Icon as={MdArrowBack} boxSize="15px" />
-        </Box>
-        <Text fontSize="19px" fontWeight="700">
-          New Session
-        </Text>
-      </Flex>
+          <MdArrowBack className="size-[15px]" />
+        </button>
+        <p className="text-lg font-bold">New Session</p>
+      </div>
 
       <Form method="post">
-        <Box display="flex" flexDirection="column" gap="16px" maxW="720px">
-          <Card p="22px" gap="16px">
-            <Text fontSize="14px" fontWeight="700">
-              Recipe
-            </Text>
+        <div className="flex max-w-[720px] flex-col gap-4">
+          <Card className="gap-4 p-[22px]">
+            <p className="text-sm font-bold">Recipe</p>
             <Select
               name="recipeId"
               placeholder="Select a recipe"
@@ -119,50 +110,39 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
             </Select>
 
             {recipe && (
-              <Flex align="center" gap="14px" p="12px" bg="ink.bg" borderRadius="10px">
-                <Image
+              <div className="flex items-center gap-3.5 rounded-[10px] bg-ink-bg p-3">
+                <img
                   src={recipe.photoUrl || '/img/no-photo.jpg'}
                   alt={recipe.name}
-                  boxSize="56px"
-                  objectFit="cover"
-                  borderRadius="8px"
-                  flexShrink={0}
+                  className="size-14 shrink-0 rounded-lg object-cover"
                 />
-                <Box flex="1" minW="0">
-                  <Text fontSize="14px" fontWeight="700" noOfLines={1}>
-                    {recipe.name}
-                  </Text>
-                  <Text fontSize="12px" color="ink.textFaint" mb="6px">
-                    {recipe.style || 'Unspecified style'}
-                  </Text>
-                  <Flex gap="18px" fontSize="11px" color="ink.textSecondary">
-                    <Box>
-                      <Text color="ink.textFaint">ABV</Text>
-                      <Text fontWeight="700">{recipe.abv.toFixed(1)}%</Text>
-                    </Box>
-                    <Box>
-                      <Text color="ink.textFaint">IBU</Text>
-                      <Text fontWeight="700">{recipe.ibu}</Text>
-                    </Box>
-                    <Box>
-                      <Text color="ink.textFaint">Est. Brew Time</Text>
-                      <Text fontWeight="700">{formatMinutes(brewMinutes)}</Text>
-                    </Box>
-                  </Flex>
-                </Box>
-              </Flex>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{recipe.name}</p>
+                  <p className="mb-1.5 text-xs text-ink-text-faint">{recipe.style || 'Unspecified style'}</p>
+                  <div className="flex gap-[18px] text-[11px] text-ink-text-secondary">
+                    <div>
+                      <p className="text-ink-text-faint">ABV</p>
+                      <p className="font-bold">{recipe.abv.toFixed(1)}%</p>
+                    </div>
+                    <div>
+                      <p className="text-ink-text-faint">IBU</p>
+                      <p className="font-bold">{recipe.ibu}</p>
+                    </div>
+                    <div>
+                      <p className="text-ink-text-faint">Est. Brew Time</p>
+                      <p className="font-bold">{formatMinutes(brewMinutes)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </Card>
 
-          <Card p="22px" gap="16px">
-            <Text fontSize="14px" fontWeight="700">
-              Devices
-            </Text>
-            <Flex gap="16px" wrap="wrap">
-              <Box flex="1" minW="220px">
-                <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="6px">
-                  Brew Device *
-                </Text>
+          <Card className="gap-4 p-[22px]">
+            <p className="text-sm font-bold">Devices</p>
+            <div className="flex flex-wrap gap-4">
+              <div className="min-w-[220px] flex-1">
+                <Label className="mb-1.5 block text-[11px] font-semibold text-ink-text-secondary">Brew Device *</Label>
                 <Select
                   name="deviceId"
                   placeholder="Select a device"
@@ -175,11 +155,11 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
                     </option>
                   ))}
                 </Select>
-              </Box>
-              <Box flex="1" minW="220px">
-                <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="6px">
+              </div>
+              <div className="min-w-[220px] flex-1">
+                <Label className="mb-1.5 block text-[11px] font-semibold text-ink-text-secondary">
                   Ferment Device (optional)
-                </Text>
+                </Label>
                 <Select
                   name="fermentDeviceId"
                   value={fermentDeviceId}
@@ -192,76 +172,62 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
                     </option>
                   ))}
                 </Select>
-              </Box>
-            </Flex>
+              </div>
+            </div>
           </Card>
 
-          <Card p="22px" gap="14px">
-            <Box>
-              <Text fontSize="14px" fontWeight="700">
-                Carbonation
-              </Text>
-              <Text fontSize="12px" color="ink.textFaint">
+          <Card className="gap-3.5 p-[22px]">
+            <div>
+              <p className="text-sm font-bold">Carbonation</p>
+              <p className="text-xs text-ink-text-faint">
                 Manual step — no sensor tracking. Choose method and how long.
-              </Text>
-            </Box>
-            <Flex gap="8px" wrap="wrap">
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               {CARB_METHODS.map((m) => (
-                <Box
+                <button
                   key={m.label}
-                  as="button"
                   type="button"
                   onClick={() => setCarbMethod(m.label)}
-                  px="14px"
-                  py="9px"
-                  borderRadius="8px"
-                  bg={carbMethod === m.label ? 'brand.100' : 'ink.bg'}
-                  border="1px solid"
-                  borderColor={carbMethod === m.label ? 'brand.500' : 'ink.divider'}
-                  color={carbMethod === m.label ? 'ink.text' : 'ink.textSecondary'}
-                  fontSize="13px"
-                  fontWeight="600"
+                  className={cn(
+                    'rounded-lg border px-3.5 py-2.5 text-[13px] font-semibold',
+                    carbMethod === m.label
+                      ? 'border-brand-500 bg-brand-100 text-ink-text'
+                      : 'border-ink-divider bg-ink-bg text-ink-text-secondary',
+                  )}
                 >
                   {m.label}
-                </Box>
+                </button>
               ))}
-            </Flex>
+            </div>
             <input type="hidden" name="carbMethod" value={carbMethod} />
-            <Box maxW="200px">
-              <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="6px">
+            <div className="max-w-[200px]">
+              <Label className="mb-1.5 block text-[11px] font-semibold text-ink-text-secondary">
                 Duration ({carbUnit})
-              </Text>
+              </Label>
               <Input
                 type="number"
                 name="carbDuration"
                 value={carbDuration}
                 onChange={(e) => setCarbDuration(Number(e.target.value))}
                 min={1}
-                fontFamily="mono"
+                className="font-mono"
               />
-            </Box>
+            </div>
           </Card>
 
-          {actionData?.error && (
-            <Text fontSize="13px" color="danger.500">
-              {actionData.error}
-            </Text>
-          )}
+          {actionData?.error && <p className="text-[13px] text-danger-500">{actionData.error}</p>}
 
-          <Flex align="center" justify="space-between" wrap="wrap" gap="12px">
-            <Box>
-              <Text fontSize="10px" fontWeight="700" color="ink.textFaint" letterSpacing="0.5px">
-                ESTIMATED TOTAL TIME
-              </Text>
-              <Text fontSize="14px" fontFamily="mono" fontWeight="700">
-                {estimate}
-              </Text>
-            </Box>
-            <Button type="submit" variant="brand" isDisabled={!recipeId || !deviceId} isLoading={isSubmitting}>
-              Start Brewing
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.5px] text-ink-text-faint">ESTIMATED TOTAL TIME</p>
+              <p className="font-mono text-sm font-bold">{estimate}</p>
+            </div>
+            <Button type="submit" variant="brand" disabled={!recipeId || !deviceId || isSubmitting}>
+              {isSubmitting ? 'Starting…' : 'Start Brewing'}
             </Button>
-          </Flex>
-        </Box>
+          </div>
+        </div>
       </Form>
     </>
   );

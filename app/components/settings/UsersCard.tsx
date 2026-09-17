@@ -1,32 +1,18 @@
-import {
-  Box,
-  Button,
-  Flex,
-  FormControl,
-  FormLabel,
-  Icon,
-  IconButton,
-  Input,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Select,
-  Text,
-  VStack,
-  useDisclosure,
-} from '@chakra-ui/react';
 import { useFetcher } from 'react-router';
 import { useEffect, useState, type FC } from 'react';
 import { MdDelete, MdEdit, MdMoreVert, MdPersonAdd } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Select } from '~/components/ui/select';
 
 type User = {
   id: number;
@@ -60,64 +46,42 @@ const UserRow: FC<{
   onDelete: () => void;
   deleteBusy: boolean;
 }> = ({ user, onEdit, onDelete, deleteBusy }) => (
-  <Flex
-    align="center"
-    gap="12px"
-    px="14px"
-    py="12px"
-    borderTop="1px solid"
-    borderColor="ink.divider"
-    _first={{ borderTop: 'none' }}
-  >
-    <Flex
-      w="34px"
-      h="34px"
-      borderRadius="full"
-      bg="ink.bg"
-      align="center"
-      justify="center"
-      fontSize="13px"
-      fontWeight="700"
-      color="ink.textSecondary"
-      flex="0 0 auto"
-    >
+  <div className="flex items-center gap-3 border-t border-ink-divider px-3.5 py-3 first:border-t-0">
+    <div className="flex size-[34px] flex-none items-center justify-center rounded-full bg-ink-bg text-[13px] font-bold text-ink-text-secondary">
       {initialsFor(user.name)}
-    </Flex>
-    <Box flex="1" minW="0">
-      <Text fontSize="13px" fontWeight="600">
-        {user.name}
-      </Text>
-      <Text fontSize="11px" color="ink.textFaint">
-        {user.email}
-      </Text>
-    </Box>
-    <Text fontSize="12px" color="ink.textSecondary" flex="0 0 auto">
-      {ROLE_LABEL[user.role] ?? user.role}
-    </Text>
-    <Menu placement="bottom-end">
-      <MenuButton
-        as={IconButton}
-        aria-label="User actions"
-        icon={<Icon as={MdMoreVert} boxSize="18px" />}
-        variant="ghost"
-        size="sm"
-        flex="0 0 auto"
-      />
-      <MenuList>
-        <MenuItem icon={<Icon as={MdEdit} />} onClick={onEdit}>
+    </div>
+    <div className="min-w-0 flex-1">
+      <p className="text-[13px] font-semibold">{user.name}</p>
+      <p className="text-[11px] text-ink-text-faint">{user.email}</p>
+    </div>
+    <p className="flex-none text-xs text-ink-text-secondary">{ROLE_LABEL[user.role] ?? user.role}</p>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="User actions"
+          className="flex size-8 flex-none items-center justify-center rounded-md text-ink-text-secondary transition-colors hover:bg-ink-card hover:text-ink-text"
+        >
+          <MdMoreVert className="size-[18px]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEdit}>
+          <MdEdit className="size-4" />
           Edit
-        </MenuItem>
-        <MenuItem icon={<Icon as={MdDelete} />} color="danger.500" isDisabled={deleteBusy} onClick={onDelete}>
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="danger" disabled={deleteBusy} onClick={onDelete}>
+          <MdDelete className="size-4" />
           Delete
-        </MenuItem>
-      </MenuList>
-    </Menu>
-  </Flex>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
 );
 
 export const UsersCard: FC<UsersCardProps> = ({ users }) => {
-  const addDisclosure = useDisclosure();
-  const editDisclosure = useDisclosure();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -132,7 +96,7 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
 
   const handleAdd = () => {
     addFetcher.submit({ intent: 'addUser', name, email, password, role }, { method: 'post' });
-    addDisclosure.onClose();
+    setAddOpen(false);
     setName('');
     setEmail('');
     setPassword('');
@@ -144,7 +108,7 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
     setEditName(user.name);
     setEditEmail(user.email);
     setEditRole(user.role);
-    editDisclosure.onOpen();
+    setEditOpen(true);
   };
 
   const handleEditSave = () => {
@@ -155,7 +119,7 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
       { intent: 'updateUser', id: String(editTarget.id), name: editName, email: editEmail, role: editRole },
       { method: 'post' },
     );
-    editDisclosure.onClose();
+    setEditOpen(false);
   };
 
   useEffect(() => {
@@ -166,24 +130,16 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
 
   return (
     <>
-      <Card p="24px">
-        <Flex justify="space-between" align="center" mb="14px">
-          <Text fontSize="17px" fontWeight="700">
-            Users
-          </Text>
-          <Button leftIcon={<Icon as={MdPersonAdd} />} variant="brand" size="sm" onClick={addDisclosure.onOpen}>
+      <Card className="p-6">
+        <div className="mb-3.5 flex items-center justify-between">
+          <p className="text-[17px] font-bold">Users</p>
+          <Button variant="brand" size="sm" onClick={() => setAddOpen(true)}>
+            <MdPersonAdd className="size-4" />
             Add User
           </Button>
-        </Flex>
+        </div>
 
-        <Box
-          display="flex"
-          flexDirection="column"
-          border="1px solid"
-          borderColor="ink.divider"
-          borderRadius="10px"
-          overflow="hidden"
-        >
+        <div className="flex flex-col overflow-hidden rounded-[10px] border border-ink-divider">
           {users.map((user) => (
             <UserRow
               key={user.id}
@@ -193,93 +149,106 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
               deleteBusy={deleteFetcher.state !== 'idle'}
             />
           ))}
-        </Box>
+        </div>
       </Card>
 
-      <Modal isOpen={addDisclosure.isOpen} onClose={addDisclosure.onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Add User</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Name</FormLabel>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Role</FormLabel>
-                <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={addDisclosure.onClose}>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add User</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div>
+              <Label htmlFor="add-name">Name</Label>
+              <Input id="add-name" className="mt-1.5" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="add-email">Email</Label>
+              <Input
+                id="add-email"
+                type="email"
+                className="mt-1.5"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="add-password">Password</Label>
+              <Input
+                id="add-password"
+                type="password"
+                className="mt-1.5"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="add-role">Role</Label>
+              <Select id="add-role" className="mt-1.5" value={role} onChange={(e) => setRole(e.target.value)}>
+                {ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handleAdd} isDisabled={!name || !email || !password}>
+            <Button variant="brand" disabled={!name || !email || !password} onClick={handleAdd}>
               Add User
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <Modal isOpen={editDisclosure.isOpen} onClose={editDisclosure.onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Edit User</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Name</FormLabel>
-                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
-                <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Role</FormLabel>
-                <Select value={editRole} onChange={(e) => setEditRole(e.target.value)}>
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={editDisclosure.onClose}>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div>
+              <Label htmlFor="edit-name">Name</Label>
+              <Input id="edit-name" className="mt-1.5" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                className="mt-1.5"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-role">Role</Label>
+              <Select id="edit-role" className="mt-1.5" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                {ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
             <Button
               variant="brand"
-              isLoading={editFetcher.state !== 'idle'}
-              isDisabled={!editName || !editEmail}
+              disabled={!editName || !editEmail || editFetcher.state !== 'idle'}
               onClick={handleEditSave}
             >
               Save Changes
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

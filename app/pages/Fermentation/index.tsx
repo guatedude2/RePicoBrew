@@ -1,8 +1,9 @@
-import { Box, Button, Flex, HStack, Icon, Select, SimpleGrid, Text, VStack } from '@chakra-ui/react';
 import { useFetcher } from 'react-router';
 import { useEffect, useState } from 'react';
 import { MdScience, MdStop, MdThermostat, MdTimer, MdWifi } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Select } from '~/components/ui/select';
 import { ACCENT, StatCard } from '~/components/ui/StatCard';
 import FermentationChart from './components/FermentationChart';
 
@@ -137,22 +138,17 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
 
   return (
     <>
-      <Flex align="flex-end" justify="space-between" gap="16px" wrap="wrap">
-        <Box>
-          <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
-            Fermentation Tracking
-          </Text>
-          <Text fontSize="14px" color="ink.textDim" mt="4px">
-            Monitor your Tilt hydrometers in real-time
-          </Text>
-        </Box>
-        <HStack spacing="10px" wrap="wrap">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[26px] font-bold tracking-[-0.3px]">Fermentation Tracking</p>
+          <p className="mt-1 text-sm text-ink-text-dim">Monitor your Tilt hydrometers in real-time</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
           {sessions.length > 1 && (
             <Select
               value={selectedSessionId ?? ''}
               onChange={(e) => setSelectedSessionId(parseInt(e.target.value, 10))}
-              w="auto"
-              minW="220px"
+              className="w-auto min-w-[220px]"
             >
               {sessions.map((session) => (
                 <option key={session.id} value={session.id}>
@@ -162,26 +158,16 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
             </Select>
           )}
           {sessions.length === 1 && activeSession && (
-            <Box
-              bg="ink.card"
-              border="1px solid"
-              borderColor="ink.cardBorder"
-              borderRadius="8px"
-              px="14px"
-              py="10px"
-              fontSize="13px"
-              color="ink.textSecondary"
-            >
+            <div className="rounded-lg border border-ink-card-border bg-ink-card px-3.5 py-2.5 text-[13px] text-ink-text-secondary">
               {activeSession.device.color} Tilt · Started {new Date(activeSession.createdAt).toLocaleDateString()}
-            </Box>
+            </div>
           )}
           {sessions.length === 0 && availableTilts.filter((t) => !t.activeSession).length > 0 && (
             <>
               {awaitingBatches.length > 0 && (
                 <Select
                   placeholder="Link to a brewing batch (optional)"
-                  w="auto"
-                  minW="220px"
+                  className="w-auto min-w-[220px]"
                   value={selectedBatchId ?? ''}
                   onChange={(e) => setSelectedBatchId(e.target.value ? parseInt(e.target.value, 10) : null)}
                 >
@@ -194,8 +180,7 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
               )}
               <Select
                 placeholder="Select a Tilt to track"
-                w="auto"
-                minW="220px"
+                className="w-auto min-w-[220px]"
                 onChange={(e) => {
                   const deviceId = parseInt(e.target.value, 10);
                   if (deviceId) {
@@ -214,49 +199,36 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
             </>
           )}
           {activeSession && (
-            <Button
-              variant="danger"
-              leftIcon={<Icon as={MdStop} />}
-              onClick={stopSession}
-              isLoading={fetcher.state !== 'idle'}
-            >
-              Stop Tracking
+            <Button variant="danger" onClick={stopSession} disabled={fetcher.state !== 'idle'}>
+              <MdStop />
+              {fetcher.state !== 'idle' ? 'Stopping…' : 'Stop Tracking'}
             </Button>
           )}
-        </HStack>
-      </Flex>
+        </div>
+      </div>
 
       {sessions.length === 0 ? (
-        <Card p={{ base: '32px', md: '48px' }} alignItems="center" textAlign="center" gap="14px">
-          <Flex w="64px" h="64px" borderRadius="full" bg="brand.100" align="center" justify="center" mx="auto">
-            <Icon as={MdScience} boxSize="30px" color="brand.500" />
-          </Flex>
-          <Text fontSize="19px" fontWeight="700">
-            No Active Fermentation
-          </Text>
-          <Text fontSize="14px" color="ink.textFaint" maxW="440px" mx="auto">
+        <Card className="items-center gap-3.5 p-8 text-center md:p-12">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-brand-100">
+            <MdScience className="size-[30px] text-brand-500" />
+          </div>
+          <p className="text-lg font-bold">No Active Fermentation</p>
+          <p className="mx-auto max-w-[440px] text-sm text-ink-text-faint">
             Start tracking a Tilt hydrometer to monitor specific gravity and temperature during fermentation in
             real-time.
-          </Text>
+          </p>
           {availableTilts.length === 0 && (
-            <Box
-              p="12px 16px"
-              borderRadius="8px"
-              bg="danger.100"
-              borderLeft="3px solid"
-              borderColor="danger.500"
-              textAlign="left"
-            >
-              <Text fontSize="13px" color="ink.text" fontWeight="600">
+            <div className="rounded-lg border-l-[3px] border-danger-500 bg-danger-100 px-4 py-3 text-left">
+              <p className="text-[13px] font-semibold text-ink-text">
                 No Tilt devices detected. Make sure your Tilt is powered on and in range.
-              </Text>
-            </Box>
+              </p>
+            </div>
           )}
         </Card>
       ) : (
         activeSession && (
           <>
-            <SimpleGrid columns={{ base: 1, sm: 2, xl: 4 }} gap="14px">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1200px]:grid-cols-4">
               <StatCard
                 label="Specific Gravity"
                 value={currentReading?.gravity?.toFixed(3) || '-.---'}
@@ -287,29 +259,25 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
                 icon={MdTimer}
                 accent={ACCENT.brand}
               />
-            </SimpleGrid>
+            </div>
 
-            <Card p="24px">
-              <Flex justify="space-between" align="center" mb="18px" wrap="wrap" gap="8px">
-                <VStack align="start" spacing="2px">
-                  <Text fontSize="16px" fontWeight="700">
-                    Fermentation Progress
-                  </Text>
-                  <Text fontSize="13px" color="ink.textFaint">
-                    Real-time gravity and temperature tracking
-                  </Text>
-                </VStack>
-                <HStack spacing="14px" fontSize="12px" color="ink.textSecondary">
-                  <HStack spacing="6px">
-                    <Box w="10px" h="2px" bg="info.500" />
-                    <Text>Gravity</Text>
-                  </HStack>
-                  <HStack spacing="6px">
-                    <Box w="10px" h="2px" bg="brand.500" />
-                    <Text>Temp</Text>
-                  </HStack>
-                </HStack>
-              </Flex>
+            <Card className="p-6">
+              <div className="mb-[18px] flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-col items-start gap-0.5">
+                  <p className="text-base font-bold">Fermentation Progress</p>
+                  <p className="text-[13px] text-ink-text-faint">Real-time gravity and temperature tracking</p>
+                </div>
+                <div className="flex items-center gap-3.5 text-xs text-ink-text-secondary">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-2.5 bg-info-500" />
+                    <span>Gravity</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-0.5 w-2.5 bg-brand-500" />
+                    <span>Temp</span>
+                  </div>
+                </div>
+              </div>
               <FermentationChart sessionId={activeSession.id} />
             </Card>
           </>

@@ -1,30 +1,18 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data } from 'react-router';
 import { useLoaderData, Link, useFetcher, useNavigate, useSearchParams } from 'react-router';
-import {
-  Box,
-  Button,
-  Flex,
-  Grid,
-  Icon,
-  IconButton,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Portal,
-  Text,
-  Tooltip,
-} from '@chakra-ui/react';
 import { useState, type FC } from 'react';
 import { MdAdd, MdArrowDownward, MdArrowUpward, MdContentCopy, MdDelete, MdEdit, MdMoreVert } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { RecipeRepository } from '~/repositories/recipe.server';
 
 export const meta = () => [{ title: 'Recipes | RePicoBrew' }];
@@ -105,11 +93,13 @@ const SortableHeader: FC<{ label: string; sortKey: SortKey; activeSort: SortKey;
 }) => {
   const isActive = activeSort === sortKey;
   return (
-    <Link to={href} style={{ textDecoration: 'none' }}>
-      <Flex align="center" gap="4px" color={isActive ? 'ink.text' : 'ink.textFaint'} _hover={{ color: 'ink.text' }}>
-        <Text>{label}</Text>
-        {isActive && <Icon as={dir === 'asc' ? MdArrowUpward : MdArrowDownward} boxSize="12px" />}
-      </Flex>
+    <Link to={href} className="no-underline">
+      <div
+        className={`flex items-center gap-1 hover:text-ink-text ${isActive ? 'text-ink-text' : 'text-ink-text-faint'}`}
+      >
+        <span>{label}</span>
+        {isActive && (dir === 'asc' ? <MdArrowUpward className="size-3" /> : <MdArrowDownward className="size-3" />)}
+      </div>
     </Link>
   );
 };
@@ -119,107 +109,65 @@ const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void 
   const duplicateFetcher = useFetcher();
 
   return (
-    <Grid
-      templateColumns={columns}
-      minW="720px"
-      px="20px"
-      py="16px"
-      alignItems="center"
-      borderBottom="1px solid"
-      borderColor="ink.divider"
-      cursor="pointer"
-      _hover={{ bg: 'ink.cardHover' }}
+    <div
+      className="grid min-w-[720px] cursor-pointer items-center border-b border-ink-divider px-5 py-4 hover:bg-ink-card-hover"
+      style={{ gridTemplateColumns: columns }}
       onClick={() => navigate(`/recipes/${recipe.id}?mode=view`)}
     >
-      <Flex align="center" gap="10px">
-        <Box w="7px" h="7px" borderRadius="full" bg="brand.500" />
-        <Text fontSize="14px" fontWeight="700">
-          {recipe.name}
-        </Text>
-      </Flex>
-      <Text fontSize="13px" color="ink.textSecondary">
-        {recipe.style || '-'}
-      </Text>
-      <Box
-        as="span"
-        fontSize="11px"
-        fontWeight="700"
-        px="8px"
-        py="3px"
-        borderRadius="6px"
-        bg="brand.100"
-        color="brand.500"
-        w="fit-content"
-      >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="size-[7px] shrink-0 rounded-full bg-brand-500" />
+        <p className="truncate text-sm font-bold">{recipe.name}</p>
+      </div>
+      <p className="text-[13px] text-ink-text-secondary">{recipe.style || '-'}</p>
+      <span className="w-fit rounded-md bg-brand-100 px-2 py-[3px] text-[11px] font-bold text-brand-500">
         {recipe.abv.toFixed(1)}%
-      </Box>
-      <Box
-        as="span"
-        fontSize="11px"
-        fontWeight="700"
-        px="8px"
-        py="3px"
-        borderRadius="6px"
-        bg="accentLime.100"
-        color="accentLime.500"
-        w="fit-content"
-      >
+      </span>
+      <span className="w-fit rounded-md bg-accent-lime-100 px-2 py-[3px] text-[11px] font-bold text-accent-lime-500">
         {recipe.ibu} IBU
-      </Box>
-      <Tooltip
-        label={`${recipe.completedSessionCount} completed out of ${recipe.sessionCount} ${
-          recipe.sessionCount === 1 ? 'session' : 'sessions'
-        }`}
-        fontSize="12px"
-      >
-        <Text fontSize="13px" color="ink.textSecondary" w="fit-content" fontFamily="mono">
-          {recipe.completedSessionCount}/{recipe.sessionCount}
-        </Text>
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <p className="w-fit font-mono text-[13px] text-ink-text-secondary">
+            {recipe.completedSessionCount}/{recipe.sessionCount}
+          </p>
+        </TooltipTrigger>
+        <TooltipContent>
+          {recipe.completedSessionCount} completed out of {recipe.sessionCount}{' '}
+          {recipe.sessionCount === 1 ? 'session' : 'sessions'}
+        </TooltipContent>
       </Tooltip>
-      <Box
-        as="span"
-        fontSize="11px"
-        fontWeight="700"
-        px="8px"
-        py="3px"
-        borderRadius="6px"
-        bg="info.100"
-        color="info.500"
-        w="fit-content"
-      >
+      <span className="w-fit rounded-md bg-info-100 px-2 py-[3px] text-[11px] font-bold text-info-500">
         {recipe.deviceType}
-      </Box>
-      <Flex justify="flex-end" onClick={(e) => e.stopPropagation()}>
-        <Menu placement="bottom-end">
-          <MenuButton
-            as={IconButton}
-            aria-label="Recipe actions"
-            icon={<Icon as={MdMoreVert} boxSize="18px" />}
-            variant="ghost"
-            size="sm"
-          />
-          <Portal>
-            <MenuList>
-              <MenuItem icon={<Icon as={MdEdit} />} onClick={() => navigate(`/recipes/${recipe.id}`)}>
-                Edit
-              </MenuItem>
-              <MenuItem
-                icon={<Icon as={MdContentCopy} />}
-                isDisabled={duplicateFetcher.state !== 'idle'}
-                onClick={() =>
-                  duplicateFetcher.submit({ intent: 'duplicate', id: String(recipe.id) }, { method: 'post' })
-                }
-              >
-                Duplicate
-              </MenuItem>
-              <MenuItem icon={<Icon as={MdDelete} />} color="danger.500" onClick={() => onRequestDelete(recipe)}>
-                Delete
-              </MenuItem>
-            </MenuList>
-          </Portal>
-        </Menu>
-      </Flex>
-    </Grid>
+      </span>
+      <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label="Recipe actions" variant="ghost" size="icon">
+              <MdMoreVert className="size-[18px]" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(`/recipes/${recipe.id}`)}>
+              <MdEdit className="size-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={duplicateFetcher.state !== 'idle'}
+              onClick={() =>
+                duplicateFetcher.submit({ intent: 'duplicate', id: String(recipe.id) }, { method: 'post' })
+              }
+            >
+              <MdContentCopy className="size-4" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="danger" onClick={() => onRequestDelete(recipe)}>
+              <MdDelete className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   );
 };
 
@@ -242,64 +190,43 @@ export default function RecipesPage() {
 
   return (
     <>
-      <Flex align="flex-end" justify="space-between" gap="16px" wrap="wrap">
-        <Box>
-          <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
-            Recipes
-          </Text>
-          <Text fontSize="14px" color="ink.textDim" mt="4px">
-            Manage your brewing recipes
-          </Text>
-        </Box>
-        <Flex align="center" gap="12px">
-          <Box
-            fontSize="12px"
-            fontWeight="700"
-            px="12px"
-            py="5px"
-            borderRadius="999px"
-            bg="brand.100"
-            color="brand.500"
-          >
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[26px] font-bold tracking-[-0.3px]">Recipes</p>
+          <p className="mt-1 text-sm text-ink-text-dim">Manage your brewing recipes</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-brand-100 px-3 py-[5px] text-xs font-bold text-brand-500">
             {recipes.length} Total
-          </Box>
+          </span>
           <Link to="/recipes/new">
-            <Button variant="brand" size="sm" leftIcon={<Icon as={MdAdd} />}>
+            <Button variant="brand" size="sm">
+              <MdAdd />
               New Recipe
             </Button>
           </Link>
-        </Flex>
-      </Flex>
+        </div>
+      </div>
 
-      <Card overflow="hidden" p="0">
+      <Card className="overflow-hidden p-0">
         {recipes.length === 0 ? (
-          <Flex direction="column" align="center" gap="14px" py="64px">
-            <Text fontSize="19px" fontWeight="700">
-              No Recipes Yet
-            </Text>
-            <Text fontSize="14px" color="ink.textFaint" textAlign="center" maxW="380px">
+          <div className="flex flex-col items-center gap-3.5 py-16">
+            <p className="text-lg font-bold">No Recipes Yet</p>
+            <p className="max-w-[380px] text-center text-sm text-ink-text-faint">
               Create your first recipe to start brewing with your Pico device
-            </Text>
+            </p>
             <Link to="/recipes/new">
-              <Button variant="brand" leftIcon={<Icon as={MdAdd} />}>
+              <Button variant="brand">
+                <MdAdd />
                 Create Your First Recipe
               </Button>
             </Link>
-          </Flex>
+          </div>
         ) : (
-          <Box overflowX="auto">
-            <Grid
-              templateColumns={columns}
-              minW="720px"
-              px="20px"
-              py="14px"
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.5px"
-              color="ink.textFaint"
-              textTransform="uppercase"
-              borderBottom="1px solid"
-              borderColor="ink.divider"
+          <div className="overflow-x-auto">
+            <div
+              className="grid min-w-[720px] border-b border-ink-divider px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.5px] text-ink-text-faint"
+              style={{ gridTemplateColumns: columns }}
             >
               <SortableHeader label="Name" sortKey="name" activeSort={sort} dir={dir} href={sortHref('name')} />
               <SortableHeader label="Style" sortKey="style" activeSort={sort} dir={dir} href={sortHref('style')} />
@@ -313,8 +240,8 @@ export default function RecipesPage() {
                 href={sortHref('sessions')}
               />
               <SortableHeader label="Type" sortKey="type" activeSort={sort} dir={dir} href={sortHref('type')} />
-              <Box />
-            </Grid>
+              <div />
+            </div>
             {recipes.map((recipe) => (
               <RecipeRow
                 key={recipe.id}
@@ -322,26 +249,25 @@ export default function RecipesPage() {
                 onRequestDelete={(r) => setDeleteTarget({ id: r.id, name: r.name })}
               />
             ))}
-          </Box>
+          </div>
         )}
       </Card>
 
-      <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Delete this recipe?</ModalHeader>
-          <ModalBody>
-            <Text fontSize="14px" color="ink.textSecondary">
-              This removes {deleteTarget?.name} from your recipe list. This can&apos;t be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap="10px">
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this recipe?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            This removes {deleteTarget?.name} from your recipe list. This can&apos;t be undone.
+          </p>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Keep
             </Button>
             <Button
               variant="danger"
-              isLoading={deleteFetcher.state !== 'idle'}
+              disabled={deleteFetcher.state !== 'idle'}
               onClick={() => {
                 if (!deleteTarget) {
                   return;
@@ -352,9 +278,9 @@ export default function RecipesPage() {
             >
               Delete
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

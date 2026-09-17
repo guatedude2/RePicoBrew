@@ -24,12 +24,10 @@ interface ReducerState {
   apNetworkNameError: string | null;
   apPassword: string;
   apPasswordError: string | null;
-  showAPPassword: boolean;
   wifiNetworkName: string;
   wifiNetworkNameError: string | null;
   wifiPassword: string;
   wifiPasswordError: string | null;
-  showWifiPassword: boolean;
   generalSaveState: SaveState;
   apSaveState: SaveState;
   wifiSaveState: SaveState;
@@ -53,12 +51,10 @@ const baseInitialState: ReducerState = {
   apNetworkNameError: null,
   apPassword: '',
   apPasswordError: null,
-  showAPPassword: false,
   wifiNetworkName: '',
   wifiNetworkNameError: null,
   wifiPassword: '',
   wifiPasswordError: null,
-  showWifiPassword: false,
   generalSaveState: 'idle',
   apSaveState: 'idle',
   wifiSaveState: 'idle',
@@ -117,9 +113,6 @@ const tinyReducer = createTinyReducer({
       state.apPasswordError = null;
       state.isAPSectionDirty = true;
     },
-    setShowAPPassword(state, { payload }: PayloadAction<boolean>) {
-      state.showAPPassword = payload;
-    },
     setWifiNetworkName(state, { payload }: PayloadAction<string>) {
       state.wifiNetworkName = payload;
       state.wifiNetworkNameError = null;
@@ -129,9 +122,6 @@ const tinyReducer = createTinyReducer({
       state.wifiPassword = payload;
       state.wifiPasswordError = null;
       state.isWifiSectionDirty = true;
-    },
-    setShowWifiPassword(state, { payload }: PayloadAction<boolean>) {
-      state.showWifiPassword = payload;
     },
     validateHostnameSection(state, { payload }: PayloadAction<(valid: boolean) => void>) {
       state.isHostNameError = hostnameValidator.safeParse(state.hostName).success

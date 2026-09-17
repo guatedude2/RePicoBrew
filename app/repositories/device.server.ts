@@ -63,6 +63,10 @@ export class DeviceRepository {
     });
   }
 
+  public static async deleteDevice(id: number) {
+    await prisma.device.delete({ where: { id } });
+  }
+
   public static async getDeviceByUID(uid: string) {
     return await prisma.device.findFirst({ where: { uid } });
   }

@@ -1,10 +1,19 @@
-import { Box, Flex, HStack, Icon, Menu, MenuButton, MenuDivider, MenuItem, MenuList, Text } from '@chakra-ui/react';
 import { Link as RemixLink, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
 import type { FC } from 'react';
 import { MdCheckCircle, MdLogout, MdNotificationsNone, MdOutlinePerson, MdWarning } from 'react-icons/md';
 import type { NavItem } from '~/layouts/nav';
+import { Badge } from '~/components/ui/badge';
 import { SidebarDrawer } from '~/components/sidebar/Sidebar';
-import { attentionMessage, phaseAccent } from '~/utils/batch-phase';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
+import { attentionMessage } from '~/utils/batch-phase';
+import { cn } from '~/lib/utils';
+import { formatRelativeTime } from '~/utils/relative-time';
 
 const ROLE_LABEL: Record<string, string> = {
   Regular: 'Regular User',
@@ -28,134 +37,112 @@ export const Topbar: FC<{ routes: NavItem[] }> = ({ routes }) => {
   const logoutFetcher = useFetcher();
 
   return (
-    <Flex
-      align="center"
-      justify="space-between"
-      px={{ base: '16px', md: '32px' }}
-      py="18px"
-      borderBottom="1px solid"
-      borderColor="ink.border"
-      position="sticky"
-      top="0"
-      bg="oklch(0.15 0.004 260 / 0.92)"
-      backdropFilter="blur(6px)"
-      zIndex={2}
-      gap="16px"
-      wrap="wrap"
+    <div
+      className="sticky top-0 z-[2] flex flex-wrap items-center justify-between gap-4 border-b border-ink-border px-4 py-[18px] backdrop-blur-[6px] md:px-8"
+      style={{ backgroundColor: 'oklch(0.15 0.004 260 / 0.92)' }}
     >
-      <HStack spacing="14px">
+      <div className="flex items-center gap-3.5">
         <SidebarDrawer routes={routes} />
-        <Text fontSize="20px" fontWeight="700">
-          {current?.name ?? 'RePicoBrew'}
-        </Text>
-      </HStack>
-      <HStack spacing="14px">
-        <Menu placement="bottom-end">
-          <MenuButton
-            position="relative"
-            w="34px"
-            h="34px"
-            borderRadius="8px"
-            bg="ink.card"
-            border="1px solid"
-            borderColor="ink.cardBorder"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            <Icon as={MdNotificationsNone} boxSize="16px" color="ink.textMuted" />
-            {attentionBatches.length > 0 && (
-              <Box
-                position="absolute"
-                top="-2px"
-                right="-2px"
-                w="8px"
-                h="8px"
-                borderRadius="full"
-                bg="brand.500"
-                border="1.5px solid"
-                borderColor="ink.bg"
-              />
-            )}
-          </MenuButton>
-          <MenuList maxH="360px" overflowY="auto" minW="300px">
-            <Box px="12px" py="8px">
-              <Text fontWeight="700" fontSize="14px">
-                Needs Attention
-              </Text>
-            </Box>
-            <MenuDivider />
+        <p className="text-xl font-bold">{current?.name ?? 'RePicoBrew'}</p>
+      </div>
+      <div className="flex items-center gap-3.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Notifications"
+              className="relative flex size-[34px] items-center justify-center rounded-lg border border-ink-card-border bg-ink-card"
+            >
+              <MdNotificationsNone className="size-4 text-ink-text-muted" />
+              {attentionBatches.length > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full border-[1.5px] border-ink-bg bg-brand-500" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-96 overflow-hidden p-0">
+            <div className="flex items-center gap-2 border-b border-ink-divider px-4 py-3">
+              <MdNotificationsNone className="size-4 text-ink-text-faint" />
+              <span className="text-sm font-medium">Notifications</span>
+              {attentionBatches.length > 0 && (
+                <Badge variant="subtle" className="font-normal">
+                  {attentionBatches.length} pending
+                </Badge>
+              )}
+            </div>
             {attentionBatches.length === 0 ? (
-              <Flex direction="column" align="center" gap="6px" py="20px" px="12px">
-                <Icon as={MdCheckCircle} boxSize="20px" color="success.500" />
-                <Text fontSize="12px" color="ink.textFaint">
-                  All caught up
-                </Text>
-              </Flex>
+              <div className="flex flex-col items-center gap-1.5 px-3 py-6">
+                <MdCheckCircle className="size-5 text-success-500" />
+                <p className="text-xs text-ink-text-faint">All caught up</p>
+              </div>
             ) : (
-              attentionBatches.map((batch) => (
-                <MenuItem
-                  key={batch.id}
-                  as={RemixLink}
-                  to={batch.sessionId ? `/sessions/${batch.sessionId}` : '/sessions'}
-                  icon={<Icon as={MdWarning} color="orange.400" />}
-                  whiteSpace="normal"
-                >
-                  <Text fontSize="13px" fontWeight="600" noOfLines={1}>
-                    {batch.name}
-                  </Text>
-                  <Text fontSize="11px" color={`oklch(${phaseAccent(batch.phase)})`}>
-                    {attentionMessage(batch.phase)}
-                  </Text>
-                </MenuItem>
-              ))
+              <>
+                <div className="max-h-[360px] overflow-y-auto">
+                  {attentionBatches.map((batch, index) => (
+                    <DropdownMenuItem key={batch.id} asChild className="items-start whitespace-normal rounded-none">
+                      <RemixLink
+                        to={batch.sessionId ? `/sessions/${batch.sessionId}` : '/sessions'}
+                        className={cn(
+                          'gap-3 px-4 py-3',
+                          index < attentionBatches.length - 1 && 'border-b border-ink-divider',
+                        )}
+                      >
+                        <MdWarning className="mt-0.5 size-4 shrink-0 text-orange-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{batch.name}</p>
+                          <p className="mt-0.5 truncate text-xs text-ink-text-faint">{attentionMessage(batch.phase)}</p>
+                        </div>
+                        <span className="shrink-0 text-xs text-ink-text-faintest">
+                          {formatRelativeTime(batch.updatedAt)}
+                        </span>
+                      </RemixLink>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+                <div className="border-t border-ink-divider px-4 py-2.5">
+                  <p className="text-center text-xs text-ink-text-faint">
+                    Showing {attentionBatches.length} of {attentionBatches.length}
+                  </p>
+                </div>
+              </>
             )}
-          </MenuList>
-        </Menu>
-        <Menu placement="bottom-end">
-          <MenuButton
-            w="34px"
-            h="34px"
-            borderRadius="full"
-            bgGradient="linear(155deg, gray.500, gray.700)"
-            border="1px solid"
-            borderColor="ink.borderStrong"
-            fontSize="13px"
-            fontWeight="700"
-            color="white"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-          >
-            {session ? initialsFor(session.name) : ''}
-          </MenuButton>
-          <MenuList>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Account menu"
+              className="flex size-[34px] items-center justify-center rounded-full border border-ink-border-strong bg-gradient-to-br from-gray-500 to-gray-700 text-[13px] font-bold text-white"
+            >
+              {session ? initialsFor(session.name) : ''}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
             {session && (
-              <Box px="12px" py="8px">
-                <Text fontWeight="700" fontSize="14px">
-                  {session.name}
-                </Text>
-                <Text fontSize="12px" color="ink.textFaint">
-                  {ROLE_LABEL[session.role] ?? session.role}
-                </Text>
-              </Box>
+              <div className="px-3 py-2">
+                <p className="text-sm font-bold">{session.name}</p>
+                <p className="text-xs text-ink-text-faint">{ROLE_LABEL[session.role] ?? session.role}</p>
+              </div>
             )}
-            <MenuDivider />
-            <MenuItem as={RemixLink} to="/profile" icon={<Icon as={MdOutlinePerson} />}>
-              My Profile
-            </MenuItem>
-            <MenuItem
-              icon={<Icon as={MdLogout} />}
-              color="danger.500"
-              isDisabled={logoutFetcher.state !== 'idle'}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <RemixLink to="/profile">
+                <MdOutlinePerson className="size-4" />
+                My Profile
+              </RemixLink>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="danger"
+              disabled={logoutFetcher.state !== 'idle'}
               onClick={() => logoutFetcher.submit({}, { method: 'post', action: '/logout' })}
             >
+              <MdLogout className="size-4" />
               Log Out
-            </MenuItem>
-          </MenuList>
-        </Menu>
-      </HStack>
-    </Flex>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   );
 };
 

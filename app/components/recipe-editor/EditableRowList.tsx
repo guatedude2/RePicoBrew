@@ -1,5 +1,5 @@
-import { Box, Grid, Icon, Input, Text } from '@chakra-ui/react';
 import { MdAdd, MdDeleteOutline } from 'react-icons/md';
+import { Input } from '~/components/ui/input';
 
 export type RowColumn<T> = {
   key: Extract<keyof T, string>;
@@ -7,15 +7,6 @@ export type RowColumn<T> = {
   type: 'text' | 'number';
   step?: number;
   placeholder?: string;
-};
-
-const fieldStyle = {
-  bg: 'ink.bg',
-  border: '1px solid',
-  borderColor: 'ink.cardBorder',
-  borderRadius: '6px',
-  fontSize: '13px',
-  h: '34px',
 };
 
 export function EditableRowList<T extends { id: string }>({
@@ -42,36 +33,28 @@ export function EditableRowList<T extends { id: string }>({
   const rowTemplateColumns = readOnly ? templateColumns : `${templateColumns} 32px`;
 
   return (
-    <Box display="flex" flexDirection="column" gap="8px">
+    <div className="flex flex-col gap-2">
       {rows.length > 0 && (
-        <Grid
-          templateColumns={rowTemplateColumns}
-          gap="8px"
-          fontSize="11px"
-          fontWeight="700"
-          color="ink.textFaintest"
-          textTransform="uppercase"
+        <div
+          className="grid gap-2 text-[11px] font-bold uppercase text-ink-text-faintest"
+          style={{ gridTemplateColumns: rowTemplateColumns }}
         >
           {columns.map((col) => (
-            <Text key={col.key}>{col.label}</Text>
+            <span key={col.key}>{col.label}</span>
           ))}
-          {!readOnly && <Box />}
-        </Grid>
+          {!readOnly && <div />}
+        </div>
       )}
       {rows.map((row) => (
-        <Grid key={row.id} templateColumns={rowTemplateColumns} gap="8px" alignItems="center">
+        <div key={row.id} className="grid items-center gap-2" style={{ gridTemplateColumns: rowTemplateColumns }}>
           {columns.map((col) =>
             readOnly ? (
-              <Text
+              <p
                 key={col.key}
-                fontSize="13px"
-                fontFamily={col.type === 'number' ? 'mono' : undefined}
-                color="ink.textMuted"
-                px="11px"
-                py="9px"
+                className={`px-2.5 py-2 text-[13px] text-ink-text-muted ${col.type === 'number' ? 'font-mono' : ''}`}
               >
                 {(row[col.key] as string | number | undefined) ?? '—'}
-              </Text>
+              </p>
             ) : (
               <Input
                 key={col.key}
@@ -82,56 +65,34 @@ export function EditableRowList<T extends { id: string }>({
                 onChange={(e) =>
                   onChange(row.id, col.key, col.type === 'number' ? Number(e.target.value) : e.target.value)
                 }
-                fontFamily={col.type === 'number' ? 'mono' : undefined}
-                {...fieldStyle}
+                className={`h-[34px] rounded-md bg-ink-bg text-[13px] ${col.type === 'number' ? 'font-mono' : ''}`}
               />
             ),
           )}
           {!readOnly &&
             (rows.length > minRows ? (
-              <Box
-                as="button"
+              <button
                 type="button"
                 onClick={() => onRemove(row.id)}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                w="28px"
-                h="28px"
-                borderRadius="6px"
-                color="danger.500"
-                _hover={{ bg: 'ink.card' }}
+                className="flex size-7 items-center justify-center rounded-md text-danger-500 hover:bg-ink-card"
               >
-                <Icon as={MdDeleteOutline} boxSize="16px" />
-              </Box>
+                <MdDeleteOutline className="size-4" />
+              </button>
             ) : (
-              <Box />
+              <div />
             ))}
-        </Grid>
+        </div>
       ))}
       {!readOnly && (
-        <Box
-          as="button"
+        <button
           type="button"
           onClick={onAdd}
-          alignSelf="flex-start"
-          display="flex"
-          alignItems="center"
-          gap="6px"
-          px="12px"
-          py="7px"
-          borderRadius="6px"
-          border="1px solid"
-          borderColor="ink.borderStrong"
-          color="ink.textSecondary"
-          fontSize="12px"
-          fontWeight="600"
-          _hover={{ bg: 'ink.card' }}
+          className="flex items-center gap-1.5 self-start rounded-md border border-ink-border-strong px-3 py-[7px] text-xs font-semibold text-ink-text-secondary hover:bg-ink-card"
         >
-          <Icon as={MdAdd} boxSize="12px" />
+          <MdAdd className="size-3" />
           {addLabel}
-        </Box>
+        </button>
       )}
-    </Box>
+    </div>
   );
 }

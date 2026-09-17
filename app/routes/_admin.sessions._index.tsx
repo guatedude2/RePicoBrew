@@ -1,26 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, useSearchParams, useFetcher, useNavigate, Link } from 'react-router';
-import {
-  Box,
-  Button,
-  Flex,
-  Grid,
-  Icon,
-  IconButton,
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuList,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  Portal,
-  Text,
-  Tooltip,
-} from '@chakra-ui/react';
 import { useState, type FC } from 'react';
 import {
   MdAdd,
@@ -34,7 +13,16 @@ import {
   MdMoreVert,
   MdWarning,
 } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { BatchRepository } from '~/repositories/batch.server';
 import { BatchPhase } from '~/types';
 import { batchNeedsAttention, phaseAccent, phaseLabel } from '~/utils/batch-phase';
@@ -82,11 +70,13 @@ const SortableHeader: FC<{ label: string; sortKey: SortKey; activeSort: SortKey;
 }) => {
   const isActive = activeSort === sortKey;
   return (
-    <Link to={href} style={{ textDecoration: 'none' }}>
-      <Flex align="center" gap="4px" color={isActive ? 'ink.text' : 'ink.textFaint'} _hover={{ color: 'ink.text' }}>
-        <Text>{label}</Text>
-        {isActive && <Icon as={dir === 'asc' ? MdArrowUpward : MdArrowDownward} boxSize="12px" />}
-      </Flex>
+    <Link to={href} className="no-underline">
+      <div
+        className={`flex items-center gap-1 hover:text-ink-text ${isActive ? 'text-ink-text' : 'text-ink-text-faint'}`}
+      >
+        <span>{label}</span>
+        {isActive && (dir === 'asc' ? <MdArrowUpward className="size-3" /> : <MdArrowDownward className="size-3" />)}
+      </div>
     </Link>
   );
 };
@@ -103,91 +93,75 @@ const SessionRow: FC<{ batch: BatchRow; onRequestCancel: (batch: BatchRow) => vo
   const needsAttention = batchNeedsAttention(batch);
 
   return (
-    <Grid
-      templateColumns={columns}
-      minW="640px"
-      px="20px"
-      py="16px"
-      alignItems="center"
-      borderBottom="1px solid"
-      borderColor="ink.divider"
-      cursor="pointer"
-      _hover={{ bg: 'ink.cardHover' }}
+    <div
+      className="grid min-w-[640px] cursor-pointer items-center border-b border-ink-divider px-5 py-4 hover:bg-ink-card-hover"
+      style={{ gridTemplateColumns: columns }}
       onClick={() => navigate(`/sessions/${primarySession?.id ?? ''}`)}
     >
-      <Text fontSize="13px" fontWeight="700">
-        {batch.name}
-      </Text>
-      <Flex align="center" gap="8px" fontSize="13px">
-        <Box w="7px" h="7px" borderRadius="full" bg="brand.500" />
-        {primarySession?.device?.name || 'Unknown'}
-      </Flex>
-      <Flex align="center" gap="6px">
-        <Box
-          as="span"
-          fontSize="11px"
-          fontWeight="700"
-          px="9px"
-          py="3px"
-          borderRadius="6px"
-          bg={`oklch(${phaseAccent(batch.phase)} / 0.18)`}
-          color={`oklch(${phaseAccent(batch.phase)})`}
+      <p className="truncate text-[13px] font-bold">{batch.name}</p>
+      <div className="flex min-w-0 items-center gap-2 text-[13px]">
+        <span className="size-[7px] shrink-0 rounded-full bg-brand-500" />
+        <span className="truncate">{primarySession?.device?.name || 'Unknown'}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span
+          className="rounded-md px-2.5 py-[3px] text-[11px] font-bold"
+          style={{
+            backgroundColor: `oklch(${phaseAccent(batch.phase)} / 0.18)`,
+            color: `oklch(${phaseAccent(batch.phase)})`,
+          }}
         >
           {phaseLabel(batch.phase)}
-        </Box>
+        </span>
         {needsAttention && (
-          <Tooltip label="Needs your input to continue" fontSize="12px">
-            <Flex>
-              <Icon as={MdWarning} boxSize="15px" color="orange.400" />
-            </Flex>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex">
+                <MdWarning className="size-[15px] text-orange-400" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Needs your input to continue</TooltipContent>
           </Tooltip>
         )}
-      </Flex>
-      <Box>
-        <Text fontSize="13px" fontWeight="600">
-          {formatDate(batch.createdAt)}
-        </Text>
-        <Text fontSize="11px" color="ink.textFaint">
-          {formatTime(batch.createdAt)}
-        </Text>
-      </Box>
-      <Flex justify="flex-end" onClick={(e) => e.stopPropagation()}>
+      </div>
+      <div>
+        <p className="text-[13px] font-semibold">{formatDate(batch.createdAt)}</p>
+        <p className="text-[11px] text-ink-text-faint">{formatTime(batch.createdAt)}</p>
+      </div>
+      <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
         {(isLive || isArchivable) && (
-          <Menu placement="bottom-end">
-            <MenuButton
-              as={IconButton}
-              aria-label="Session actions"
-              icon={<Icon as={MdMoreVert} boxSize="18px" />}
-              variant="ghost"
-              size="sm"
-            />
-            <Portal>
-              <MenuList>
-                {isLive && (
-                  <MenuItem icon={<Icon as={MdCancel} />} color="danger.500" onClick={() => onRequestCancel(batch)}>
-                    Cancel Session
-                  </MenuItem>
-                )}
-                {isArchivable && (
-                  <MenuItem
-                    icon={<Icon as={MdArchive} />}
-                    isDisabled={archiveFetcher.state !== 'idle'}
-                    onClick={() =>
-                      archiveFetcher.submit(
-                        { intent: 'archive' },
-                        { method: 'post', action: `/api/batches/${batch.id}`, encType: 'application/json' },
-                      )
-                    }
-                  >
-                    Archive
-                  </MenuItem>
-                )}
-              </MenuList>
-            </Portal>
-          </Menu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label="Session actions" variant="ghost" size="icon">
+                <MdMoreVert className="size-[18px]" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isLive && (
+                <DropdownMenuItem variant="danger" onClick={() => onRequestCancel(batch)}>
+                  <MdCancel className="size-4" />
+                  Cancel Session
+                </DropdownMenuItem>
+              )}
+              {isArchivable && (
+                <DropdownMenuItem
+                  disabled={archiveFetcher.state !== 'idle'}
+                  onClick={() =>
+                    archiveFetcher.submit(
+                      { intent: 'archive' },
+                      { method: 'post', action: `/api/batches/${batch.id}`, encType: 'application/json' },
+                    )
+                  }
+                >
+                  <MdArchive className="size-4" />
+                  Archive
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-      </Flex>
-    </Grid>
+      </div>
+    </div>
   );
 };
 
@@ -221,69 +195,48 @@ export default function SessionsPage() {
 
   return (
     <>
-      <Flex align="flex-end" justify="space-between" gap="16px" wrap="wrap">
-        <Box>
-          <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
-            Brew Sessions
-          </Text>
-          <Text fontSize="14px" color="ink.textDim" mt="4px">
-            History of all brewing sessions
-          </Text>
-        </Box>
-        <Flex align="center" gap="12px">
-          <Box
-            fontSize="12px"
-            fontWeight="700"
-            px="12px"
-            py="5px"
-            borderRadius="999px"
-            bg="brand.100"
-            color="brand.500"
-          >
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[26px] font-bold tracking-[-0.3px]">Brew Sessions</p>
+          <p className="mt-1 text-sm text-ink-text-dim">History of all brewing sessions</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-brand-100 px-3 py-[5px] text-xs font-bold text-brand-500">
             {total} Total
-          </Box>
+          </span>
           <Link to="/sessions/new">
-            <Button variant="brand" size="sm" leftIcon={<Icon as={MdAdd} />}>
+            <Button variant="brand" size="sm">
+              <MdAdd />
               New Session
             </Button>
           </Link>
-        </Flex>
-      </Flex>
+        </div>
+      </div>
 
-      <Card overflow="hidden" p="0">
+      <Card className="overflow-hidden p-0">
         {batches.length === 0 ? (
-          <Flex direction="column" align="center" gap="14px" py="64px">
-            <Flex w="72px" h="72px" borderRadius="full" bg="brand.100" align="center" justify="center">
-              <Icon as={MdHistory} boxSize="34px" color="brand.500" />
-            </Flex>
-            <Text fontSize="19px" fontWeight="700">
-              No Sessions Yet
-            </Text>
-            <Text fontSize="14px" color="ink.textFaint" textAlign="center" maxW="380px">
+          <div className="flex flex-col items-center gap-3.5 py-16">
+            <div className="flex size-[72px] items-center justify-center rounded-full bg-brand-100">
+              <MdHistory className="size-[34px] text-brand-500" />
+            </div>
+            <p className="text-lg font-bold">No Sessions Yet</p>
+            <p className="max-w-[380px] text-center text-sm text-ink-text-faint">
               Start a brew on your Pico device and it will appear here with full history and logs
-            </Text>
-          </Flex>
+            </p>
+          </div>
         ) : (
           <>
-            <Box overflowX="auto">
-              <Grid
-                templateColumns={columns}
-                minW="640px"
-                px="20px"
-                py="14px"
-                fontSize="11px"
-                fontWeight="700"
-                letterSpacing="0.5px"
-                textTransform="uppercase"
-                borderBottom="1px solid"
-                borderColor="ink.divider"
+            <div className="overflow-x-auto">
+              <div
+                className="grid min-w-[640px] border-b border-ink-divider px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.5px]"
+                style={{ gridTemplateColumns: columns }}
               >
                 <SortableHeader label="Recipe" sortKey="recipe" activeSort={sort} dir={dir} href={sortHref('recipe')} />
                 <SortableHeader label="Device" sortKey="device" activeSort={sort} dir={dir} href={sortHref('device')} />
                 <SortableHeader label="Status" sortKey="status" activeSort={sort} dir={dir} href={sortHref('status')} />
                 <SortableHeader label="Date" sortKey="date" activeSort={sort} dir={dir} href={sortHref('date')} />
-                <Box />
-              </Grid>
+                <div />
+              </div>
               {batches.map((batch) => (
                 <SessionRow
                   key={batch.id}
@@ -291,60 +244,63 @@ export default function SessionsPage() {
                   onRequestCancel={(b) => setCancelTarget({ id: b.id, name: b.name })}
                 />
               ))}
-            </Box>
+            </div>
 
-            <Flex align="center" justify="space-between" px="20px" py="14px" gap="12px" wrap="wrap">
-              <Text fontSize="12px" color="ink.textFaint">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <p className="text-xs text-ink-text-faint">
                 Showing {rangeStart}–{rangeEnd} of {total}
-              </Text>
-              <Flex align="center" gap="8px">
+              </p>
+              <div className="flex items-center gap-2">
                 {page <= 1 ? (
-                  <Button variant="outline" size="sm" leftIcon={<Icon as={MdChevronLeft} />} isDisabled>
+                  <Button variant="outline" size="sm" disabled>
+                    <MdChevronLeft />
                     Previous
                   </Button>
                 ) : (
                   <Link to={pageHref(page - 1)}>
-                    <Button variant="outline" size="sm" leftIcon={<Icon as={MdChevronLeft} />}>
+                    <Button variant="outline" size="sm">
+                      <MdChevronLeft />
                       Previous
                     </Button>
                   </Link>
                 )}
-                <Text fontSize="12px" color="ink.textSecondary" px="4px">
+                <p className="px-1 text-xs text-ink-text-secondary">
                   Page {page} of {totalPages}
-                </Text>
+                </p>
                 {page >= totalPages ? (
-                  <Button variant="outline" size="sm" rightIcon={<Icon as={MdChevronRight} />} isDisabled>
+                  <Button variant="outline" size="sm" disabled>
                     Next
+                    <MdChevronRight />
                   </Button>
                 ) : (
                   <Link to={pageHref(page + 1)}>
-                    <Button variant="outline" size="sm" rightIcon={<Icon as={MdChevronRight} />}>
+                    <Button variant="outline" size="sm">
                       Next
+                      <MdChevronRight />
                     </Button>
                   </Link>
                 )}
-              </Flex>
-            </Flex>
+              </div>
+            </div>
           </>
         )}
       </Card>
 
-      <Modal isOpen={!!cancelTarget} onClose={() => setCancelTarget(null)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Cancel this session?</ModalHeader>
-          <ModalBody>
-            <Text fontSize="14px" color="ink.textSecondary">
-              This stops {cancelTarget?.name} now and marks the session as canceled. This can&apos;t be undone.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap="10px">
+      <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel this session?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            This stops {cancelTarget?.name} now and marks the session as canceled. This can&apos;t be undone.
+          </p>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setCancelTarget(null)}>
               Keep Session
             </Button>
             <Button
               variant="danger"
-              isLoading={cancelFetcher.state !== 'idle'}
+              disabled={cancelFetcher.state !== 'idle'}
               onClick={() => {
                 if (!cancelTarget) {
                   return;
@@ -356,11 +312,11 @@ export default function SessionsPage() {
                 setCancelTarget(null);
               }}
             >
-              Cancel Session
+              {cancelFetcher.state !== 'idle' ? 'Canceling…' : 'Cancel Session'}
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

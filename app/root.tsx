@@ -1,9 +1,8 @@
-import { ChakraProvider } from '@chakra-ui/react';
 import { StrictMode } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse, useRouteError } from 'react-router';
 import { NotFound } from './pages/NotFound';
 import { ServerError } from './pages/ServerError';
-import theme from './theme/theme';
+import './tailwind.css';
 
 function Document({ children, title = 'RePicoBrew' }: { children: React.ReactNode; title?: string }) {
   return (
@@ -33,11 +32,9 @@ function Document({ children, title = 'RePicoBrew' }: { children: React.ReactNod
 export default function App() {
   return (
     <Document>
-      <ChakraProvider theme={theme}>
-        <StrictMode>
-          <Outlet />
-        </StrictMode>
-      </ChakraProvider>
+      <StrictMode>
+        <Outlet />
+      </StrictMode>
     </Document>
   );
 }
@@ -51,22 +48,18 @@ export function ErrorBoundary() {
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
       <Document title="404 Not Found">
-        <ChakraProvider theme={theme}>
-          <StrictMode>
-            <NotFound minH="100vh" />
-          </StrictMode>
-        </ChakraProvider>
+        <StrictMode>
+          <NotFound minH="100vh" />
+        </StrictMode>
       </Document>
     );
   }
 
   return (
     <Document title="Something went wrong">
-      <ChakraProvider theme={theme}>
-        <StrictMode>
-          <ServerError minH="100vh" />
-        </StrictMode>
-      </ChakraProvider>
+      <StrictMode>
+        <ServerError minH="100vh" />
+      </StrictMode>
     </Document>
   );
 }

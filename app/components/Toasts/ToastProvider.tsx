@@ -1,9 +1,9 @@
-import type { AlertStatus } from '@chakra-ui/react';
-import { Flex, Portal } from '@chakra-ui/react';
-import { createContext, useEffect } from 'react';
+import { createContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Dispatch, FC, PropsWithChildren } from 'react';
 import type { AnyAction, PayloadAction } from '~/utils/use-tiny-reducer';
 import { createTinyReducer, useTinyReducer } from '~/utils/use-tiny-reducer';
+import type { AlertStatus } from './ToastAlert';
 import { ToastAlert } from './ToastAlert';
 
 export interface Toast {
@@ -69,42 +69,33 @@ export const Context = createContext<ToastSliceState>({} as ToastSliceState);
 
 const ToastConsumer: FC = () => {
   const { state, actions, dispatch } = useTinyReducer(tinyReducer);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     instanceDispatch = dispatch;
+    setMounted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <Portal>
-      {state.toasts.length > 0 ? (
-        <Flex
-          direction="column"
-          gap={2}
-          justifyContent="flex-end"
-          sx={{
-            position: 'fixed',
-            top: 2,
-            right: 2,
-            zIndex: 300,
-            transition: '100ms max-height',
-            maxHeight: 'max-content',
-          }}
-        >
-          {state.toasts.map(({ key, type, title, message, duration, callback }) => (
-            <ToastAlert
-              key={key}
-              type={type}
-              title={title}
-              message={message}
-              duration={duration}
-              onClick={callback}
-              onClose={() => actions.dismissToast(key)}
-            />
-          ))}
-        </Flex>
-      ) : null}
-    </Portal>
+  if (!mounted || state.toasts.length === 0) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed right-2 top-2 z-[300] flex max-h-max flex-col justify-end gap-2 transition-[max-height] duration-100">
+      {state.toasts.map(({ key, type, title, message, duration, callback }) => (
+        <ToastAlert
+          key={key}
+          type={type}
+          title={title}
+          message={message}
+          duration={duration}
+          onClick={callback}
+          onClose={() => actions.dismissToast(key)}
+        />
+      ))}
+    </div>,
+    document.body,
   );
 };
 

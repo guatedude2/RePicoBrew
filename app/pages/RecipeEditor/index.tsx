@@ -1,10 +1,15 @@
-import { Box, Button, Checkbox, Flex, Grid, Icon, Input, Select, Text, Textarea } from '@chakra-ui/react';
 import { Form, Link, useNavigate, useNavigation } from 'react-router';
 import { useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Checkbox } from '~/components/ui/checkbox';
+import { Input } from '~/components/ui/input';
+import { Select } from '~/components/ui/select';
+import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
+import { cn } from '~/lib/utils';
 import { IngredientSection, PicoLocationMap } from '~/types';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 
@@ -122,15 +127,11 @@ export type RecipeEditorData = {
 };
 
 const FieldLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="5px">
-    {children}
-  </Text>
+  <p className="mb-[5px] text-[11px] font-semibold text-ink-text-secondary">{children}</p>
 );
 
 const FieldValue: FC<{ children: React.ReactNode; mono?: boolean }> = ({ children, mono }) => (
-  <Text px="11px" py="9px" fontSize="14px" fontFamily={mono ? 'mono' : undefined} color="ink.textMuted">
-    {children}
-  </Text>
+  <p className={cn('px-2.5 py-2 text-sm text-ink-text-muted', mono && 'font-mono')}>{children}</p>
 );
 
 const MASH_TYPE_LABELS: Record<string, string> = {
@@ -146,6 +147,10 @@ const FERMENTATION_TYPE_LABELS: Record<string, string> = {
   '2': 'Advanced / Custom',
 };
 
+const SectionLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">{children}</p>
+);
+
 const OverviewStat: FC<{
   label: string;
   value: React.ReactNode;
@@ -153,21 +158,15 @@ const OverviewStat: FC<{
   max?: string;
   input?: React.ReactNode;
 }> = ({ label, value, min, max, input }) => (
-  <Box>
-    <Text fontSize="11px" fontWeight="700" color="ink.textFaint" textTransform="uppercase">
-      {label}
-    </Text>
-    {input ?? (
-      <Text mt="4px" px="8px" py="6px" fontSize="14px" fontWeight="700" fontFamily="mono">
-        {value}
-      </Text>
-    )}
+  <div>
+    <p className="text-[11px] font-bold uppercase text-ink-text-faint">{label}</p>
+    {input ?? <p className="mt-1 px-2 py-1.5 font-mono text-sm font-bold">{value}</p>}
     {(min || max) && (
-      <Text fontSize="10px" color="ink.textFaintest" mt="4px">
+      <p className="mt-1 text-[10px] text-ink-text-faintest">
         MIN {min ?? '—'} · MAX {max ?? '—'}
-      </Text>
+      </p>
     )}
-  </Box>
+  </div>
 );
 
 const rowsToIngredients = (
@@ -411,44 +410,32 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     ],
   );
 
-  const FormWrapper = readOnly ? Box : Form;
+  const FormWrapper = readOnly ? 'div' : Form;
   const formWrapperProps = readOnly ? {} : { method: 'post' as const, encType: 'multipart/form-data' as const };
 
   return (
     <>
-      <Flex align="center" gap="12px" mb="4px">
-        <Box
-          as="button"
+      <div className="mb-1 flex items-center gap-3">
+        <button
           type="button"
           onClick={() => navigate('/recipes')}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          w="32px"
-          h="32px"
-          borderRadius="7px"
-          bg="ink.card"
-          border="1px solid"
-          borderColor="ink.cardBorder"
+          className="flex size-8 items-center justify-center rounded-[7px] border border-ink-card-border bg-ink-card"
         >
-          <Icon as={MdArrowBack} boxSize="15px" />
-        </Box>
-        <Box flex="1" minW="0">
-          <Text fontSize="19px" fontWeight="700" noOfLines={1}>
-            {name || 'New Recipe'}
-          </Text>
-          <Text fontSize="12px" color="ink.textFaint">
-            {style || ' '}
-          </Text>
-        </Box>
+          <MdArrowBack className="size-[15px]" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-bold">{name || 'New Recipe'}</p>
+          <p className="text-xs text-ink-text-faint">{style || ' '}</p>
+        </div>
         {readOnly && recipe && (
           <Link to={`/recipes/${recipe.id}`}>
-            <Button variant="brand" size="sm" leftIcon={<Icon as={MdEdit} />}>
+            <Button variant="brand" size="sm">
+              <MdEdit />
               Edit Recipe
             </Button>
           </Link>
         )}
-      </Flex>
+      </div>
 
       <FormWrapper {...formWrapperProps}>
         {!readOnly && (
@@ -470,87 +457,54 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           </>
         )}
 
-        <Box display="flex" flexDirection="column" gap="16px" maxW="1040px">
+        <div className="flex max-w-[1040px] flex-col gap-4">
           {blockingErrors && !readOnly && (
-            <Box
-              bg="danger.100"
-              border="1px solid"
-              borderColor="danger.500"
-              borderRadius="10px"
-              p="14px 16px"
-              display="flex"
-              flexDirection="column"
-              gap="6px"
-            >
-              <Flex align="center" gap="8px" fontSize="13px" fontWeight="700" color="danger.500">
-                <Icon as={MdError} boxSize="15px" />
+            <div className="flex flex-col gap-1.5 rounded-[10px] border border-danger-500 bg-danger-100 p-3.5">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-danger-500">
+                <MdError className="size-[15px]" />
                 Fix these before saving
-              </Flex>
+              </div>
               {errors.map((err) => (
-                <Text key={err} fontSize="13px" color="ink.textSecondary" pl="23px">
+                <p key={err} className="pl-[23px] text-[13px] text-ink-text-secondary">
                   {err}
-                </Text>
+                </p>
               ))}
-            </Box>
+            </div>
           )}
 
           {!readOnly && (
-            <Flex justify="flex-end">
-              <Button type="submit" variant="brand" isDisabled={blockingErrors} isLoading={isSubmitting}>
-                Save Recipe
+            <div className="flex justify-end">
+              <Button type="submit" variant="brand" disabled={blockingErrors || isSubmitting}>
+                {isSubmitting ? 'Saving…' : 'Save Recipe'}
               </Button>
-            </Flex>
+            </div>
           )}
 
           {/* Overview */}
-          <Card p="22px" gap="22px" flexDirection={{ base: 'column', md: 'row' }}>
-            <Box
-              as="button"
+          <Card className="flex-col gap-[22px] p-[22px] md:flex-row">
+            <button
               type="button"
               disabled={readOnly}
               onClick={readOnly ? undefined : () => fileInputRef.current?.click()}
-              w="180px"
-              h="220px"
-              flex="0 0 auto"
-              borderRadius="12px"
-              border="1px dashed"
-              borderColor="ink.borderStrong"
-              bg="ink.bg"
-              backgroundImage={`url(${photoPreview || '/img/no-photo.jpg'})`}
-              backgroundSize="cover"
-              backgroundPosition="center"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-              cursor={readOnly ? 'default' : 'pointer'}
+              className={cn(
+                'flex h-[220px] w-[180px] flex-none items-center justify-center overflow-hidden rounded-xl border border-dashed border-ink-border-strong bg-ink-bg bg-cover bg-center',
+                readOnly ? 'cursor-default' : 'cursor-pointer',
+              )}
+              style={{ backgroundImage: `url(${photoPreview || '/img/no-photo.jpg'})` }}
             >
               {!photoPreview && !readOnly && (
-                <Flex
-                  direction="column"
-                  align="center"
-                  gap="6px"
-                  color="ink.text"
-                  bg="blackAlpha.600"
-                  px="10px"
-                  py="8px"
-                  borderRadius="8px"
-                >
-                  <Icon as={MdCameraAlt} boxSize="24px" />
-                  <Text fontSize="12px">Beer glass photo</Text>
-                </Flex>
+                <div className="flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-2 text-ink-text">
+                  <MdCameraAlt className="size-6" />
+                  <p className="text-xs">Beer glass photo</p>
+                </div>
               )}
-            </Box>
-            <Box flex="1" minW="260px" display="flex" flexDirection="column" gap="14px">
-              <Box>
-                <Text fontSize="20px" fontWeight="700">
-                  {name || 'New Recipe'}
-                </Text>
-                <Text fontSize="13px" color="ink.textDim" mt="2px">
-                  {style || ' '}
-                </Text>
-              </Box>
-              <Grid templateColumns="repeat(auto-fit, minmax(90px, 1fr))" gap="12px">
+            </button>
+            <div className="flex min-w-[260px] flex-1 flex-col gap-3.5">
+              <div>
+                <p className="text-xl font-bold">{name || 'New Recipe'}</p>
+                <p className="mt-0.5 text-[13px] text-ink-text-dim">{style || ' '}</p>
+              </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))' }}>
                 <OverviewStat
                   label="OG"
                   value={og.toFixed(3)}
@@ -563,12 +517,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                         step={0.001}
                         value={og}
                         onChange={(e) => setOg(Number(e.target.value))}
-                        mt="4px"
-                        h="30px"
-                        fontFamily="mono"
-                        fontWeight="700"
-                        bg="ink.bg"
-                        borderColor="ink.cardBorder"
+                        className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
                       />
                     )
                   }
@@ -590,12 +539,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                         type="number"
                         value={ibu}
                         onChange={(e) => setIbu(Number(e.target.value))}
-                        mt="4px"
-                        h="30px"
-                        fontFamily="mono"
-                        fontWeight="700"
-                        bg="ink.bg"
-                        borderColor="ink.cardBorder"
+                        className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
                       />
                     )
                   }
@@ -612,71 +556,45 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   min={recipe?.abvMin?.toString()}
                   max={recipe?.abvMax?.toString()}
                 />
-              </Grid>
-            </Box>
+              </div>
+            </div>
           </Card>
 
           {/* Composition */}
-          <Card p="22px" gap="16px">
-            <Text fontSize="15px" fontWeight="700">
-              Composition
-            </Text>
-            <Grid templateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap="20px">
-              <Flex direction="column" align="center" gap="12px">
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                >
-                  Grain Bill
-                </Text>
-                <Box w="120px" h="120px" borderRadius="full" bg={grain.background} position="relative">
-                  <Box position="absolute" inset="16px" borderRadius="full" bg="ink.card" />
-                </Box>
-                <Flex direction="column" gap="4px">
+          <Card className="gap-4 p-[22px]">
+            <p className="text-[15px] font-bold">Composition</p>
+            <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Grain Bill</p>
+                <div className="relative size-[120px] rounded-full" style={{ background: grain.background }}>
+                  <div className="absolute inset-4 rounded-full bg-ink-card" />
+                </div>
+                <div className="flex flex-col gap-1">
                   {grain.legend.map((item) => (
-                    <Flex key={item.label} align="center" gap="6px" fontSize="12px" color="ink.textSecondary">
-                      <Box w="9px" h="9px" borderRadius="full" bg={item.color} />
+                    <div key={item.label} className="flex items-center gap-1.5 text-xs text-ink-text-secondary">
+                      <span className="size-[9px] shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                       {item.label}
-                    </Flex>
+                    </div>
                   ))}
-                </Flex>
-              </Flex>
-              <Flex direction="column" align="center" gap="12px">
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                >
-                  Hop Bill
-                </Text>
-                <Box w="120px" h="120px" borderRadius="full" bg={hopDonut.background} position="relative">
-                  <Box position="absolute" inset="16px" borderRadius="full" bg="ink.card" />
-                </Box>
-                <Flex direction="column" gap="4px">
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Hop Bill</p>
+                <div className="relative size-[120px] rounded-full" style={{ background: hopDonut.background }}>
+                  <div className="absolute inset-4 rounded-full bg-ink-card" />
+                </div>
+                <div className="flex flex-col gap-1">
                   {hopDonut.legend.map((item) => (
-                    <Flex key={item.label} align="center" gap="6px" fontSize="12px" color="ink.textSecondary">
-                      <Box w="9px" h="9px" borderRadius="full" bg={item.color} />
+                    <div key={item.label} className="flex items-center gap-1.5 text-xs text-ink-text-secondary">
+                      <span className="size-[9px] shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                       {item.label}
-                    </Flex>
+                    </div>
                   ))}
-                </Flex>
-              </Flex>
-              <Flex direction="column" align="center" gap="12px">
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                >
-                  Wort Curve
-                </Text>
-                <Box as="svg" width="100%" height="120px" viewBox="0 0 260 120" preserveAspectRatio="none">
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Wort Curve</p>
+                <svg width="100%" height="120px" viewBox="0 0 260 120" preserveAspectRatio="none">
                   <line x1={30} y1={10} x2={30} y2={100} stroke="oklch(0.3 0.01 260)" strokeWidth={1} />
                   <line x1={30} y1={100} x2={250} y2={100} stroke="oklch(0.3 0.01 260)" strokeWidth={1} />
                   <text x={4} y={14} fill="oklch(0.5 0.008 260)" fontSize={9}>
@@ -692,62 +610,52 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     strokeWidth={2.5}
                     strokeLinecap="round"
                   />
-                </Box>
-                <Text fontSize="12px" color="ink.textSecondary" textAlign="center">
-                  Brew Time (Est.):{' '}
-                  <Text as="b" color="ink.text">
-                    {wort.brewTimeLabel}
-                  </Text>
+                </svg>
+                <p className="text-center text-xs text-ink-text-secondary">
+                  Brew Time (Est.): <b className="text-ink-text">{wort.brewTimeLabel}</b>
                   <br />
-                  Chill Time (Est.):{' '}
-                  <Text as="b" color="ink.text">
-                    {wort.chillTimeLabel}
-                  </Text>
-                </Text>
-              </Flex>
-            </Grid>
+                  Chill Time (Est.): <b className="text-ink-text">{wort.chillTimeLabel}</b>
+                </p>
+              </div>
+            </div>
           </Card>
 
           {/* Recipe Details */}
-          <Card p="22px" gap="14px">
-            <Text fontSize="15px" fontWeight="700">
-              Recipe Details
-            </Text>
-            <Flex gap="14px" wrap="wrap">
-              <Box flex="1" minW="200px">
+          <Card className="gap-3.5 p-[22px]">
+            <p className="text-[15px] font-bold">Recipe Details</p>
+            <div className="flex flex-wrap gap-3.5">
+              <div className="min-w-[200px] flex-1">
                 <FieldLabel>Recipe Name *</FieldLabel>
                 {readOnly ? (
                   <FieldValue>{name}</FieldValue>
                 ) : (
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 )}
-              </Box>
-              <Box flex="1" minW="200px">
+              </div>
+              <div className="min-w-[200px] flex-1">
                 <FieldLabel>Style</FieldLabel>
                 {readOnly ? (
                   <FieldValue>{style || '—'}</FieldValue>
                 ) : (
                   <Input value={style} onChange={(e) => setStyle(e.target.value)} />
                 )}
-              </Box>
-            </Flex>
-            <Box>
+              </div>
+            </div>
+            <div>
               <FieldLabel>Notes</FieldLabel>
               {readOnly ? (
                 <FieldValue>{notes || '—'}</FieldValue>
               ) : (
-                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} resize="vertical" />
+                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-y" />
               )}
-            </Box>
+            </div>
           </Card>
 
           {/* Water */}
-          <Card p="22px" gap="14px">
-            <Text fontSize="15px" fontWeight="700">
-              Water
-            </Text>
-            <Flex gap="14px" wrap="wrap">
-              <Box flex="1" minW="160px">
+          <Card className="gap-3.5 p-[22px]">
+            <p className="text-[15px] font-bold">Water</p>
+            <div className="flex flex-wrap gap-3.5">
+              <div className="min-w-[160px] flex-1">
                 <FieldLabel>Batch Size (Gal)</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{batchSize}</FieldValue>
@@ -757,29 +665,18 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     step={0.1}
                     value={batchSize}
                     onChange={(e) => setBatchSize(Number(e.target.value))}
-                    fontFamily="mono"
+                    className="font-mono"
                   />
                 )}
-              </Box>
-              <Box flex="1" minW="160px">
+              </div>
+              <div className="min-w-[160px] flex-1">
                 <FieldLabel>Starting Water (Gal)</FieldLabel>
-                <Text px="11px" py="9px" fontSize="13px" fontFamily="mono" color="ink.textMuted">
-                  {startingWater}
-                </Text>
-              </Box>
-            </Flex>
+                <p className="px-2.5 py-2 font-mono text-[13px] text-ink-text-muted">{startingWater}</p>
+              </div>
+            </div>
             {(!readOnly || amendments.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Water Amendments
-                </Text>
+              <div>
+                <SectionLabel>Water Amendments</SectionLabel>
                 <EditableRowList
                   rows={amendments}
                   templateColumns="1.5fr 1fr 1fr"
@@ -794,16 +691,14 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Water Amendment"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
           </Card>
 
           {/* Mash & Fermentables */}
-          <Card p="22px" gap="16px">
-            <Text fontSize="15px" fontWeight="700">
-              Mash &amp; Fermentables
-            </Text>
-            <Box maxW="220px">
+          <Card className="gap-4 p-[22px]">
+            <p className="text-[15px] font-bold">Mash &amp; Fermentables</p>
+            <div className="max-w-[220px]">
               <FieldLabel>Mash Type</FieldLabel>
               {readOnly ? (
                 <FieldValue>{MASH_TYPE_LABELS[mashType] ?? mashType}</FieldValue>
@@ -815,19 +710,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   <option value="2">Custom</option>
                 </Select>
               )}
-            </Box>
+            </div>
             {(!readOnly || mashSteps.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Mash Steps
-                </Text>
+              <div>
+                <SectionLabel>Mash Steps</SectionLabel>
                 <EditableRowList
                   rows={mashSteps}
                   templateColumns="1.6fr 0.9fr 0.9fr"
@@ -843,20 +729,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   minRows={1}
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
             {(!readOnly || fermentables.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Fermentables
-                </Text>
+              <div>
+                <SectionLabel>Fermentables</SectionLabel>
                 <EditableRowList
                   rows={fermentables}
                   templateColumns="1.6fr 0.9fr 0.9fr"
@@ -871,17 +748,15 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Fermentable"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
           </Card>
 
           {/* Boil */}
-          <Card p="22px" gap="16px">
-            <Text fontSize="15px" fontWeight="700">
-              Boil
-            </Text>
-            <Flex gap="14px" wrap="wrap">
-              <Box flex="1" minW="160px">
+          <Card className="gap-4 p-[22px]">
+            <p className="text-[15px] font-bold">Boil</p>
+            <div className="flex flex-wrap gap-3.5">
+              <div className="min-w-[160px] flex-1">
                 <FieldLabel>Total Boil Time (min)</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{boilTime}</FieldValue>
@@ -890,11 +765,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     type="number"
                     value={boilTime}
                     onChange={(e) => setBoilTime(Number(e.target.value))}
-                    fontFamily="mono"
+                    className="font-mono"
                   />
                 )}
-              </Box>
-              <Box flex="1" minW="160px">
+              </div>
+              <div className="min-w-[160px] flex-1">
                 <FieldLabel>Boil Temp °F</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{boilTemp}</FieldValue>
@@ -903,40 +778,28 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     type="number"
                     value={boilTemp}
                     onChange={(e) => setBoilTemp(Number(e.target.value))}
-                    fontFamily="mono"
+                    className="font-mono"
                   />
                 )}
-              </Box>
-              <Box flex="1" minW="180px">
+              </div>
+              <div className="min-w-[180px] flex-1">
                 <FieldLabel>First Wort Hopping</FieldLabel>
                 {readOnly ? (
                   <FieldValue>{firstWortHopping ? 'Enabled' : 'Disabled'}</FieldValue>
                 ) : (
-                  <Checkbox
-                    isChecked={firstWortHopping}
-                    onChange={(e) => setFirstWortHopping(e.target.checked)}
-                    colorScheme="brand"
-                    mt="6px"
-                  >
-                    <Text fontSize="13px" color="ink.textSecondary">
-                      Enabled
-                    </Text>
-                  </Checkbox>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Checkbox
+                      checked={firstWortHopping}
+                      onCheckedChange={(checked) => setFirstWortHopping(checked === true)}
+                    />
+                    <p className="text-[13px] text-ink-text-secondary">Enabled</p>
+                  </div>
                 )}
-              </Box>
-            </Flex>
+              </div>
+            </div>
             {(!readOnly || hops.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Hops
-                </Text>
+              <div>
+                <SectionLabel>Hops</SectionLabel>
                 <EditableRowList
                   rows={hops}
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
@@ -952,20 +815,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Hop"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
             {(!readOnly || otherBoil.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Other Boil Ingredients
-                </Text>
+              <div>
+                <SectionLabel>Other Boil Ingredients</SectionLabel>
                 <EditableRowList
                   rows={otherBoil}
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
@@ -981,16 +835,14 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Ingredient"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
           </Card>
 
           {/* Fermentation */}
-          <Card p="22px" gap="16px">
-            <Text fontSize="15px" fontWeight="700">
-              Fermentation
-            </Text>
-            <Box maxW="220px">
+          <Card className="gap-4 p-[22px]">
+            <p className="text-[15px] font-bold">Fermentation</p>
+            <div className="max-w-[220px]">
               <FieldLabel>Fermentation Type</FieldLabel>
               {readOnly ? (
                 <FieldValue>{FERMENTATION_TYPE_LABELS[fermentationType] ?? fermentationType}</FieldValue>
@@ -1001,33 +853,20 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   <option value="2">Advanced / Custom</option>
                 </Select>
               )}
-            </Box>
-            <Box>
-              <Text
-                fontSize="12px"
-                fontWeight="700"
-                color="ink.textFaint"
-                textTransform="uppercase"
-                letterSpacing="0.4px"
-                mb="8px"
-              >
-                Yeast
-              </Text>
-              <Grid templateColumns="1.6fr 0.9fr 0.9fr 0.9fr" gap="8px">
-                <Box>
-                  <Text fontSize="10px" color="ink.textFaintest" mb="4px">
-                    Name
-                  </Text>
+            </div>
+            <div>
+              <SectionLabel>Yeast</SectionLabel>
+              <div className="grid gap-2" style={{ gridTemplateColumns: '1.6fr 0.9fr 0.9fr 0.9fr' }}>
+                <div>
+                  <p className="mb-1 text-[10px] text-ink-text-faintest">Name</p>
                   {readOnly ? (
                     <FieldValue>{yeastName || '—'}</FieldValue>
                   ) : (
-                    <Input value={yeastName} onChange={(e) => setYeastName(e.target.value)} fontSize="13px" />
+                    <Input value={yeastName} onChange={(e) => setYeastName(e.target.value)} className="text-[13px]" />
                   )}
-                </Box>
-                <Box>
-                  <Text fontSize="10px" color="ink.textFaintest" mb="4px">
-                    Expected Attenuation %
-                  </Text>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] text-ink-text-faintest">Expected Attenuation %</p>
                   {readOnly ? (
                     <FieldValue mono>{yeastAttenuation}</FieldValue>
                   ) : (
@@ -1035,31 +874,25 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                       type="number"
                       value={yeastAttenuation}
                       onChange={(e) => setYeastAttenuation(Number(e.target.value))}
-                      fontFamily="mono"
-                      fontSize="13px"
+                      className="font-mono text-[13px]"
                     />
                   )}
-                </Box>
-                <Box>
-                  <Text fontSize="10px" color="ink.textFaintest" mb="4px">
-                    Range Temp °F
-                  </Text>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] text-ink-text-faintest">Range Temp °F</p>
                   {readOnly ? (
                     <FieldValue mono>{yeastRangeTemp || '—'}</FieldValue>
                   ) : (
                     <Input
                       value={yeastRangeTemp}
                       onChange={(e) => setYeastRangeTemp(e.target.value)}
-                      fontFamily="mono"
-                      fontSize="13px"
+                      className="font-mono text-[13px]"
                       placeholder="64 - 82"
                     />
                   )}
-                </Box>
-                <Box>
-                  <Text fontSize="10px" color="ink.textFaintest" mb="4px">
-                    Pitch Temp °F
-                  </Text>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] text-ink-text-faintest">Pitch Temp °F</p>
                   {readOnly ? (
                     <FieldValue mono>{yeastPitchTemp}</FieldValue>
                   ) : (
@@ -1067,25 +900,15 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                       type="number"
                       value={yeastPitchTemp}
                       onChange={(e) => setYeastPitchTemp(Number(e.target.value))}
-                      fontFamily="mono"
-                      fontSize="13px"
+                      className="font-mono text-[13px]"
                     />
                   )}
-                </Box>
-              </Grid>
-            </Box>
+                </div>
+              </div>
+            </div>
             {(!readOnly || fermentationSteps.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Fermentation Steps
-                </Text>
+              <div>
+                <SectionLabel>Fermentation Steps</SectionLabel>
                 <EditableRowList
                   rows={fermentationSteps}
                   templateColumns="1.6fr 0.8fr 0.7fr 0.7fr"
@@ -1101,20 +924,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Fermentation Step"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
             {(!readOnly || dryHops.length > 0) && (
-              <Box>
-                <Text
-                  fontSize="12px"
-                  fontWeight="700"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
-                  letterSpacing="0.4px"
-                  mb="8px"
-                >
-                  Dry Hops
-                </Text>
+              <div>
+                <SectionLabel>Dry Hops</SectionLabel>
                 <EditableRowList
                   rows={dryHops}
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
@@ -1130,92 +944,69 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   addLabel="Add Hop"
                   readOnly={readOnly}
                 />
-              </Box>
+              </div>
             )}
           </Card>
 
           {/* Machine Steps */}
-          <Card p="22px" gap="14px">
-            <Flex
-              align="center"
-              gap="8px"
-              as="button"
+          <Card className="gap-3.5 p-[22px]">
+            <button
               type="button"
               onClick={() => setMachineStepsExpanded((v) => !v)}
-              cursor="pointer"
-              textAlign="left"
+              className="flex items-center gap-2 text-left"
             >
-              <Icon
-                as={MdExpandMore}
-                boxSize="18px"
-                color="ink.textFaint"
-                transform={machineStepsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)'}
-                transition="transform 0.15s ease"
+              <MdExpandMore
+                className={cn(
+                  'size-[18px] text-ink-text-faint transition-transform duration-150',
+                  machineStepsExpanded ? 'rotate-0' : '-rotate-90',
+                )}
               />
-              <Text fontSize="15px" fontWeight="700">
-                Machine Steps
-              </Text>
-            </Flex>
+              <p className="text-[15px] font-bold">Machine Steps</p>
+            </button>
             {machineStepsExpanded && (
-              <Box border="1px solid" borderColor="ink.divider" borderRadius="10px" overflow="hidden">
-                <Grid
-                  templateColumns="1.7fr 1fr 0.8fr 0.8fr 0.8fr"
-                  gap="10px"
-                  px="14px"
-                  py="10px"
-                  bg="ink.bg"
-                  fontSize="11px"
-                  fontWeight="700"
-                  letterSpacing="0.4px"
-                  color="ink.textFaint"
-                  textTransform="uppercase"
+              <div className="overflow-hidden rounded-[10px] border border-ink-divider">
+                <div
+                  className="grid gap-2.5 bg-ink-bg px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-ink-text-faint"
+                  style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
                 >
-                  <Text>Name</Text>
-                  <Text>Location</Text>
-                  <Text>Temp °F</Text>
-                  <Text>Time (min)</Text>
-                  <Text>Drain (min)</Text>
-                </Grid>
+                  <span>Name</span>
+                  <span>Location</span>
+                  <span>Temp °F</span>
+                  <span>Time (min)</span>
+                  <span>Drain (min)</span>
+                </div>
                 {machineSteps.map((row, index) => (
-                  <Grid
+                  <div
                     key={row.id}
-                    templateColumns="1.7fr 1fr 0.8fr 0.8fr 0.8fr"
-                    gap="10px"
-                    px="14px"
-                    py="9px"
-                    alignItems="center"
-                    borderTop={index > 0 ? '1px solid' : undefined}
-                    borderColor="ink.divider"
-                    fontSize="13px"
+                    className={cn(
+                      'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
+                      index > 0 && 'border-t border-ink-divider',
+                    )}
+                    style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
                   >
-                    <Text>{row.name}</Text>
-                    <Text color="ink.textMuted">{PicoLocationMap[row.location]}</Text>
-                    <Text fontFamily="mono">{row.temperature}</Text>
-                    <Text fontFamily="mono">{row.stepTime}</Text>
-                    <Text fontFamily="mono">{row.drainTime}</Text>
-                  </Grid>
+                    <p>{row.name}</p>
+                    <p className="text-ink-text-muted">{PicoLocationMap[row.location]}</p>
+                    <p className="font-mono">{row.temperature}</p>
+                    <p className="font-mono">{row.stepTime}</p>
+                    <p className="font-mono">{row.drainTime}</p>
+                  </div>
                 ))}
-              </Box>
+              </div>
             )}
             {!readOnly && (
-              <Text
-                as="button"
+              <button
                 type="button"
                 onClick={() => setModalOpen(true)}
-                alignSelf="flex-start"
-                fontSize="13px"
-                fontWeight="600"
-                color="brand.500"
-                cursor="pointer"
+                className="self-start text-[13px] font-semibold text-brand-500"
               >
                 Edit Machine Steps
-              </Text>
+              </button>
             )}
           </Card>
-          <Text fontSize="11px" color="ink.textFaintest" px="4px">
+          <p className="px-1 text-[11px] text-ink-text-faintest">
             Firmware program run by the Pico. Step times are subject to change when compensating for lower boil temp.
-          </Text>
-        </Box>
+          </p>
+        </div>
       </FormWrapper>
 
       {!readOnly && (
@@ -1229,5 +1020,3 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     </>
   );
 };
-
-export default RecipeEditor;

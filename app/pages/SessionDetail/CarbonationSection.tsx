@@ -1,7 +1,9 @@
-import { Box, Button, Flex, HStack, Icon, Input, Text } from '@chakra-ui/react';
 import { useFetcher } from 'react-router';
 import { useEffect, useState, type FC } from 'react';
 import { MdCheck } from 'react-icons/md';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { cn } from '~/lib/utils';
 
 const METHODS = [
   { label: 'Bottle', unit: 'weeks' },
@@ -31,26 +33,15 @@ export const Ring: FC<{ percent: number; label: string; color?: string }> = ({
   label,
   color = RING_COLOR,
 }) => (
-  <Box
-    position="relative"
-    w="96px"
-    h="96px"
-    flex="0 0 auto"
-    borderRadius="full"
-    display="flex"
-    alignItems="center"
-    justifyContent="center"
-    sx={{ background: `conic-gradient(${color} ${percent}%, oklch(0.26 0.008 260) 0)` }}
+  <div
+    className="relative flex size-24 flex-none items-center justify-center rounded-full"
+    style={{ background: `conic-gradient(${color} ${percent}%, oklch(0.26 0.008 260) 0)` }}
   >
-    <Flex w="78px" h="78px" borderRadius="full" bg="ink.card" direction="column" align="center" justify="center">
-      <Text fontFamily="mono" fontSize="18px" fontWeight="700">
-        {percent}%
-      </Text>
-      <Text fontSize="9px" color="ink.textFaint">
-        {label}
-      </Text>
-    </Flex>
-  </Box>
+    <div className="flex size-[78px] flex-col items-center justify-center rounded-full bg-ink-card">
+      <p className="font-mono text-lg font-bold">{percent}%</p>
+      <p className="text-[9px] text-ink-text-faint">{label}</p>
+    </div>
+  </div>
 );
 
 // Picks a carbonation method + duration and kicks off the countdown — the normal path is from
@@ -67,47 +58,38 @@ export const CarbonationSetupForm: FC<{
   const unit = METHODS.find((m) => m.label === method)?.unit ?? 'weeks';
 
   return (
-    <Box display="flex" flexDirection="column" gap="14px">
-      <HStack spacing="10px" wrap="wrap">
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap gap-2.5">
         {METHODS.map((m) => (
-          <Box
+          <button
             key={m.label}
-            as="button"
             type="button"
             onClick={() => setMethod(m.label)}
-            flex="1"
-            minW="120px"
-            px="16px"
-            py="14px"
-            borderRadius="10px"
-            bg={method === m.label ? 'brand.100' : 'ink.bg'}
-            border="1px solid"
-            borderColor={method === m.label ? 'brand.500' : 'ink.divider'}
-            color={method === m.label ? 'ink.text' : 'ink.textSecondary'}
-            fontSize="14px"
-            fontWeight="700"
+            className={cn(
+              'min-w-[120px] flex-1 rounded-[10px] border px-4 py-3.5 text-sm font-bold',
+              method === m.label
+                ? 'border-brand-500 bg-brand-100 text-ink-text'
+                : 'border-ink-divider bg-ink-bg text-ink-text-secondary',
+            )}
           >
             {m.label}
-          </Box>
+          </button>
         ))}
-      </HStack>
-      <HStack spacing="12px" align="flex-end" wrap="wrap">
-        <Box>
-          <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="6px">
-            Duration ({unit})
-          </Text>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Duration ({unit})</p>
           <Input
             type="number"
             min={1}
-            w="100px"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
-            fontFamily="mono"
+            className="w-[100px] font-mono"
           />
-        </Box>
+        </div>
         <Button
           variant="brand"
-          isLoading={fetcher.state !== 'idle'}
+          disabled={fetcher.state !== 'idle'}
           onClick={() =>
             fetcher.submit(JSON.stringify({ intent: 'startCarbonation', method, duration, unit }), {
               method: 'post',
@@ -116,10 +98,10 @@ export const CarbonationSetupForm: FC<{
             })
           }
         >
-          Start Carbonating
+          {fetcher.state !== 'idle' ? 'Starting…' : 'Start Carbonating'}
         </Button>
-      </HStack>
-    </Box>
+      </div>
+    </div>
   );
 };
 
@@ -147,32 +129,28 @@ export const CarbonationSection: FC<{ data: CarbonationData }> = ({ data }) => {
 
   if (data.isCompleted || data.carbStatus === 'finished') {
     return (
-      <Flex direction="column" align="center" gap="8px" py="16px" textAlign="center">
-        <Flex w="40px" h="40px" borderRadius="full" bg="success.100" align="center" justify="center">
-          <Icon as={MdCheck} boxSize="20px" color="success.500" />
-        </Flex>
-        <Text fontSize="14px" fontWeight="700">
-          Carbonation complete
-        </Text>
-        <Text fontSize="12px" color="ink.textFaint">
-          {data.carbMethod ?? 'Batch'} · session finished
-        </Text>
-      </Flex>
+      <div className="flex flex-col items-center gap-2 py-4 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-success-100">
+          <MdCheck className="size-5 text-success-500" />
+        </div>
+        <p className="text-sm font-bold">Carbonation complete</p>
+        <p className="text-xs text-ink-text-faint">{data.carbMethod ?? 'Batch'} · session finished</p>
+      </div>
     );
   }
 
   if (!data.carbStatus || data.carbStatus === 'setup') {
     return (
-      <Box display="flex" flexDirection="column" gap="14px">
-        <Text fontSize="12px" color="ink.textSecondary">
+      <div className="flex flex-col gap-3.5">
+        <p className="text-xs text-ink-text-secondary">
           This step has no sensor tracking — it&apos;s manual. Choose a method and how long, then start.
-        </Text>
+        </p>
         <CarbonationSetupForm
           batchId={data.batchId}
           initialMethod={data.carbMethod}
           initialDuration={data.carbDuration}
         />
-      </Box>
+      </div>
     );
   }
 
@@ -186,27 +164,22 @@ export const CarbonationSection: FC<{ data: CarbonationData }> = ({ data }) => {
 
   if (stage === 'extend') {
     return (
-      <Box display="flex" flexDirection="column" gap="14px">
-        <Text fontSize="12px" color="ink.textSecondary">
-          Add more time to keep carbonating with {data.carbMethod}.
-        </Text>
-        <HStack spacing="12px" align="flex-end" wrap="wrap">
-          <Box>
-            <Text fontSize="11px" fontWeight="600" color="ink.textSecondary" mb="6px">
-              Additional Duration (days)
-            </Text>
+      <div className="flex flex-col gap-3.5">
+        <p className="text-xs text-ink-text-secondary">Add more time to keep carbonating with {data.carbMethod}.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Additional Duration (days)</p>
             <Input
               type="number"
               min={1}
-              w="100px"
               value={extendAmount}
               onChange={(e) => setExtendAmount(Number(e.target.value))}
-              fontFamily="mono"
+              className="w-[100px] font-mono"
             />
-          </Box>
+          </div>
           <Button
             variant="brand"
-            isLoading={fetcher.state !== 'idle'}
+            disabled={fetcher.state !== 'idle'}
             onClick={() => {
               submit({ intent: 'extendCarbonation', extendMinutes: extendAmount * 24 * 60 });
               setStage('counting');
@@ -217,41 +190,41 @@ export const CarbonationSection: FC<{ data: CarbonationData }> = ({ data }) => {
           <Button variant="outline" onClick={() => setStage('counting')}>
             Cancel
           </Button>
-        </HStack>
-      </Box>
+        </div>
+      </div>
     );
   }
 
   // counting
   return (
-    <Box display="flex" flexDirection="column" gap="14px">
-      <Flex justify="space-between" align="center" wrap="wrap" gap="24px">
-        <Box>
-          <Text fontSize="11px" fontWeight="700" letterSpacing="0.5px" color="ink.textFaint" textTransform="uppercase">
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-6">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-ink-text-faint">
             Total Carbonation Time Left · {data.carbMethod}
-          </Text>
-          <Text fontFamily="mono" fontSize="38px" fontWeight="300" mt="4px">
+          </p>
+          <p className="mt-1 font-mono text-[38px] font-light">
             {days}d {hours}h
-          </Text>
-          <Text fontSize="12px" color="ink.textFaint" mt="4px">
+          </p>
+          <p className="mt-1 text-xs text-ink-text-faint">
             Started {data.carbStartedAt ? new Date(data.carbStartedAt).toLocaleString() : '—'}
-          </Text>
-        </Box>
+          </p>
+        </div>
         <Ring percent={percent} label="Complete" />
-      </Flex>
-      <HStack spacing="10px">
-        <Button variant="outline" flex="1" onClick={() => setStage('extend')}>
+      </div>
+      <div className="flex gap-2.5">
+        <Button variant="outline" className="flex-1" onClick={() => setStage('extend')}>
           Extend
         </Button>
         <Button
           variant="brand"
-          flex="1"
-          isLoading={fetcher.state !== 'idle'}
+          className="flex-1"
+          disabled={fetcher.state !== 'idle'}
           onClick={() => submit({ intent: 'finishCarbonation' })}
         >
           Done
         </Button>
-      </HStack>
-    </Box>
+      </div>
+    </div>
   );
 };

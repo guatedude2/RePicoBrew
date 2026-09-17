@@ -26,4 +26,8 @@ export class ConfigRepository {
       update: { value: JSON.stringify(value) },
     });
   }
+
+  public static async deleteConfig(key: string) {
+    await prisma.config.deleteMany({ where: { key } });
+  }
 }

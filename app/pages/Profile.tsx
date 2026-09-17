@@ -1,20 +1,11 @@
-import {
-  Box,
-  Button,
-  Flex,
-  FormControl,
-  FormLabel,
-  Icon,
-  Input,
-  InputGroup,
-  InputRightElement,
-  Text,
-} from '@chakra-ui/react';
 import { useFetcher, useRouteLoaderData } from 'react-router';
 import { useState, type FC } from 'react';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
-import Card from '~/components/card/Card';
+import { Button } from '~/components/ui/button';
+import { Card } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
 
 const ROLE_LABEL: Record<string, string> = {
   Regular: 'Regular User',
@@ -30,21 +21,10 @@ const initialsFor = (name: string) =>
     .join('') || '?';
 
 const InfoRow: FC<{ label: string; value: string }> = ({ label, value }) => (
-  <Flex
-    justify="space-between"
-    px="16px"
-    py="12px"
-    bg="ink.bg"
-    borderTop="1px solid"
-    borderColor="ink.divider"
-    fontSize="13px"
-    _first={{ borderTop: 'none' }}
-  >
-    <Text color="ink.textFaint">{label}</Text>
-    <Text color="ink.text" fontWeight="600">
-      {value}
-    </Text>
-  </Flex>
+  <div className="flex justify-between border-t border-ink-divider bg-ink-bg px-4 py-3 text-[13px] first:border-t-0">
+    <p className="text-ink-text-faint">{label}</p>
+    <p className="font-semibold text-ink-text">{value}</p>
+  </div>
 );
 
 const PasswordField: FC<{
@@ -55,28 +35,27 @@ const PasswordField: FC<{
 }> = ({ label, value, onChange, autoComplete }) => {
   const [show, setShow] = useState(false);
   return (
-    <FormControl>
-      <FormLabel fontSize="12px" fontWeight="600" color="ink.textSecondary" mb="6px">
-        {label}
-      </FormLabel>
-      <InputGroup>
+    <div>
+      <Label className="mb-1.5 block text-xs font-semibold text-ink-text-secondary">{label}</Label>
+      <div className="relative">
         <Input
           type={show ? 'text' : 'password'}
           placeholder="••••••••"
           value={value}
           autoComplete={autoComplete}
+          className="pr-10"
           onChange={(e) => onChange(e.target.value)}
         />
-        <InputRightElement>
-          <Icon
-            color="ink.textFaint"
-            _hover={{ cursor: 'pointer' }}
-            as={show ? RiEyeCloseLine : MdOutlineRemoveRedEye}
-            onClick={() => setShow(!show)}
-          />
-        </InputRightElement>
-      </InputGroup>
-    </FormControl>
+        <button
+          type="button"
+          aria-label={show ? 'Hide password' : 'Show password'}
+          onClick={() => setShow(!show)}
+          className="absolute inset-y-0 right-3 flex items-center text-ink-text-faint"
+        >
+          {show ? <RiEyeCloseLine className="size-4" /> : <MdOutlineRemoveRedEye className="size-4" />}
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -110,68 +89,32 @@ export const Profile: FC = () => {
   }
 
   return (
-    <Box maxW="480px" display="flex" flexDirection="column" gap="18px">
-      <Text fontSize="26px" fontWeight="700" letterSpacing="-0.3px">
-        My Profile
-      </Text>
+    <div className="flex max-w-[480px] flex-col gap-[18px]">
+      <p className="text-[26px] font-bold tracking-[-0.3px]">My Profile</p>
 
-      <Card p="24px" display="flex" flexDirection="column" gap="18px">
-        <Flex align="center" gap="16px">
-          <Flex
-            w="56px"
-            h="56px"
-            borderRadius="full"
-            bgGradient="linear(155deg, gray.500, gray.700)"
-            border="1px solid"
-            borderColor="ink.borderStrong"
-            align="center"
-            justify="center"
-            fontSize="18px"
-            fontWeight="700"
-            color="white"
-            flex="0 0 auto"
-          >
+      <Card className="flex flex-col gap-[18px] p-6">
+        <div className="flex items-center gap-4">
+          <div className="flex size-14 flex-none items-center justify-center rounded-full border border-ink-border-strong bg-gradient-to-br from-gray-500 to-gray-700 text-lg font-bold text-white">
             {initialsFor(session.name)}
-          </Flex>
-          <Box>
-            <Text fontSize="18px" fontWeight="700">
-              {session.name}
-            </Text>
-            <Text fontSize="13px" color="ink.textFaint">
-              {ROLE_LABEL[session.role] ?? session.role}
-            </Text>
-          </Box>
-        </Flex>
+          </div>
+          <div>
+            <p className="text-lg font-bold">{session.name}</p>
+            <p className="text-[13px] text-ink-text-faint">{ROLE_LABEL[session.role] ?? session.role}</p>
+          </div>
+        </div>
 
-        <Box
-          display="flex"
-          flexDirection="column"
-          border="1px solid"
-          borderColor="ink.divider"
-          borderRadius="10px"
-          overflow="hidden"
-        >
+        <div className="flex flex-col overflow-hidden rounded-[10px] border border-ink-divider">
           <InfoRow label="Name" value={session.name} />
           <InfoRow label="Email" value={session.email} />
           <InfoRow label="Role" value={ROLE_LABEL[session.role] ?? session.role} />
-        </Box>
+        </div>
       </Card>
 
-      <Card p="24px" display="flex" flexDirection="column" gap="16px">
-        <Text fontSize="15px" fontWeight="700">
-          Password
-        </Text>
+      <Card className="flex flex-col gap-4 p-6">
+        <p className="text-[15px] font-bold">Password</p>
 
-        {fetcher.data?.error && (
-          <Text fontSize="12px" color="danger.500">
-            {fetcher.data.error}
-          </Text>
-        )}
-        {fetcher.data?.success && (
-          <Text fontSize="12px" color="success.500">
-            Password updated.
-          </Text>
-        )}
+        {fetcher.data?.error && <p className="text-xs text-danger-500">{fetcher.data.error}</p>}
+        {fetcher.data?.success && <p className="text-xs text-success-500">Password updated.</p>}
 
         <PasswordField
           label="Current Password"
@@ -179,40 +122,35 @@ export const Profile: FC = () => {
           onChange={setCurrentPassword}
           autoComplete="current-password"
         />
-        <Flex gap="14px" wrap="wrap">
-          <Box flex="1" minW="150px">
+        <div className="flex flex-wrap gap-3.5">
+          <div className="min-w-[150px] flex-1">
             <PasswordField
               label="New Password"
               value={newPassword}
               onChange={setNewPassword}
               autoComplete="new-password"
             />
-          </Box>
-          <Box flex="1" minW="150px">
+          </div>
+          <div className="min-w-[150px] flex-1">
             <PasswordField
               label="Confirm Password"
               value={confirmPassword}
               onChange={setConfirmPassword}
               autoComplete="new-password"
             />
-          </Box>
-        </Flex>
-        {mismatch && (
-          <Text fontSize="12px" color="danger.500">
-            Passwords don&apos;t match.
-          </Text>
-        )}
+          </div>
+        </div>
+        {mismatch && <p className="text-xs text-danger-500">Passwords don&apos;t match.</p>}
         <Button
           variant="brand"
-          alignSelf="flex-start"
-          isDisabled={!canSubmit}
-          isLoading={fetcher.state !== 'idle'}
+          className="self-start"
+          disabled={!canSubmit || fetcher.state !== 'idle'}
           onClick={updatePassword}
         >
-          Update Password
+          {fetcher.state !== 'idle' ? 'Updating…' : 'Update Password'}
         </Button>
       </Card>
-    </Box>
+    </div>
   );
 };
 

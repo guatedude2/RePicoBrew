@@ -129,6 +129,15 @@ export class BatchRepository {
     return batches.filter((batch) => batchNeedsAttention(batch));
   }
 
+  // Batches in one of the two telemetry-bearing stages the AI advisor watches — candidates for
+  // the scheduler's cadence check (see app/services/ai-scheduler.server.ts).
+  public static async listActiveForAi() {
+    return await prisma.batch.findMany({
+      where: { phase: { in: [BatchPhase.BREWING, BatchPhase.FERMENTING] }, archived: false },
+      select: { id: true, phase: true },
+    });
+  }
+
   public static async listRecentCompleted(limit = 5) {
     return await prisma.batch.findMany({
       where: { phase: { in: [BatchPhase.COMPLETED, BatchPhase.CANCELED] }, archived: false },

@@ -1,10 +1,8 @@
-// Chakra imports
-import { Box, Flex } from '@chakra-ui/react';
-// Layout components
 import { Outlet } from 'react-router';
 import { ToastProvider, createToast } from '~/components/Toasts/ToastProvider';
 import { Sidebar } from '~/components/sidebar/Sidebar';
 import { Topbar } from '~/components/navbar/Topbar';
+import { TooltipProvider } from '~/components/ui/tooltip';
 import { DeviceType } from '~/types';
 import { useServerSideEvent } from '~/utils/sse';
 import nav from './nav';
@@ -35,16 +33,18 @@ export const MainLayout = () => {
   });
 
   return (
-    <Flex minH="100vh" w="100%" bg="ink.bg">
-      <Sidebar routes={nav} />
-      <Box flex="1" minW="0" display="flex" flexDirection="column">
-        <Topbar routes={nav} />
-        <ToastProvider>
-          <Box px={{ base: '16px', md: '32px' }} pt="28px" pb="48px" display="flex" flexDirection="column" gap="22px">
-            <Outlet />
-          </Box>
-        </ToastProvider>
-      </Box>
-    </Flex>
+    <TooltipProvider delayDuration={200}>
+      <div className="flex min-h-screen w-full bg-ink-bg">
+        <Sidebar routes={nav} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar routes={nav} />
+          <ToastProvider>
+            <div className="flex flex-col gap-[22px] px-4 pb-12 pt-7 md:px-8">
+              <Outlet />
+            </div>
+          </ToastProvider>
+        </div>
+      </div>
+    </TooltipProvider>
   );
 };

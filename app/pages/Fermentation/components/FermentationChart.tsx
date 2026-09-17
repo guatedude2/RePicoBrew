@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Box } from '@chakra-ui/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { Chart } from '~/components/charts/Chart.client';
@@ -145,14 +144,12 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
   ];
 
   return (
-    <Box>
+    <div>
       {data.length === 0 ? (
-        <Box textAlign="center" py={8} color="ink.textFaint">
-          Waiting for first reading...
-        </Box>
+        <div className="py-8 text-center text-ink-text-faint">Waiting for first reading...</div>
       ) : (
         <ClientOnly>{() => <Chart options={chartOptions} series={series} type="line" height={350} />}</ClientOnly>
       )}
-    </Box>
+    </div>
   );
 }

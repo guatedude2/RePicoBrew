@@ -1,0 +1,11 @@
+-- CreateTable
+CREATE TABLE "AiAdvice" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "batchId" INTEGER NOT NULL,
+    "phase" TEXT NOT NULL,
+    "trigger" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AiAdvice_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "Batch" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
