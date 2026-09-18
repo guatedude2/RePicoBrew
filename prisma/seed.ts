@@ -1,6 +1,12 @@
+import { join } from 'node:path';
+import { PrismaBetterSQLite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// engineType="client" (see schema.prisma) has no built-in query engine at all — a driver adapter
+// is required, same as app/services/prisma.server.ts's own client.
+const prisma = new PrismaClient({
+  adapter: new PrismaBetterSQLite3({ url: `file:${join(process.cwd(), 'prisma', 'picobrew.db')}` }),
+});
 
 async function main() {
   await prisma.user.create({

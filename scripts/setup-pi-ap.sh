@@ -46,6 +46,9 @@ systemctl stop dnsmasq || true
 
 # Configure static IP for wlan0
 echo "Configuring static IP for $WIFI_INTERFACE..."
+# Not guaranteed to already exist (hit this building the pi-image pipeline: a fresh Bullseye Lite
+# image doesn't ship this directory until something else creates it first).
+mkdir -p /etc/dhcpcd.conf.d
 cat > /etc/dhcpcd.conf.d/picobrew.conf <<EOF
 # RePicoBrew AP Configuration
 interface $WIFI_INTERFACE

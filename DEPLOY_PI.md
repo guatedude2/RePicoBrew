@@ -7,7 +7,7 @@ Deploy RePicoBrew on a Raspberry Pi as a WiFi Access Point that spoofs `picobrew
 - Raspberry Pi (Zero W, 3, 4, or 5) running Raspberry Pi OS (Debian-based)
 - WiFi adapter (built-in on most models)
 - Ethernet or second WiFi adapter for internet connectivity (optional, for initial setup)
-- Node.js 18+ and pnpm installed
+- Node.js 20+ and pnpm installed
 - Root/sudo access
 
 ## Architecture
@@ -61,8 +61,8 @@ curl http://localhost:8080/
 sudo apt update
 sudo apt upgrade -y
 
-# Install Node.js 18+ (if not already installed)
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# Install Node.js 20+ (if not already installed)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Install pnpm
@@ -283,7 +283,7 @@ cp /home/pi/RePicoBrew/prisma/picobrew.db /home/pi/backup-$(date +%Y%m%d).db
 ### Application won't start
 
 - Check logs: `sudo journalctl -u repicobrew -f`
-- Verify Node version: `node --version` (should be 18+)
+- Verify Node version: `node --version` (should be 20+)
 - Check port 8080 not in use: `sudo netstat -tlnp | grep :8080`
 - Run manually to see errors: `cd /home/pi/RePicoBrew && pnpm start`
 

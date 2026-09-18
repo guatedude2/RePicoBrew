@@ -19,6 +19,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 # device to the appliance, which fails to launch at all with "failed to find romfile
 # efi-virtio.rom" without this — Debian's qemu-system-common doesn't ship it separately
 # (confirmed by hitting exactly this error while building this).
+# nodejs: NOT for the Pi image itself (that gets its own architecture-correct tarball — see
+# build.sh) — this runs `prisma generate`/`migrate deploy` on the build host's own native
+# architecture (amd64/arm64, both fully supported by Prisma) instead of under this container's ARM
+# emulation, where Prisma publishes no engine binary at all for 32-bit ARM (confirmed via 404s).
+# The generated client itself is pure JS+WASM (engineType="client"), so it doesn't matter which
+# machine produced it — see chroot-provision.sh/chroot-finish.sh for the split.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libguestfs-tools \
       "linux-image-$(dpkg --print-architecture)" \
@@ -31,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       wget \
       rsync \
       ca-certificates \
+      nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # libguestfs's supermin appliance needs a kernel it can boot under QEMU to inspect/modify the

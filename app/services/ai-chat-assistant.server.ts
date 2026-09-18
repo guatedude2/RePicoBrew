@@ -28,7 +28,11 @@ import { DeviceType } from '~/types';
 
 export type AiChatAction =
   | { type: 'navigate'; to: string; draftRecipe: { packType: PackKind; recipe: PicoPackAiRecipe | ZPackAiRecipe } }
-  | { type: 'navigate'; to: string; draftSession: { deviceId: number; recipeId: number } };
+  | { type: 'navigate'; to: string; draftSession: { deviceId: number; recipeId: number } }
+  // Plain navigation, no draft payload — used when the user asks to edit/update the recipe
+  // currently being viewed on a read-only recipe page or a session's detail page (see
+  // EDIT_RECIPE_INSTRUCTIONS below). The client just navigates; there's nothing to pre-fill.
+  | { type: 'navigate'; to: string };
 
 export type AiChatResult =
   | { success: true; reply: string; action: AiChatAction | null }
@@ -63,8 +67,17 @@ Known recipes (id: name (style)):
 {{RECIPES}}`;
 
 const NO_ACTIONS_INSTRUCTIONS =
-  'You cannot draft recipes or start sessions from here — "action" must always be null. If the user asks for ' +
-  'either, tell them to use the AI Brewmaster from the Dashboard or another general page instead.';
+  'You cannot draft brand-new recipes or start brew sessions from here — "action" must never be {"type":"draft_recipe",' +
+  '...} or {"type":"start_session",...}. If the user asks for either, tell them to use the AI Brewmaster from the ' +
+  'Dashboard or another general page instead.';
+
+// Offered on a read-only recipe view and on a session's detail page (see api.ai-chat.ts, which only sets
+// `editRecipeUrl` there) — lets the user ask to edit the recipe they're currently looking at without leaving chat.
+const EDIT_RECIPE_INSTRUCTIONS =
+  'You can also trigger one action when the user clearly asks to edit, update, or change the recipe currently ' +
+  'being discussed (e.g. "update this recipe", "let\'s tweak the hops", "I want to change this") — never volunteer ' +
+  'it unprompted: set "action" to {"type":"edit_recipe"}. Your "reply" should briefly acknowledge you\'re taking ' +
+  'them to the editor (e.g. "Sure, taking you to the recipe editor.").';
 
 function jsonOnlyInstruction(): string {
   return (
@@ -73,14 +86,24 @@ function jsonOnlyInstruction(): string {
   );
 }
 
-function buildSystemPrompt(allowActions: boolean, deviceLines: string, recipeLines: string): string {
-  const capabilities = allowActions
-    ? ACTIONS_INSTRUCTIONS.replace('{{DEVICES}}', deviceLines || '(none registered yet)').replace(
-        '{{RECIPES}}',
-        recipeLines || '(none saved yet)',
-      )
-    : NO_ACTIONS_INSTRUCTIONS;
-  return `${GENERAL_PERSONA}\n\n${capabilities}\n\n${jsonOnlyInstruction()}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`;
+function buildSystemPrompt(opts: {
+  allowDraftAndSession: boolean;
+  allowEditRecipeNavigate: boolean;
+  deviceLines: string;
+  recipeLines: string;
+}): string {
+  const blocks: string[] = [
+    opts.allowDraftAndSession
+      ? ACTIONS_INSTRUCTIONS.replace('{{DEVICES}}', opts.deviceLines || '(none registered yet)').replace(
+          '{{RECIPES}}',
+          opts.recipeLines || '(none saved yet)',
+        )
+      : NO_ACTIONS_INSTRUCTIONS,
+  ];
+  if (opts.allowEditRecipeNavigate) {
+    blocks.push(EDIT_RECIPE_INSTRUCTIONS);
+  }
+  return `${GENERAL_PERSONA}\n\n${blocks.join('\n\n')}\n\n${jsonOnlyInstruction()}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`;
 }
 
 // Mirrors ai-recipe-generator.server.ts's own parseJsonResponse — models occasionally wrap JSON in
@@ -113,7 +136,11 @@ type RawAction = { type?: unknown; packType?: unknown; brief?: unknown; deviceId
 export async function runGeneralChat(input: {
   message: string;
   allowActions: boolean;
-  batchContext?: string;
+  contextLine?: string;
+  // Set only when the current scope is a specific, existing recipe (a read-only recipe view) or a
+  // session with a known recipe — the URL to send the user to if they ask to edit/update it. See
+  // api.ai-chat.ts for how each scope derives this.
+  editRecipeUrl?: string;
 }): Promise<AiChatResult> {
   const message = input.message.trim();
   if (!message) {
@@ -142,8 +169,13 @@ export async function runGeneralChat(input: {
     .map((r) => `${r.id}: ${r.name} (${r.style || 'Unspecified style'})`)
     .join('\n');
 
-  const system = buildSystemPrompt(input.allowActions, deviceLines, recipeLines);
-  const user = input.batchContext ? `Context: ${input.batchContext}\n\n${message}` : message;
+  const system = buildSystemPrompt({
+    allowDraftAndSession: input.allowActions,
+    allowEditRecipeNavigate: Boolean(input.editRecipeUrl),
+    deviceLines,
+    recipeLines,
+  });
+  const user = input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message;
 
   let raw: string;
   try {
@@ -167,7 +199,15 @@ export async function runGeneralChat(input: {
     return { success: false, error: 'The AI response could not be understood. Try rephrasing your message.' };
   }
 
-  if (!input.allowActions || !rawAction) {
+  if (!rawAction) {
+    return { success: true, reply: replyText ?? FALLBACK_REPLY, action: null };
+  }
+
+  if (rawAction.type === 'edit_recipe' && input.editRecipeUrl) {
+    return { success: true, reply: replyText ?? FALLBACK_REPLY, action: { type: 'navigate', to: input.editRecipeUrl } };
+  }
+
+  if (!input.allowActions) {
     return { success: true, reply: replyText ?? FALLBACK_REPLY, action: null };
   }
 

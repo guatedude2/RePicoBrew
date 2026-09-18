@@ -64,21 +64,20 @@ ln -sf /etc/systemd/system/repicobrew.service /etc/systemd/system/multi-user.tar
 ln -sf /etc/systemd/system/tilt-ble.service /etc/systemd/system/multi-user.target.wants/tilt-ble.service
 
 chown -R pi:pi "$APP_DIR"
+cd "$APP_DIR"
+
+echo "==> Disabling postinstall's 'prisma generate' for this install..."
+# Prisma publishes no native engine binary at all for 32-bit ARM ("linux-arm") — confirmed via a
+# 404 fetching the query-engine, and again on the schema-engine, so `prisma generate`/`migrate`
+# can never succeed running natively under this chroot's qemu-arm emulation. build.sh instead runs
+# them on the build host itself (real amd64/arm64 — an architecture Prisma fully supports),
+# targeting this same mounted rootfs right after this script exits. That's safe because the
+# schema uses engineType="client": the generated output is pure JS+WASM, so it doesn't matter
+# which machine produced it. Stripping the key here (in the image's own copy of package.json,
+# not the git-tracked source) only affects this one install.
+node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));delete p.scripts.postinstall;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
 
 echo "==> Installing app dependencies (real network, real CPU emulation — this is the slow step)..."
-cd "$APP_DIR"
 sudo -u pi bash -c 'HUSKY=0 /usr/local/bin/pnpm install'
 
-echo "==> Generating Prisma client, applying migrations, seeding..."
-sudo -u pi /usr/local/bin/pnpm exec prisma generate
-sudo -u pi /usr/local/bin/pnpm exec prisma migrate deploy
-sudo -u pi /usr/local/bin/pnpm exec prisma db seed
-
-echo "==> Building production bundle..."
-sudo -u pi bash -c '/usr/local/bin/pnpm build'
-
-echo "==> Cleaning up apt cache..."
-apt-get clean
-rm -rf /var/lib/apt/lists/*
-
-echo "=== chroot provisioning complete ==="
+echo "=== chroot provisioning (install phase) complete ==="

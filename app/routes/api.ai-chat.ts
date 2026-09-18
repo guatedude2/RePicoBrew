@@ -2,7 +2,35 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data } from 'react-router';
 import { AiChatRepository, type AiChatScope } from '~/repositories/ai-chat.server';
 import { BatchRepository } from '~/repositories/batch.server';
+import { RecipeRepository } from '~/repositories/recipe.server';
 import { runGeneralChat } from '~/services/ai-chat-assistant.server';
+
+// -1 is this app's "not set" sentinel for ABV/IBU (see app/utils/brew-stats.ts) — skip rather than
+// show a misleading "-1% ABV" to the AI.
+function describeRecipe(recipe: {
+  name: string;
+  style: string | null;
+  deviceType: string;
+  abv: number;
+  ibu: number;
+  ingredients: Array<{ section: string; name: string }>;
+}): string {
+  const stats = [recipe.abv >= 0 ? `${recipe.abv}% ABV` : null, recipe.ibu >= 0 ? `${recipe.ibu} IBU` : null]
+    .filter(Boolean)
+    .join(', ');
+  const fermentables = recipe.ingredients.filter((i) => i.section === 'FERMENTABLE').map((i) => i.name);
+  const hops = recipe.ingredients.filter((i) => i.section === 'BOIL_HOP' || i.section === 'DRY_HOP').map((i) => i.name);
+  const ingredientBits = [
+    fermentables.length ? `fermentables: ${fermentables.slice(0, 6).join(', ')}` : null,
+    hops.length ? `hops: ${hops.slice(0, 6).join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join('; ');
+  const styleBit = recipe.style ? ` (${recipe.style})` : '';
+  const statsBit = stats ? `, ${stats}` : '';
+  const ingredientsBit = ingredientBits ? `. Ingredients — ${ingredientBits}` : '';
+  return `Recipe "${recipe.name}"${styleBit}, ${recipe.deviceType} device${statsBit}${ingredientsBit}.`;
+}
 
 // GET  /api/ai-chat?scope=general|recipe|session&scopeId=<number, omitted for general>
 //      Returns { threadId, messages } for that scope — the AI Brewmaster sidekick (see
@@ -88,21 +116,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const thread = await AiChatRepository.getOrCreateThread(scope, scopeId);
     await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
 
-    // A light conversational touch for session-scoped chat — which batch/recipe is being
-    // discussed — not a re-implementation of ai-advisor.server.ts's own scheduled/on-demand
-    // telemetry advice feature (AiAdviceBlock on the Session Detail page), which stays untouched.
-    let batchContext: string | undefined;
+    // A light conversational touch for session/recipe-scoped chat — what's currently being viewed
+    // — not a re-implementation of ai-advisor.server.ts's own scheduled/on-demand telemetry advice
+    // feature (AiAdviceBlock on the Session Detail page), which stays untouched. `editRecipeUrl`
+    // lets the user ask to edit/update that recipe from chat instead of clicking into the editor
+    // themselves (see EDIT_RECIPE_INSTRUCTIONS in ai-chat-assistant.server.ts).
+    let contextLine: string | undefined;
+    let editRecipeUrl: string | undefined;
     if (scope === 'session' && scopeId != null) {
       const batch = await BatchRepository.getBatch(scopeId);
       if (batch) {
         const recipeBit = batch.recipe
           ? `, recipe "${batch.recipe.name}"${batch.recipe.style ? ` (${batch.recipe.style})` : ''}`
           : '';
-        batchContext = `Batch "${batch.name}", phase ${batch.phase}${recipeBit}.`;
+        contextLine = `Batch "${batch.name}", phase ${batch.phase}${recipeBit}.`;
+        if (batch.recipe) {
+          editRecipeUrl = `/recipes/${batch.recipe.id}`;
+        }
+      }
+    } else if (scope === 'recipe' && scopeId != null) {
+      const recipe = await RecipeRepository.getRecipe(scopeId);
+      if (recipe) {
+        contextLine = describeRecipe(recipe);
+        editRecipeUrl = `/recipes/${recipe.id}`;
       }
     }
 
-    const result = await runGeneralChat({ message: message.trim(), allowActions: scope === 'general', batchContext });
+    const result = await runGeneralChat({
+      message: message.trim(),
+      allowActions: scope === 'general',
+      contextLine,
+      editRecipeUrl,
+    });
     if (!result.success) {
       return data({ error: result.error }, { status: 422 });
     }

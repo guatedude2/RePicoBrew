@@ -38,7 +38,8 @@ const GENERAL_EXAMPLES = [
   'how do I clean the machine?',
   'what temperature should fermentation be?',
 ];
-const SESSION_EXAMPLES = ["how's this batch looking?", 'what should I watch out for next?'];
+const SESSION_EXAMPLES = ["how's this batch looking?", 'what should I watch out for next?', 'update this recipe'];
+const RECIPE_VIEW_EXAMPLES = ['how would I make this hoppier?', 'what style is this closest to?', 'update this recipe'];
 
 // Warm amber/hop-gold accent for the sidekick's own branding — distinct from the app's blue/brand
 // accent so the floating widget reads as its own thing, not just another primary button.
@@ -62,24 +63,28 @@ type GeneralChatResponse = { success: true; reply: string; action: AiChatAction 
 const RECIPE_ROUTE_ID = 'routes/_admin.recipes.$id';
 const SESSION_ROUTE_ID = 'routes/_admin.sessions.$id';
 
-function useAiChatScope(): { scope: AiChatScope; scopeId: number | null } {
+function useAiChatScope(): { scope: AiChatScope; scopeId: number | null; contextLabel: string | null } {
   const matches = useMatches();
   const recipeMatch = matches.find((m) => m.id === RECIPE_ROUTE_ID);
-  const recipeId = recipeMatch?.params.id ? Number(recipeMatch.params.id) : null;
-  if (recipeId != null && !Number.isNaN(recipeId)) {
-    return { scope: 'recipe', scopeId: recipeId };
+  // The route's own loader data already has the recipe's name — reading it straight off the match
+  // means the "Recipe: <name>" chip works on a read-only recipe view too, not just while editing
+  // (where useRegisterAiRecipeBridge's `recipeLabel` covers it instead — see the sidekick's chip).
+  const recipeData = recipeMatch?.data as { recipe?: { id: number; name: string } } | undefined;
+  if (recipeData?.recipe) {
+    return { scope: 'recipe', scopeId: recipeData.recipe.id, contextLabel: recipeData.recipe.name };
   }
 
   const sessionMatch = matches.find((m) => m.id === SESSION_ROUTE_ID);
   // The session detail route's own :id param is the Session id, but AiChatThread scopes a "brew
   // session" chat by Batch id (one batch spans Brewing/Fermentation/Carbonation as one continuous
-  // flow) — the loader's own returned `batch.id` is what we want, read straight off the match.
-  const batchId = (sessionMatch?.data as { batch?: { id?: number } } | undefined)?.batch?.id;
-  if (sessionMatch && typeof batchId === 'number') {
-    return { scope: 'session', scopeId: batchId };
+  // flow) — the loader's own returned `batch.id`/`batch.name` are what we want, read straight off
+  // the match.
+  const batch = (sessionMatch?.data as { batch?: { id?: number; name?: string } } | undefined)?.batch;
+  if (sessionMatch && typeof batch?.id === 'number') {
+    return { scope: 'session', scopeId: batch.id, contextLabel: batch.name ?? null };
   }
 
-  return { scope: 'general', scopeId: null };
+  return { scope: 'general', scopeId: null, contextLabel: null };
 }
 
 function historyUrl(scope: AiChatScope, scopeId: number | null): string {
@@ -101,7 +106,13 @@ function subtitleFor(mode: SidekickMode, scope: AiChatScope): string {
   if (mode === 'generate') {
     return 'Draft a new recipe from a description';
   }
-  return scope === 'session' ? 'Chat about this brew session' : 'Ask about brewing, draft a recipe, or start a session';
+  if (scope === 'session') {
+    return 'Chat about this brew session';
+  }
+  if (scope === 'recipe') {
+    return 'Ask about this recipe, or ask me to update it';
+  }
+  return 'Ask about brewing, draft a recipe, or start a session';
 }
 
 function emptyStateTextFor(mode: SidekickMode, scope: AiChatScope): string {
@@ -111,9 +122,13 @@ function emptyStateTextFor(mode: SidekickMode, scope: AiChatScope): string {
   if (mode === 'generate') {
     return 'Describe a beer and I’ll draft a full recipe — review everything before saving.';
   }
-  return scope === 'session'
-    ? 'Ask anything about this brew session.'
-    : 'Ask anything about brewing, or try one of the actions below.';
+  if (scope === 'session') {
+    return 'Ask anything about this brew session, or ask me to update its recipe.';
+  }
+  if (scope === 'recipe') {
+    return 'Ask anything about this recipe, or ask me to update it and I’ll take you to the editor.';
+  }
+  return 'Ask anything about brewing, or try one of the actions below.';
 }
 
 function sendingTextFor(mode: SidekickMode): string {
@@ -148,7 +163,7 @@ function sendButtonLabelFor(mode: SidekickMode): string {
 
 export function AiBrewmasterSidekick() {
   const navigate = useNavigate();
-  const { scope, scopeId } = useAiChatScope();
+  const { scope, scopeId, contextLabel } = useAiChatScope();
   const bridge = useAiSidekickBridge();
   let mode: SidekickMode = null;
   if (bridge) {
@@ -252,7 +267,13 @@ export function AiBrewmasterSidekick() {
     if (bridge) {
       return dynamicSuggestions ?? (mode === 'edit' ? EDIT_EXAMPLES : GENERATE_EXAMPLES);
     }
-    return scope === 'session' ? SESSION_EXAMPLES : GENERAL_EXAMPLES;
+    if (scope === 'session') {
+      return SESSION_EXAMPLES;
+    }
+    if (scope === 'recipe') {
+      return RECIPE_VIEW_EXAMPLES;
+    }
+    return GENERAL_EXAMPLES;
   }, [bridge, mode, dynamicSuggestions, scope]);
 
   const subtitle = subtitleFor(mode, scope);
@@ -286,14 +307,16 @@ export function AiBrewmasterSidekick() {
           </div>
 
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-            {bridge && (
+            {(bridge || contextLabel) && (
               <div
                 className="flex w-fit max-w-full items-center gap-1.5 rounded-full border border-ink-divider bg-ink-bg px-2.5 py-1 text-[11px] text-ink-text-faint"
-                title="What the AI Brewmaster currently sees as the recipe to work from"
+                title="What the AI Brewmaster currently has as context"
               >
                 <MdMenuBook className="size-3 flex-none" />
-                <span className="flex-none font-semibold text-ink-text-secondary">Recipe:</span>
-                <span className="truncate">{bridge.recipeLabel}</span>
+                <span className="flex-none font-semibold text-ink-text-secondary">
+                  {bridge || scope === 'recipe' ? 'Recipe:' : 'Session:'}
+                </span>
+                <span className="truncate">{bridge ? bridge.recipeLabel : contextLabel}</span>
               </div>
             )}
 

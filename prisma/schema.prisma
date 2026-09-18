@@ -2,7 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  // "client" mode generates a pure JS client with no native query-engine binary at all — required
+  // for the Pi Zero W (32-bit ARM/"linux-arm"), an architecture Prisma doesn't publish an engine
+  // binary for (confirmed via a 404 on prisma generate). Queries run entirely through the
+  // @prisma/adapter-better-sqlite3 driver adapter already used at runtime (see prisma.server.ts).
+  engineType = "client"
 }
 
 datasource db {

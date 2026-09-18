@@ -62,7 +62,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-NODE_VERSION="18.20.8"
+# @react-router/dev AND @react-router/serve hard-require Node >=20.0.0 (confirmed by hitting that
+# exact failure with 18.20.8 — this isn't just a build-time tool requirement, `pnpm start` needs it
+# too). Pinned to an early 20.x point release deliberately: the latest (20.20.2) is compiled against
+# a newer glibc/libstdc++ (needs GLIBCXX_3.4.29/30) than Bullseye ships, and fails to even run
+# ("version `GLIBCXX_3.4.30' not found") — confirmed via `objdump -T` that 20.9.0 only needs up to
+# GLIBCXX_3.4.21, comfortably within what Bullseye provides, while still satisfying the >=20.0.0
+# floor. unofficial-builds.nodejs.org publishes genuine ARMv6 builds for this version too.
+NODE_VERSION="20.9.0"
 
 case "$TARGET" in
   zero-w)
@@ -218,8 +225,30 @@ echo "    native addon compilation for better-sqlite3/@stoprocent/noble under em
 chroot "$ROOT_MNT" "/usr/bin/$QEMU_STATIC_BIN" /bin/bash "/tmp/chroot-provision.sh" \
   "$NODE_TARBALL_URL" "$PNPM_VERSION"
 
+# Prisma publishes no native engine binary for 32-bit ARM ("linux-arm") at all — confirmed via a
+# 404 on both the query-engine and schema-engine. Run `generate`/`migrate deploy` here instead, on
+# this build host's own native architecture (amd64/arm64 — both fully supported by Prisma),
+# directly against the image mounted at $ROOT_MNT. Safe because the schema uses
+# engineType="client": the generated output is pure JS+WASM, so it doesn't matter which machine
+# produced it. `db seed` still has to run inside the chroot below — it loads the ARM-compiled
+# better-sqlite3 native binding via the driver adapter, which this host's Node can't touch.
+APP_DIR_HOST="$ROOT_MNT/home/pi/RePicoBrew"
+echo "==> Generating Prisma client + applying migrations (on build host, not under ARM emulation)..."
+(cd "$APP_DIR_HOST" && node node_modules/prisma/build/index.js generate)
+(cd "$APP_DIR_HOST" && node node_modules/prisma/build/index.js migrate deploy)
+# The two commands above run as this build host's own user (root, inside the builder container),
+# which would otherwise leave the generated client and the new picobrew.db owned by root —
+# unwritable by the `pi` user the app and `db seed` actually run as (both on the Pi and in the
+# chroot below).
+chown -R 1000:1000 "$APP_DIR_HOST"
+
+cp "$SCRIPT_DIR/chroot-finish.sh" "$ROOT_MNT/tmp/chroot-finish.sh"
+chmod 0755 "$ROOT_MNT/tmp/chroot-finish.sh"
+chroot "$ROOT_MNT" "/usr/bin/$QEMU_STATIC_BIN" /bin/bash "/tmp/chroot-finish.sh"
+
 echo "==> Cleaning up build-only artifacts from the image..."
-rm -f "$ROOT_MNT/usr/bin/$QEMU_STATIC_BIN" "$ROOT_MNT/etc/resolv.conf" "$ROOT_MNT/tmp/chroot-provision.sh"
+rm -f "$ROOT_MNT/usr/bin/$QEMU_STATIC_BIN" "$ROOT_MNT/etc/resolv.conf" \
+  "$ROOT_MNT/tmp/chroot-provision.sh" "$ROOT_MNT/tmp/chroot-finish.sh"
 
 cleanup
 trap - EXIT
