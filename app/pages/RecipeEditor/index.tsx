@@ -1,6 +1,7 @@
 import { Form, Link, useNavigate, useNavigation } from 'react-router';
-import { useMemo, useRef, useState, type FC } from 'react';
+import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
+import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -10,7 +11,9 @@ import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
+import type { AiIngredientRow, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
+import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 
@@ -29,6 +32,41 @@ type Row = {
 
 const newId = () => Math.random().toString(36).slice(2);
 const emptyRow = (fields: Partial<Row> = {}): Row => ({ id: newId(), name: '', ...fields });
+
+// Converts an AI Brewmaster ingredient row into the editor's own Row shape, dropping any rows the
+// model left nameless.
+const aiRowsToRows = (items: AiIngredientRow[] | undefined): Row[] =>
+  (items ?? [])
+    .filter((r) => r.name?.trim())
+    .map((r) => ({
+      id: newId(),
+      name: r.name,
+      amount: r.amount,
+      unit: r.unit,
+      color: r.color,
+      aa: r.aa,
+      time: r.time,
+      temp: r.temp,
+      days: r.days,
+      hours: r.hours,
+    }));
+
+// The inverse of aiRowsToRows — used to tell the AI Brewmaster what the editor's current
+// ingredient rows are, for a "tweak this recipe" edit request.
+const rowsToAiRows = (items: Row[]): AiIngredientRow[] =>
+  items
+    .filter((r) => r.name.trim())
+    .map((r) => ({
+      name: r.name,
+      amount: r.amount,
+      unit: r.unit,
+      color: r.color,
+      aa: r.aa,
+      time: r.time,
+      temp: r.temp,
+      days: r.days,
+      hours: r.hours,
+    }));
 
 const GRAIN_PALETTE = ['oklch(0.75 0.1 75)', 'oklch(0.6 0.13 45)', 'oklch(0.5 0.1 35)', 'oklch(0.65 0.12 90)'];
 const HOP_PALETTE = ['oklch(0.75 0.15 145)', 'oklch(0.6 0.14 150)', 'oklch(0.45 0.1 155)', 'oklch(0.68 0.13 135)'];
@@ -199,6 +237,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== 'idle';
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dirty-field highlighting only makes sense against a real "originally loaded" recipe — a
+  // brand-new recipe has no original to diff against, so nothing is ever flagged there.
+  const isEditingExisting = Boolean(recipe) && !readOnly;
 
   const bySection = (section: IngredientSection): Row[] =>
     (recipe?.ingredients ?? [])
@@ -224,8 +265,8 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
 
   const [og, setOg] = useState(recipe?.og ?? 1.05);
   const [ibu, setIbu] = useState(recipe?.ibu ?? 30);
-  const fg = recipe?.fg ?? null;
-  const srm = recipe?.colorSRM ?? null;
+  const [fg, setFg] = useState<number | null>(recipe?.fg ?? null);
+  const [srm, setSrm] = useState<number | null>(recipe?.colorSRM ?? null);
   const abv = fg != null ? Math.max(0, (og - fg) * 131.25) : recipe?.abv ?? 0;
 
   const [batchSize, setBatchSize] = useState(recipe?.batchSize ?? 2.5);
@@ -258,6 +299,141 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
   );
   const [modalOpen, setModalOpen] = useState(false);
   const [machineStepsExpanded, setMachineStepsExpanded] = useState(false);
+
+  // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors setting each field by
+  // hand. Never auto-saves; the user still reviews and hits Save Recipe themselves.
+  const handleAiGenerated = (aiRecipe: ZPackAiRecipe) => {
+    setName(aiRecipe.name);
+    if (aiRecipe.style) {
+      setStyle(aiRecipe.style);
+    }
+    if (aiRecipe.notes) {
+      setNotes(aiRecipe.notes);
+    }
+    setOg(aiRecipe.og);
+    setFg(aiRecipe.fg);
+    setSrm(aiRecipe.colorSRM);
+    setIbu(aiRecipe.ibu);
+    setBatchSize(aiRecipe.batchSize);
+    setMashType(String(aiRecipe.mashType));
+    setBoilTime(aiRecipe.boilTime);
+    setBoilTemp(aiRecipe.boilTemp);
+    setFirstWortHopping(aiRecipe.firstWortHopping);
+    setFermentationType(String(aiRecipe.fermentationType));
+    setYeastName(aiRecipe.yeastName);
+    setYeastAttenuation(aiRecipe.yeastAttenuation);
+    setYeastRangeTemp(aiRecipe.yeastRangeTemp);
+    setYeastPitchTemp(aiRecipe.yeastPitchTemp);
+    setFermentables(aiRowsToRows(aiRecipe.fermentables));
+    const aiMashSteps = aiRowsToRows(aiRecipe.mashSteps);
+    setMashSteps(
+      aiMashSteps.length ? aiMashSteps : [emptyRow({ name: 'Single Step Infusion Mash', temp: 152, time: 60 })],
+    );
+    setHops(aiRowsToRows(aiRecipe.hops));
+    setDryHops(aiRowsToRows(aiRecipe.dryHops));
+    setFermentationSteps(aiRowsToRows(aiRecipe.fermentationSteps));
+    setMachineSteps(aiRecipe.steps.map(machineStepToRow));
+    setMachineStepsExpanded(true);
+  };
+
+  // What the sidekick sends back as "the current recipe" for a "tweak this" edit request — kept
+  // in sync with every field the AI can touch, same shape as a fresh generation returns.
+  const currentAiRecipe: ZPackAiRecipe = useMemo(
+    () => ({
+      name,
+      style,
+      abv,
+      ibu,
+      notes,
+      og,
+      fg: fg ?? 1.01,
+      colorSRM: srm ?? 6,
+      batchSize,
+      boilTime,
+      boilTemp,
+      firstWortHopping,
+      mashType: Number(mashType),
+      fermentationType: Number(fermentationType),
+      yeastName,
+      yeastAttenuation,
+      yeastRangeTemp,
+      yeastPitchTemp,
+      fermentables: rowsToAiRows(fermentables),
+      mashSteps: rowsToAiRows(mashSteps),
+      hops: rowsToAiRows(hops),
+      dryHops: rowsToAiRows(dryHops),
+      fermentationSteps: rowsToAiRows(fermentationSteps),
+      steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+    }),
+    [
+      name,
+      style,
+      abv,
+      ibu,
+      notes,
+      og,
+      fg,
+      srm,
+      batchSize,
+      boilTime,
+      boilTemp,
+      firstWortHopping,
+      mashType,
+      fermentationType,
+      yeastName,
+      yeastAttenuation,
+      yeastRangeTemp,
+      yeastPitchTemp,
+      fermentables,
+      mashSteps,
+      hops,
+      dryHops,
+      fermentationSteps,
+      machineSteps,
+    ],
+  );
+
+  // A brand-new recipe (no `recipe` prop) may have an AI-drafted recipe waiting from the global
+  // sidekick's "create me a new recipe" chat action (see AiBrewmasterModal.tsx / api.ai-chat.ts) —
+  // it stashes the draft in sessionStorage right before navigating here, since a GET navigation has
+  // nowhere else to carry a full recipe payload. Picked up once on mount, same "AI drafts, human
+  // reviews and hits Save" pattern as every other AI entry point into this editor.
+  useEffect(() => {
+    if (recipe) {
+      return;
+    }
+    const raw = sessionStorage.getItem('ai-draft-recipe');
+    if (!raw) {
+      return;
+    }
+    try {
+      const draft = JSON.parse(raw) as { packType?: string; recipe?: ZPackAiRecipe };
+      if (draft.packType === 'zpack' && draft.recipe) {
+        handleAiGenerated(draft.recipe);
+      }
+    } catch {
+      // malformed/foreign draft — ignore rather than half-apply it
+    } finally {
+      sessionStorage.removeItem('ai-draft-recipe');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Publishes this editor's live recipe state to the globally-rendered AI Brewmaster sidekick (see
+  // MainLayout.tsx) so it can drive generate/edit requests for THIS recipe — same contract as when
+  // the sidekick used to be embedded directly here. Not published in read-only mode, matching the
+  // sidekick's old `!readOnly` gate.
+  useRegisterAiRecipeBridge(
+    readOnly
+      ? null
+      : {
+          packType: 'zpack',
+          hasContent: Boolean(name.trim()),
+          recipeLabel: name.trim() || 'New Recipe',
+          currentRecipe: currentAiRecipe,
+          onGenerated: (r) => handleAiGenerated(r as ZPackAiRecipe),
+        },
+  );
 
   const initialSnapshotRef = useRef({
     name,
@@ -475,8 +651,8 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           )}
 
           {!readOnly && (
-            <div className="flex justify-end">
-              <Button type="submit" variant="brand" disabled={blockingErrors || isSubmitting}>
+            <div className="flex justify-end gap-2">
+              <Button type="submit" variant="brand" disabled={hasErrors || isSubmitting}>
                 {isSubmitting ? 'Saving…' : 'Save Recipe'}
               </Button>
             </div>
@@ -519,7 +695,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                         step={0.001}
                         value={og}
                         onChange={(e) => setOg(Number(e.target.value))}
-                        className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(og, recipe?.og ?? 1.05, isEditingExisting),
+                        )}
                       />
                     )
                   }
@@ -529,6 +708,20 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   value={fg != null ? fg.toFixed(3) : '—'}
                   min={recipe?.fgMin?.toFixed(3)}
                   max={recipe?.fgMax?.toFixed(3)}
+                  input={
+                    readOnly ? undefined : (
+                      <Input
+                        type="number"
+                        step={0.001}
+                        value={fg ?? ''}
+                        onChange={(e) => setFg(e.target.value === '' ? null : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(fg, recipe?.fg ?? null, isEditingExisting),
+                        )}
+                      />
+                    )
+                  }
                 />
                 <OverviewStat
                   label="IBU"
@@ -541,7 +734,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                         type="number"
                         value={ibu}
                         onChange={(e) => setIbu(Number(e.target.value))}
-                        className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(ibu, recipe?.ibu ?? 30, isEditingExisting),
+                        )}
                       />
                     )
                   }
@@ -551,6 +747,19 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   value={srm ?? '—'}
                   min={recipe?.srmMin?.toString()}
                   max={recipe?.srmMax?.toString()}
+                  input={
+                    readOnly ? undefined : (
+                      <Input
+                        type="number"
+                        value={srm ?? ''}
+                        onChange={(e) => setSrm(e.target.value === '' ? null : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(srm, recipe?.colorSRM ?? null, isEditingExisting),
+                        )}
+                      />
+                    )
+                  }
                 />
                 <OverviewStat
                   label="ABV %"
@@ -631,7 +840,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 {readOnly ? (
                   <FieldValue>{name}</FieldValue>
                 ) : (
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={dirtyClass(name, recipe?.name ?? '', isEditingExisting)}
+                  />
                 )}
               </div>
               <div className="min-w-[200px] flex-1">
@@ -639,7 +852,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 {readOnly ? (
                   <FieldValue>{style || '—'}</FieldValue>
                 ) : (
-                  <Input value={style} onChange={(e) => setStyle(e.target.value)} />
+                  <Input
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                    className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
+                  />
                 )}
               </div>
             </div>
@@ -648,7 +865,12 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               {readOnly ? (
                 <FieldValue>{notes || '—'}</FieldValue>
               ) : (
-                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-y" />
+                <Textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className={cn('resize-y', dirtyClass(notes, recipe?.notes ?? '', isEditingExisting))}
+                />
               )}
             </div>
           </Card>
@@ -667,7 +889,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     step={0.1}
                     value={batchSize}
                     onChange={(e) => setBatchSize(Number(e.target.value))}
-                    className="font-mono"
+                    className={cn('font-mono', dirtyClass(batchSize, recipe?.batchSize ?? 2.5, isEditingExisting))}
                   />
                 )}
               </div>
@@ -767,7 +989,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     type="number"
                     value={boilTime}
                     onChange={(e) => setBoilTime(Number(e.target.value))}
-                    className="font-mono"
+                    className={cn('font-mono', dirtyClass(boilTime, recipe?.boilTime ?? 60, isEditingExisting))}
                   />
                 )}
               </div>
@@ -780,7 +1002,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     type="number"
                     value={boilTemp}
                     onChange={(e) => setBoilTemp(Number(e.target.value))}
-                    className="font-mono"
+                    className={cn('font-mono', dirtyClass(boilTemp, recipe?.boilTemp ?? 207, isEditingExisting))}
                   />
                 )}
               </div>
@@ -864,7 +1086,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   {readOnly ? (
                     <FieldValue>{yeastName || '—'}</FieldValue>
                   ) : (
-                    <Input value={yeastName} onChange={(e) => setYeastName(e.target.value)} className="text-[13px]" />
+                    <Input
+                      value={yeastName}
+                      onChange={(e) => setYeastName(e.target.value)}
+                      className={cn('text-[13px]', dirtyClass(yeastName, recipe?.yeastName ?? '', isEditingExisting))}
+                    />
                   )}
                 </div>
                 <div>
@@ -876,7 +1102,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                       type="number"
                       value={yeastAttenuation}
                       onChange={(e) => setYeastAttenuation(Number(e.target.value))}
-                      className="font-mono text-[13px]"
+                      className={cn(
+                        'font-mono text-[13px]',
+                        dirtyClass(yeastAttenuation, recipe?.yeastAttenuation ?? 75, isEditingExisting),
+                      )}
                     />
                   )}
                 </div>
@@ -888,7 +1117,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     <Input
                       value={yeastRangeTemp}
                       onChange={(e) => setYeastRangeTemp(e.target.value)}
-                      className="font-mono text-[13px]"
+                      className={cn(
+                        'font-mono text-[13px]',
+                        dirtyClass(yeastRangeTemp, recipe?.yeastRangeTemp ?? '', isEditingExisting),
+                      )}
                       placeholder="64 - 82"
                     />
                   )}
@@ -902,7 +1134,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                       type="number"
                       value={yeastPitchTemp}
                       onChange={(e) => setYeastPitchTemp(Number(e.target.value))}
-                      className="font-mono text-[13px]"
+                      className={cn(
+                        'font-mono text-[13px]',
+                        dirtyClass(yeastPitchTemp, recipe?.yeastPitchTemp ?? 65, isEditingExisting),
+                      )}
                     />
                   )}
                 </div>
@@ -977,22 +1212,50 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   <span>Time (min)</span>
                   <span>Drain (min)</span>
                 </div>
-                {machineSteps.map((row, index) => (
-                  <div
-                    key={row.id}
-                    className={cn(
-                      'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
-                      index > 0 && 'border-t border-ink-divider',
-                    )}
-                    style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
-                  >
-                    <p>{row.name}</p>
-                    <p className="text-ink-text-muted">{PicoLocationMap[row.location]}</p>
-                    <p className="font-mono">{row.temperature}</p>
-                    <p className="font-mono">{row.stepTime}</p>
-                    <p className="font-mono">{row.drainTime}</p>
-                  </div>
-                ))}
+                {machineSteps.map((row, index) => {
+                  const originalStep = recipe?.steps?.[index];
+                  return (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
+                        index > 0 && 'border-t border-ink-divider',
+                      )}
+                      style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
+                    >
+                      <p className={dirtyClass(row.name, originalStep?.name, isEditingExisting)}>{row.name}</p>
+                      <p
+                        className={cn(
+                          'text-ink-text-muted',
+                          dirtyClass(row.location, originalStep?.location, isEditingExisting),
+                        )}
+                      >
+                        {PicoLocationMap[row.location]}
+                      </p>
+                      <p
+                        className={cn(
+                          'font-mono',
+                          dirtyClass(row.temperature, originalStep?.temperature, isEditingExisting),
+                        )}
+                      >
+                        {row.temperature}
+                      </p>
+                      <p
+                        className={cn('font-mono', dirtyClass(row.stepTime, originalStep?.stepTime, isEditingExisting))}
+                      >
+                        {row.stepTime}
+                      </p>
+                      <p
+                        className={cn(
+                          'font-mono',
+                          dirtyClass(row.drainTime, originalStep?.drainTime, isEditingExisting),
+                        )}
+                      >
+                        {row.drainTime}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {!readOnly && (

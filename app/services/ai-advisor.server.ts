@@ -1,12 +1,9 @@
 import { AiAdviceRepository, type AiAdviceTrigger } from '~/repositories/ai-advice.server';
-import {
-  AiSettingsRepository,
-  ZEN_BASE_URL,
-  ZEN_GO_BASE_URL,
-  type ResolvedProvider,
-} from '~/repositories/ai-settings.server';
+import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { SessionRepository } from '~/repositories/session.server';
+import { callAiProvider } from '~/services/ai-provider.server';
+import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
 import { BatchPhase, SessionType } from '~/types';
 
@@ -123,99 +120,17 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
 
   const userMessage = [`Phase: ${batch.phase}.`, recipeLines, stageSummary].filter(Boolean).join(' ');
 
+  const basePrompt =
+    'You are an experienced, encouraging homebrew brewmaster embedded in RePicoBrew, a home brewing tracker app. ' +
+    'Given the current stage and telemetry summary for a batch, give concise, specific, actionable advice in 2-4 short ' +
+    'sentences of plain prose (no markdown, no headers, no bullet points — it renders in a small card). Flag genuine ' +
+    "anomalies (stalled fermentation, temperature swings outside a safe range, mash temp off target) but don't invent " +
+    'problems from normal readings — a brief reassurance that things look on track is a perfectly good response.';
+
   return {
-    system:
-      'You are an experienced, encouraging homebrew brewmaster embedded in RePicoBrew, a home brewing tracker app. ' +
-      'Given the current stage and telemetry summary for a batch, give concise, specific, actionable advice in 2-4 short ' +
-      'sentences of plain prose (no markdown, no headers, no bullet points — it renders in a small card). Flag genuine ' +
-      "anomalies (stalled fermentation, temperature swings outside a safe range, mash temp off target) but don't invent " +
-      'problems from normal readings — a brief reassurance that things look on track is a perfectly good response.',
+    system: `${basePrompt}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`,
     user: userMessage,
   };
-}
-
-type ChatCompletionsProvider = Extract<ResolvedProvider, { kind: 'chat-completions' }>;
-type ClaudeProvider = Extract<ResolvedProvider, { kind: 'claude' }>;
-
-// OpenAI, OpenCode Zen, and any self-hosted OpenAI-compatible server (Ollama, LM Studio, vLLM,
-// LocalAI, ...) all speak the same Chat Completions wire format, so one call function covers all
-// three; only the base URL/key/model differ per provider (see AiSettingsRepository.getActiveProvider).
-async function callChatCompletions({
-  baseUrl,
-  apiKey,
-  model,
-  system,
-  user,
-  extraHeaders,
-}: ChatCompletionsProvider & { system: string; user: string; extraHeaders?: Record<string, string> }): Promise<string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extraHeaders };
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-  }
-
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: 800,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    }),
-    signal: AbortSignal.timeout(45000),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`AI provider request failed (${response.status}): ${body.slice(0, 200)}`);
-  }
-
-  const json = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = json.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error('AI provider response had no content');
-  }
-  return content;
-}
-
-// Anthropic's Messages API — a different shape from the OpenAI family: `x-api-key` instead of a
-// Bearer token, a required `anthropic-version` header, `system` as its own top-level field rather
-// than a message, and content returned as an array of blocks instead of `choices[0].message`.
-async function callClaude({
-  apiKey,
-  model,
-  system,
-  user,
-}: ClaudeProvider & { system: string; user: string }): Promise<string> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 800,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
-    signal: AbortSignal.timeout(45000),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Claude request failed (${response.status}): ${body.slice(0, 200)}`);
-  }
-
-  const json = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
-  const content = json.content?.find((block) => block.type === 'text')?.text?.trim();
-  if (!content) {
-    throw new Error('Claude response had no content');
-  }
-  return content;
 }
 
 export async function analyzeBatch(batchId: number, trigger: AiAdviceTrigger): Promise<AnalyzeResult> {
@@ -244,14 +159,7 @@ export async function analyzeBatch(batchId: number, trigger: AiAdviceTrigger): P
     const { system, user } = await buildPrompt(batch);
     // OpenCode's gateway (Zen/Go) routes and prompt-caches by a stable per-conversation session id;
     // without it Go's /chat/completions rejects the request outright (MissingSessionID).
-    const isOpenCodeGateway =
-      provider.kind === 'chat-completions' &&
-      (provider.baseUrl === ZEN_BASE_URL || provider.baseUrl === ZEN_GO_BASE_URL);
-    const extraHeaders = isOpenCodeGateway ? { 'x-opencode-session': `repicobrew-batch-${batchId}` } : undefined;
-    const content =
-      provider.kind === 'claude'
-        ? await callClaude({ ...provider, system, user })
-        : await callChatCompletions({ ...provider, system, user, extraHeaders });
+    const content = await callAiProvider(provider, { system, user, sessionId: `repicobrew-batch-${batchId}` });
     const advice = await AiAdviceRepository.create({
       batchId,
       phase: batch.phase,

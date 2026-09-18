@@ -253,10 +253,11 @@ const ToolbarIconButton: FC<{ icon: IconType; onClick?: () => void; label: strin
 // latest AI advice for that phase and, only while it's the batch's active phase, an Ask AI button.
 const AiAdviceBlock: FC<{
   batchId: number;
+  batchName: string;
   phase: BatchPhase;
   latest: AiAdviceRow | undefined;
   canAsk: boolean;
-}> = ({ batchId, phase, latest, canAsk }) => {
+}> = ({ batchId, batchName, phase, latest, canAsk }) => {
   const fetcher = useFetcher<{ error?: string }>();
   const isPending = fetcher.state !== 'idle';
 
@@ -284,6 +285,9 @@ const AiAdviceBlock: FC<{
           </Button>
         )}
       </div>
+      <span className="w-fit rounded-full border border-ink-divider bg-ink-card px-2 py-[3px] text-[11px] font-semibold text-ink-text-secondary">
+        Session: {batchName}
+      </span>
       {fetcher.data?.error ? <p className="text-xs text-danger-500">{fetcher.data.error}</p> : null}
       {latest ? (
         <>
@@ -752,6 +756,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           {hasAiKey && (
             <AiAdviceBlock
               batchId={batch.id}
+              batchName={batch.name}
               phase={BatchPhase.BREWING}
               latest={latestBrewAdvice}
               canAsk={batch.phase === BatchPhase.BREWING}
@@ -885,6 +890,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
         {hasAiKey && (
           <AiAdviceBlock
             batchId={batch.id}
+            batchName={batch.name}
             phase={BatchPhase.FERMENTING}
             latest={latestFermAdvice}
             canAsk={batch.phase === BatchPhase.FERMENTING}
@@ -963,6 +969,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
         {hasAiKey && (
           <AiAdviceBlock
             batchId={batch.id}
+            batchName={batch.name}
             phase={BatchPhase.FERMENTING}
             latest={latestFermAdvice}
             canAsk={batch.phase === BatchPhase.FERMENTING}

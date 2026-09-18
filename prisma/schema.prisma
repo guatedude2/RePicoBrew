@@ -221,3 +221,28 @@ model DeviceLog {
   time     DateTime @default(now())
   data     String // json
 }
+
+// One thread per scope: exactly one 'general' thread (scopeId null), one per recipe, one per
+// batch/session — the AI Brewmaster's conversation history persists here instead of resetting
+// whenever the sidekick panel closes or the user navigates away and back.
+model AiChatThread {
+  id        Int      @id @default(autoincrement())
+  scope     String // general | recipe | session
+  scopeId   Int? // Recipe.id or Batch.id; null for the single 'general' thread
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  messages AiChatMessage[]
+
+  @@unique([scope, scopeId])
+}
+
+model AiChatMessage {
+  id        Int      @id @default(autoincrement())
+  threadId  Int
+  thread    AiChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String // user | assistant
+  content   String // the display text (user's message, or the AI's explanation/reply)
+  metadata  String? // JSON: e.g. { recipeSnapshot, action } — structured extras beyond the text
+  createdAt DateTime @default(now())
+}

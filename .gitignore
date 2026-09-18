@@ -13,3 +13,8 @@ public/_proto*
 prisma/*.db-journal
 prisma/*.db-wal
 prisma/*.db-shm
+
+# pi-image build scratch space: downloaded base images (hundreds of MB) and in-progress/output
+# .img files (multiple GB) — never meant to be committed, see pi-image/README.md.
+/pi-image/cache
+/pi-image/work

@@ -1,0 +1,212 @@
+import { AiSettingsRepository } from '~/repositories/ai-settings.server';
+import { DeviceRepository } from '~/repositories/device.server';
+import { RecipeRepository } from '~/repositories/recipe.server';
+import { callAiProvider } from '~/services/ai-provider.server';
+import {
+  generatePicoPackRecipe,
+  generateZPackRecipe,
+  type PackKind,
+  type PicoPackAiRecipe,
+  type ZPackAiRecipe,
+} from '~/services/ai-recipe-generator.server';
+import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
+import { DeviceType } from '~/types';
+
+// Powers the AI Brewmaster sidekick's open-ended chat on every page that ISN'T a specific recipe
+// or session (see app/routes/api.ai-chat.ts) — general homebrewing conversation, plus two concrete
+// actions the model can request when the user clearly asks for them: drafting a brand-new recipe,
+// or starting a new brew session. Both actions follow the same "AI drafts, human confirms" pattern
+// as the recipe editor's own sidekick — this never creates a Recipe or Session/Batch row itself,
+// it only tells the client which pre-filled flow to navigate to.
+//
+// This is two chained single-shot prompts, not an agent loop: one small classification/reply call
+// decides WHETHER the user wants a drafted recipe, and if so, hands the actual drafting off to the
+// existing generatePicoPackRecipe/generateZPackRecipe calls (same prompts/few-shots/normalization
+// the recipe editor's sidekick already uses) rather than re-deriving recipe-generation quality
+// here. Keeping that concern separate avoids bloating every plain "how do I clean my machine"
+// message with the recipe generator's large few-shot system prompt.
+
+export type AiChatAction =
+  | { type: 'navigate'; to: string; draftRecipe: { packType: PackKind; recipe: PicoPackAiRecipe | ZPackAiRecipe } }
+  | { type: 'navigate'; to: string; draftSession: { deviceId: number; recipeId: number } };
+
+export type AiChatResult =
+  | { success: true; reply: string; action: AiChatAction | null }
+  | { success: false; error: string };
+
+const GENERAL_PERSONA =
+  'You are "AI Brewmaster", a friendly, knowledgeable homebrewing assistant embedded in RePicoBrew, a home-brewing ' +
+  'tracker/control app for PicoBrew machines (Pico, Zymatic, Z Series) plus Tilt/PicoFerm sensors. Chat naturally ' +
+  'about brewing, troubleshooting, and using the app. Keep replies short and practical — at most 3-4 sentences of ' +
+  'plain prose, no markdown, no headers, no bullet points.';
+
+const ACTIONS_INSTRUCTIONS = `You can also trigger two concrete actions when the user clearly asks for them — never
+volunteer them unprompted:
+
+1. Drafting a brand-new recipe (e.g. "create me a new recipe", "draft a hoppy IPA"): set "action" to
+   {"type":"draft_recipe","packType":"picopack"|"zpack","brief":"<short restatement of what beer to draft>"}.
+   Default to "zpack" (the full brew-science format) unless the user asks for something simple/steps-only, which
+   means "picopack". Do NOT invent the actual recipe yourself here — a separate step drafts it from your "brief".
+   Your "reply" should just briefly acknowledge what you're about to draft (e.g. "Drafting a hoppy citrus IPA for
+   you to review.").
+
+2. Starting a new brew session (e.g. "start a new session on the kitchen Pico", "let's brew the Mosaic pale ale"):
+   figure out which device and which recipe the user means from the lists below (match by name, loosely — "the
+   kitchen Pico" can match a device just named "Kitchen"). If BOTH are clear, set "action" to
+   {"type":"start_session","deviceId":<id>,"recipeId":<id>}. If either is missing or ambiguous, do NOT guess —
+   set "action" to null and ask a specific clarifying question in "reply" naming the real options.
+
+Known brewing devices (id: name (type)):
+{{DEVICES}}
+
+Known recipes (id: name (style)):
+{{RECIPES}}`;
+
+const NO_ACTIONS_INSTRUCTIONS =
+  'You cannot draft recipes or start sessions from here — "action" must always be null. If the user asks for ' +
+  'either, tell them to use the AI Brewmaster from the Dashboard or another general page instead.';
+
+function jsonOnlyInstruction(): string {
+  return (
+    'Respond with ONLY a single JSON object of the exact shape { "reply": "...", "action": null | {...} } — no ' +
+    'markdown code fences, no text before or after the JSON.'
+  );
+}
+
+function buildSystemPrompt(allowActions: boolean, deviceLines: string, recipeLines: string): string {
+  const capabilities = allowActions
+    ? ACTIONS_INSTRUCTIONS.replace('{{DEVICES}}', deviceLines || '(none registered yet)').replace(
+        '{{RECIPES}}',
+        recipeLines || '(none saved yet)',
+      )
+    : NO_ACTIONS_INSTRUCTIONS;
+  return `${GENERAL_PERSONA}\n\n${capabilities}\n\n${jsonOnlyInstruction()}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`;
+}
+
+// Mirrors ai-recipe-generator.server.ts's own parseJsonResponse — models occasionally wrap JSON in
+// a markdown fence or add a sentence of prose around it, so this is untrusted output that needs
+// defensive extraction rather than a bare JSON.parse.
+function parseJsonResponse(raw: string): Record<string, unknown> | null {
+  let text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) {
+    text = fenced[1].trim();
+  }
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    return null;
+  }
+  text = text.slice(firstBrace, lastBrace + 1);
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+const FALLBACK_REPLY = "Sorry, I didn't quite catch that — could you rephrase?";
+
+type RawAction = { type?: unknown; packType?: unknown; brief?: unknown; deviceId?: unknown; recipeId?: unknown };
+
+export async function runGeneralChat(input: {
+  message: string;
+  allowActions: boolean;
+  batchContext?: string;
+}): Promise<AiChatResult> {
+  const message = input.message.trim();
+  if (!message) {
+    return { success: false, error: 'Say something first.' };
+  }
+  if (message.length > 2000) {
+    return { success: false, error: 'That message is too long — try to keep it under 2000 characters.' };
+  }
+
+  const provider = await AiSettingsRepository.getActiveProvider();
+  if (!provider) {
+    return { success: false, error: 'No AI provider is configured. Add one in Settings → AI.' };
+  }
+
+  // Only worth the extra queries when the model can actually act on the answer.
+  const [devices, recipes] = input.allowActions
+    ? await Promise.all([DeviceRepository.listDevices(), RecipeRepository.getAllRecipes()])
+    : [[], []];
+  const brewDevices = devices.filter((d) => d.deviceType !== DeviceType.TILT);
+  const deviceLines = brewDevices
+    .slice(0, 30)
+    .map((d) => `${d.id}: ${d.name} (${d.deviceType})`)
+    .join('\n');
+  const recipeLines = recipes
+    .slice(0, 30)
+    .map((r) => `${r.id}: ${r.name} (${r.style || 'Unspecified style'})`)
+    .join('\n');
+
+  const system = buildSystemPrompt(input.allowActions, deviceLines, recipeLines);
+  const user = input.batchContext ? `Context: ${input.batchContext}\n\n${message}` : message;
+
+  let raw: string;
+  try {
+    raw = await callAiProvider(provider, {
+      system,
+      user,
+      maxTokens: 600,
+      sessionId: 'repicobrew-general-chat',
+    });
+  } catch (error) {
+    console.error('[ai-chat-assistant] request failed', error);
+    return { success: false, error: 'The AI request failed. Try again in a moment.' };
+  }
+
+  const parsed = parseJsonResponse(raw);
+  const replyText = parsed && typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : null;
+  const rawAction = parsed && parsed.action && typeof parsed.action === 'object' ? (parsed.action as RawAction) : null;
+
+  if (!parsed || (!replyText && !rawAction)) {
+    console.error('[ai-chat-assistant] could not parse AI response as JSON', raw.slice(0, 500));
+    return { success: false, error: 'The AI response could not be understood. Try rephrasing your message.' };
+  }
+
+  if (!input.allowActions || !rawAction) {
+    return { success: true, reply: replyText ?? FALLBACK_REPLY, action: null };
+  }
+
+  if (rawAction.type === 'draft_recipe') {
+    const packType: PackKind = rawAction.packType === 'picopack' ? 'picopack' : 'zpack';
+    const brief = typeof rawAction.brief === 'string' && rawAction.brief.trim() ? rawAction.brief.trim() : message;
+    const genResult = packType === 'zpack' ? await generateZPackRecipe(brief) : await generatePicoPackRecipe(brief);
+    if (!genResult.success) {
+      return { success: true, reply: `${replyText ?? ''} ${genResult.error}`.trim(), action: null };
+    }
+    const to = packType === 'zpack' ? '/recipes/new' : '/recipes/new-picopack';
+    return {
+      success: true,
+      reply: [replyText, genResult.explanation].filter(Boolean).join(' ').trim() || genResult.explanation,
+      action: { type: 'navigate', to, draftRecipe: { packType, recipe: genResult.recipe } },
+    };
+  }
+
+  if (rawAction.type === 'start_session') {
+    const deviceId = Number(rawAction.deviceId);
+    const recipeId = Number(rawAction.recipeId);
+    const deviceValid = brewDevices.some((d) => d.id === deviceId);
+    const recipeValid = recipes.some((r) => r.id === recipeId);
+    if (!deviceValid || !recipeValid) {
+      // The model claimed a match that doesn't actually exist in our lists — never trust that
+      // enough to navigate the user into a broken pre-fill; fall back to asking again instead of
+      // repeating a reply that implied the (invalid) action would happen.
+      return {
+        success: true,
+        reply: 'I need a valid device and recipe to start a session — which of your devices and recipes did you mean?',
+        action: null,
+      };
+    }
+    return {
+      success: true,
+      reply: replyText ?? FALLBACK_REPLY,
+      action: { type: 'navigate', to: '/sessions/new', draftSession: { deviceId, recipeId } },
+    };
+  }
+
+  return { success: true, reply: replyText ?? FALLBACK_REPLY, action: null };
+}

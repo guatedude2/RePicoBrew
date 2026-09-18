@@ -1,13 +1,16 @@
 import { Form, Link, useNavigate, useNavigation } from 'react-router';
-import { useMemo, useRef, useState, type FC } from 'react';
+import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
+import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
+import type { PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { PicoLocationMap, RecipePackType } from '~/types';
+import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 
 const newId = () => Math.random().toString(36).slice(2);
@@ -64,6 +67,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== 'idle';
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dirty-field highlighting only makes sense against a real "originally loaded" recipe — a
+  // brand-new recipe has no original to diff against, so nothing is ever flagged there.
+  const isEditingExisting = Boolean(recipe) && !readOnly;
 
   const [name, setName] = useState(recipe?.name ?? '');
   const [style, setStyle] = useState(recipe?.style ?? '');
@@ -78,6 +84,107 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   );
   const [modalOpen, setModalOpen] = useState(false);
   const [stepsExpanded, setStepsExpanded] = useState(true);
+
+  // What the form looked like on mount — for a new recipe that's the blank defaults, for an
+  // existing one it's what was loaded. Diffing against this (rather than validating from the
+  // very first render) is what lets an empty "Recipe name is required" stay quiet until the user
+  // has actually started filling the form in.
+  const initialSnapshot = useRef(
+    JSON.stringify({
+      name: recipe?.name ?? '',
+      style: recipe?.style ?? '',
+      notes: recipe?.notes ?? '',
+      abv: recipe?.abv ?? 5,
+      ibu: recipe?.ibu ?? 30,
+      steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
+        ({ id: _id, ...rest }) => rest,
+      ),
+    }),
+  ).current;
+  const isDirty = useMemo(
+    () =>
+      JSON.stringify({
+        name,
+        style,
+        notes,
+        abv,
+        ibu,
+        steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+      }) !== initialSnapshot,
+    [name, style, notes, abv, ibu, machineSteps, initialSnapshot],
+  );
+
+  // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors how a manual edit would
+  // set each field. Never auto-saves; the user still reviews and hits Save Recipe themselves.
+  const handleAiGenerated = (aiRecipe: PicoPackAiRecipe) => {
+    setName(aiRecipe.name);
+    if (aiRecipe.style) {
+      setStyle(aiRecipe.style);
+    }
+    if (aiRecipe.notes) {
+      setNotes(aiRecipe.notes);
+    }
+    setAbv(aiRecipe.abv);
+    setIbu(aiRecipe.ibu);
+    setMachineSteps(aiRecipe.steps.map(machineStepToRow));
+    setStepsExpanded(true);
+  };
+
+  // What the sidekick sends back as "the current recipe" for a "tweak this" edit request — kept
+  // in sync with every field the AI can touch, same shape as a fresh generation returns.
+  const currentAiRecipe: PicoPackAiRecipe = useMemo(
+    () => ({
+      name,
+      style,
+      abv,
+      ibu,
+      notes,
+      steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+    }),
+    [name, style, abv, ibu, notes, machineSteps],
+  );
+
+  // A brand-new recipe (no `recipe` prop) may have an AI-drafted recipe waiting from the global
+  // sidekick's "create me a new recipe" chat action (see AiBrewmasterModal.tsx / api.ai-chat.ts) —
+  // it stashes the draft in sessionStorage right before navigating here, since a GET navigation has
+  // nowhere else to carry a full recipe payload. Picked up once on mount, same "AI drafts, human
+  // reviews and hits Save" pattern as every other AI entry point into this editor.
+  useEffect(() => {
+    if (recipe) {
+      return;
+    }
+    const raw = sessionStorage.getItem('ai-draft-recipe');
+    if (!raw) {
+      return;
+    }
+    try {
+      const draft = JSON.parse(raw) as { packType?: string; recipe?: PicoPackAiRecipe };
+      if (draft.packType === 'picopack' && draft.recipe) {
+        handleAiGenerated(draft.recipe);
+      }
+    } catch {
+      // malformed/foreign draft — ignore rather than half-apply it
+    } finally {
+      sessionStorage.removeItem('ai-draft-recipe');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Publishes this editor's live recipe state to the globally-rendered AI Brewmaster sidekick (see
+  // MainLayout.tsx) so it can drive generate/edit requests for THIS recipe — same contract as when
+  // the sidekick used to be embedded directly here. Not published in read-only mode, matching the
+  // sidekick's old `!readOnly` gate.
+  useRegisterAiRecipeBridge(
+    readOnly
+      ? null
+      : {
+          packType: 'picopack',
+          hasContent: Boolean(name.trim()),
+          recipeLabel: name.trim() || 'New Recipe',
+          currentRecipe: currentAiRecipe,
+          onGenerated: (r) => handleAiGenerated(r as PicoPackAiRecipe),
+        },
+  );
 
   const machineValidation = useMemo(
     () => validatePicoRecipe(machineSteps.map(({ id: _id, ...rest }) => rest)),
@@ -158,7 +265,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         )}
 
         <div className="flex max-w-[720px] flex-col gap-4">
-          {hasErrors && !readOnly && (
+          {hasErrors && !readOnly && isDirty && (
             <div className="flex flex-col gap-1.5 rounded-[10px] border border-danger-500 bg-danger-100 p-3.5">
               <div className="flex items-center gap-2 text-[13px] font-bold text-danger-500">
                 <MdError className="size-[15px]" />
@@ -173,7 +280,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
           )}
 
           {!readOnly && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
               <Button type="submit" variant="brand" disabled={hasErrors || isSubmitting}>
                 {isSubmitting ? 'Saving…' : 'Save Recipe'}
               </Button>
@@ -208,11 +315,21 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                 <div className="flex flex-wrap gap-3.5">
                   <div className="min-w-[200px] flex-1">
                     <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Recipe Name *</p>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plinius Maximus DIPA" />
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Plinius Maximus DIPA"
+                      className={dirtyClass(name, recipe?.name ?? '', isEditingExisting)}
+                    />
                   </div>
                   <div className="min-w-[200px] flex-1">
                     <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Style</p>
-                    <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Double IPA" />
+                    <Input
+                      value={style}
+                      onChange={(e) => setStyle(e.target.value)}
+                      placeholder="Double IPA"
+                      className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
+                    />
                   </div>
                 </div>
               )}
@@ -227,7 +344,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                       step={0.1}
                       value={abv}
                       onChange={(e) => setAbv(Number(e.target.value))}
-                      className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                      className={cn(
+                        'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                        dirtyClass(abv, recipe?.abv ?? 5, isEditingExisting),
+                      )}
                     />
                   )}
                 </div>
@@ -240,7 +360,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                       type="number"
                       value={ibu}
                       onChange={(e) => setIbu(Number(e.target.value))}
-                      className="mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold"
+                      className={cn(
+                        'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                        dirtyClass(ibu, recipe?.ibu ?? 30, isEditingExisting),
+                      )}
                     />
                   )}
                 </div>
@@ -259,7 +382,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
             {readOnly ? (
               <p className="text-sm text-ink-text-secondary">{notes || '—'}</p>
             ) : (
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className={dirtyClass(notes, recipe?.notes ?? '', isEditingExisting)}
+              />
             )}
           </Card>
 
@@ -294,22 +422,50 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   <span>Time (min)</span>
                   <span>Drain (min)</span>
                 </div>
-                {machineSteps.map((row, index) => (
-                  <div
-                    key={row.id}
-                    className={cn(
-                      'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
-                      index > 0 && 'border-t border-ink-divider',
-                    )}
-                    style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
-                  >
-                    <p>{row.name}</p>
-                    <p className="text-ink-text-muted">{PicoLocationMap[row.location]}</p>
-                    <p className="font-mono">{row.temperature}</p>
-                    <p className="font-mono">{row.stepTime}</p>
-                    <p className="font-mono">{row.drainTime}</p>
-                  </div>
-                ))}
+                {machineSteps.map((row, index) => {
+                  const originalStep = recipe?.steps?.[index];
+                  return (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        'grid items-center gap-2.5 px-3.5 py-[9px] text-[13px]',
+                        index > 0 && 'border-t border-ink-divider',
+                      )}
+                      style={{ gridTemplateColumns: '1.7fr 1fr 0.8fr 0.8fr 0.8fr' }}
+                    >
+                      <p className={dirtyClass(row.name, originalStep?.name, isEditingExisting)}>{row.name}</p>
+                      <p
+                        className={cn(
+                          'text-ink-text-muted',
+                          dirtyClass(row.location, originalStep?.location, isEditingExisting),
+                        )}
+                      >
+                        {PicoLocationMap[row.location]}
+                      </p>
+                      <p
+                        className={cn(
+                          'font-mono',
+                          dirtyClass(row.temperature, originalStep?.temperature, isEditingExisting),
+                        )}
+                      >
+                        {row.temperature}
+                      </p>
+                      <p
+                        className={cn('font-mono', dirtyClass(row.stepTime, originalStep?.stepTime, isEditingExisting))}
+                      >
+                        {row.stepTime}
+                      </p>
+                      <p
+                        className={cn(
+                          'font-mono',
+                          dirtyClass(row.drainTime, originalStep?.drainTime, isEditingExisting),
+                        )}
+                      >
+                        {row.drainTime}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {!readOnly && (

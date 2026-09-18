@@ -1,6 +1,6 @@
 [Unit]
 Description=RePicoBrew Server
-Documentation=https://github.com/yourrepo/RePicoBrew
+Documentation=https://github.com/guatedude2/RePicoBrew
 After=network.target
 
 [Service]
@@ -10,7 +10,10 @@ Group=pi
 WorkingDirectory=/home/pi/RePicoBrew
 Environment="NODE_ENV=production"
 Environment="PORT=8080"
-ExecStart=/usr/bin/pnpm start
+# /usr/bin/env, not a hardcoded path: DEPLOY_PI.md's manual NodeSource install puts pnpm at
+# /usr/bin, pi-image/chroot-provision.sh's tarball install puts it at /usr/local/bin — systemd's
+# default PATH covers both, searching it at runtime works for either provisioning method.
+ExecStart=/usr/bin/env pnpm start
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

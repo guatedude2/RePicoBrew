@@ -17,11 +17,15 @@ const HARD_DELETE_MODELS: Prisma.ModelName[] = [
   // column exists on either model.
   'RecipeStep',
   'RecipeIngredient',
+  // AI Brewmaster chat log — no `deletedAt` column on either model; threads/messages aren't
+  // soft-deletable (there's no UI concept of "trash" for a chat history).
+  'AiChatThread',
+  'AiChatMessage',
 ];
 // Bumped for the Prisma 6 + driver-adapter migration (no more native query-engine binary — see
 // pi-image/README.md, which is why this changed): forces the dev singleton below to rebuild.
 // Bump again whenever HARD_DELETE_MODELS changes, since the extension closes over it.
-const PRISMA_CLIENT_GEN = 6;
+const PRISMA_CLIENT_GEN = 7;
 const sqliteUrl = `file:${join(process.cwd(), 'prisma', 'picobrew.db')}`;
 
 function isStaleSqliteError(error: unknown) {

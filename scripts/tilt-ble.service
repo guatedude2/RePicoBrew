@@ -8,8 +8,12 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi/RePicoBrew
 Environment="NODE_ENV=production"
-Environment="PATH=/home/pi/.local/share/pnpm:/home/pi/.nvm/versions/node/v18.16.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/usr/bin/node --loader tsx workers/tilt-ble.ts
+# Explicit PATH (systemd's own default already covers this, but --loader requires it before the
+# absolute-path exec below) plus /usr/bin/env: NodeSource's manual install (DEPLOY_PI.md) puts
+# node at /usr/bin, pi-image/chroot-provision.sh's tarball install puts it at /usr/local/bin — not
+# a per-user nvm install, which would silently stop working on any Node upgrade either way.
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/usr/bin/env node --loader tsx workers/tilt-ble.ts
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

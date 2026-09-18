@@ -7,10 +7,15 @@ const wrapPubSubSignal = <T = unknown>(
   options: { topic: string; eventName?: string; middleware?: (data: T) => T | Promise<T> },
 ) => {
   const onEvent = async (data: unknown) => {
-    console.log('PUB');
     const typed = data as T;
     const payload = options.middleware ? await options.middleware(typed) : typed;
-    response.send(options.eventName ?? options.topic, payload);
+    try {
+      await response.send(options.eventName ?? options.topic, payload);
+    } catch {
+      // Client already disconnected (closed tab, navigation, ...) and the abort listener hasn't
+      // unsubscribed this listener yet — writing to a closed stream rejects; nothing to do but
+      // drop it, since an unhandled rejection here previously took down the whole process.
+    }
   };
   const subId = pubsub.subscribe(options.topic, onEvent);
   response.signal.addEventListener('abort', () => {

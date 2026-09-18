@@ -1,5 +1,7 @@
-import { Outlet } from 'react-router';
+import { Outlet, useRouteLoaderData } from 'react-router';
 import { ToastProvider, createToast } from '~/components/Toasts/ToastProvider';
+import { AiBrewmasterSidekick } from '~/components/recipes/AiBrewmasterModal';
+import { AiSidekickProvider } from '~/components/recipes/AiSidekickContext';
 import { Sidebar } from '~/components/sidebar/Sidebar';
 import { Topbar } from '~/components/navbar/Topbar';
 import { TooltipProvider } from '~/components/ui/tooltip';
@@ -32,19 +34,27 @@ export const MainLayout = () => {
     });
   });
 
+  // Rendered once here (rather than per-page, as it used to be inside the two recipe editors) so
+  // the AI Brewmaster sidekick FAB is available everywhere — AiSidekickProvider lets whichever
+  // recipe editor is currently mounted (if any) hand it live recipe state; see AiSidekickContext.tsx.
+  const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
+
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex min-h-screen w-full bg-ink-bg">
-        <Sidebar routes={nav} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar routes={nav} />
-          <ToastProvider>
-            <div className="flex flex-col gap-[22px] px-4 pb-12 pt-7 md:px-8">
-              <Outlet />
-            </div>
-          </ToastProvider>
+      <AiSidekickProvider>
+        <div className="flex min-h-screen w-full bg-ink-bg">
+          <Sidebar routes={nav} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Topbar routes={nav} />
+            <ToastProvider>
+              <div className="flex flex-col gap-[22px] px-4 pb-12 pt-7 md:px-8">
+                <Outlet />
+              </div>
+            </ToastProvider>
+          </div>
         </div>
-      </div>
+        {hasAiKey && <AiBrewmasterSidekick />}
+      </AiSidekickProvider>
     </TooltipProvider>
   );
 };

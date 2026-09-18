@@ -1,5 +1,5 @@
 import { Form, useActionData, useNavigate, useNavigation } from 'react-router';
-import { useMemo, useState, type FC } from 'react';
+import { useEffect, useMemo, useState, type FC } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
@@ -62,6 +62,34 @@ export const NewSession: FC<NewSessionProps> = ({ recipes, brewDevices, tiltDevi
   const [fermentDeviceId, setFermentDeviceId] = useState('');
   const [carbMethod, setCarbMethod] = useState('Bottle');
   const [carbDuration, setCarbDuration] = useState(2);
+
+  // The global AI Brewmaster sidekick's "start a new session on <device>" chat action (see
+  // AiBrewmasterModal.tsx / api.ai-chat.ts) stashes its device/recipe pick in sessionStorage right
+  // before navigating here, since a GET navigation has nowhere else to carry it. Picked up once on
+  // mount and pre-selected below — the user still has to review and hit Start Brewing themselves,
+  // same "AI drafts, human confirms" pattern used everywhere else in this feature. Re-validated
+  // against the lists this page actually loaded, in case the AI (or a stale draft) named something
+  // that no longer exists.
+  useEffect(() => {
+    const raw = sessionStorage.getItem('ai-draft-session');
+    if (!raw) {
+      return;
+    }
+    try {
+      const draft = JSON.parse(raw) as { deviceId?: number; recipeId?: number };
+      if (draft.deviceId != null && brewDevices.some((d) => d.id === draft.deviceId)) {
+        setDeviceId(String(draft.deviceId));
+      }
+      if (draft.recipeId != null && recipes.some((r) => r.id === draft.recipeId)) {
+        setRecipeId(String(draft.recipeId));
+      }
+    } catch {
+      // malformed/foreign draft — ignore rather than half-apply it
+    } finally {
+      sessionStorage.removeItem('ai-draft-session');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const recipe = useMemo(() => recipes.find((r) => r.id === Number(recipeId)) ?? null, [recipes, recipeId]);
   const carbUnit = CARB_METHODS.find((m) => m.label === carbMethod)?.unit ?? 'weeks';
