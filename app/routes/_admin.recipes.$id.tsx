@@ -48,14 +48,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   };
 
   await RecipeRepository.updateRecipe(id, input);
-  return redirect('/recipes');
+  return redirect(`/recipes/${id}?mode=view`);
 };
 
 export default function RecipeEditPage() {
   const { recipe, readOnly } = useLoaderData<typeof loader>();
+  // Remount after a save or a view/edit switch so the editors' initial state (and their unsaved-changes
+  // baseline) is rebuilt from the freshly loaded recipe instead of the previous edit session.
+  const editorKey = `${recipe.id}-${recipe.updatedAt}-${readOnly}`;
   if (recipe.packType === RecipePackType.PICOPACK) {
     return (
       <PicoPackEditor
+        key={editorKey}
         recipe={recipe as unknown as PicoPackEditorData}
         deviceType={recipe.deviceType}
         readOnly={readOnly}
@@ -63,6 +67,11 @@ export default function RecipeEditPage() {
     );
   }
   return (
-    <RecipeEditor recipe={recipe as unknown as RecipeEditorData} deviceType={recipe.deviceType} readOnly={readOnly} />
+    <RecipeEditor
+      key={editorKey}
+      recipe={recipe as unknown as RecipeEditorData}
+      deviceType={recipe.deviceType}
+      readOnly={readOnly}
+    />
   );
 }

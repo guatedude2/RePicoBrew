@@ -16,8 +16,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     photoUrl,
   };
 
-  await RecipeRepository.createRecipe(input);
-  return redirect('/recipes');
+  const recipe = await RecipeRepository.createRecipe(input);
+  return redirect(`/recipes/${recipe.id}?mode=view`);
 };
 
 export default function RecipeNewPicoPackPage() {

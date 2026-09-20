@@ -18,6 +18,8 @@ import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 
+const RECIPE_FORM_ID = 'recipe-form';
+
 type Row = {
   id: string;
   name: string;
@@ -598,7 +600,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
   const hasUnsavedChanges = !readOnly && JSON.stringify(payload) !== initialPayloadJson.current;
 
   const FormWrapper = readOnly ? 'div' : Form;
-  const formWrapperProps = readOnly ? {} : { method: 'post' as const, encType: 'multipart/form-data' as const };
+  const formWrapperProps = readOnly
+    ? {}
+    : { id: RECIPE_FORM_ID, method: 'post' as const, encType: 'multipart/form-data' as const };
 
   return (
     <>
@@ -622,6 +626,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               Edit Recipe
             </Button>
           </Link>
+        )}
+        {!readOnly && (
+          <Button type="submit" form={RECIPE_FORM_ID} variant="brand" size="sm" disabled={hasErrors || isSubmitting}>
+            {isSubmitting ? 'Saving…' : 'Save Recipe'}
+          </Button>
         )}
       </div>
 
@@ -657,14 +666,6 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   {err}
                 </p>
               ))}
-            </div>
-          )}
-
-          {!readOnly && (
-            <div className="flex justify-end gap-2">
-              <Button type="submit" variant="brand" disabled={hasErrors || isSubmitting}>
-                {isSubmitting ? 'Saving…' : 'Save Recipe'}
-              </Button>
             </div>
           )}
 
