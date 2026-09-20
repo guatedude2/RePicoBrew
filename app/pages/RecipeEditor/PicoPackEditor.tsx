@@ -10,7 +10,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
-import type { PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
+import type { AiIngredientRow, PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
@@ -28,6 +28,8 @@ const pakRowsFor = (ingredients: RecipeEditorIngredient[] | undefined, section: 
   (ingredients ?? [])
     .filter((i) => i.section === section)
     .map((i) => ({ id: newId(), name: i.name, amount: i.amount ?? undefined, aa: i.aa ?? undefined }));
+
+const aiRowToPakRow = (r: AiIngredientRow): PakRow => ({ id: newId(), name: r.name, amount: r.amount, aa: r.aa });
 
 const pakRowsToIngredients = (rows: PakRow[], section: IngredientSection): RecipeEditorIngredient[] =>
   rows
@@ -174,6 +176,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
     setAbv(aiRecipe.abv);
     setIbu(aiRecipe.ibu);
     setMachineSteps(aiRecipe.steps.map(machineStepToRow));
+    if (aiRecipe.grains) {
+      setGrains(aiRecipe.grains.map(aiRowToPakRow));
+    }
+    if (aiRecipe.hops) {
+      setHops(aiRecipe.hops.map(aiRowToPakRow));
+    }
     setStepsExpanded(true);
   };
 
@@ -187,8 +195,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       ibu,
       notes,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+      grains: grains.map(({ id: _id, ...rest }) => rest),
+      hops: hops.map(({ id: _id, ...rest }) => rest),
     }),
-    [name, style, abv, ibu, notes, machineSteps],
+    [name, style, abv, ibu, notes, machineSteps, grains, hops],
   );
 
   // A brand-new recipe (no `recipe` prop) may have an AI-drafted recipe waiting from the global

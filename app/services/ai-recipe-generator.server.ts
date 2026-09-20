@@ -42,6 +42,10 @@ export type PicoPackAiRecipe = {
   ibu: number;
   notes: string;
   steps: PicoRecipeStep[];
+  // What to load into the physical pak (grain in ounces; hops in ounces with AA%). Optional so a
+  // response that leaves them out doesn't wipe the ones already in the editor.
+  grains?: AiIngredientRow[];
+  hops?: AiIngredientRow[];
 };
 
 export type ZPackAiRecipe = PicoPackAiRecipe & {
@@ -101,6 +105,17 @@ JSON response:
     "abv": 5,
     "ibu": 7,
     "notes": "Full-bodied imperial stout with a roasty backbone. Four late hop additions keep bitterness gentle relative to the malt weight.",
+    "grains": [
+      { "name": "Pale Malt", "amount": 30 },
+      { "name": "Roasted Barley", "amount": 6 },
+      { "name": "Chocolate Malt", "amount": 4 }
+    ],
+    "hops": [
+      { "name": "Magnum", "amount": 0.4, "aa": 12 },
+      { "name": "East Kent Goldings", "amount": 0.4, "aa": 5 },
+      { "name": "Fuggle", "amount": 0.3, "aa": 4.5 },
+      { "name": "Fuggle", "amount": 0.3, "aa": 4.5 }
+    ],
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
       { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
@@ -254,16 +269,19 @@ type GenerationMode = 'generate' | 'edit';
 function buildPicoPackSystemPrompt(mode: GenerationMode): string {
   return `${PERSONA}
 
-You are drafting or editing a PicoPak recipe: PicoBrew's steps-only format for a fixed 5-liter batch — no
-separate fermentables/hops/yeast lists, just the machine step sequence. Put any ingredient guidance (grain
-bill, hop additions, yeast) into the "notes" field as prose, and encode the actual mash/boil timing in "steps".
+You are drafting or editing a PicoPak recipe: PicoBrew's format for a fixed 5-liter batch, driven by the machine
+step sequence. The "grains" and "hops" lists say what to load into the physical pak: grain goes in the main
+compartment (amounts in OUNCES, roughly 20-60 oz total), and each hop is a separate hop compartment (amounts in
+OUNCES, AA% is the alpha acid percentage) — one entry per hop-addition step in "steps", in the same order, at most
+4. Encode the mash/boil timing in "steps"; yeast guidance goes in "notes".
 
 ${MACHINE_STEP_RULES}
 
 ${mode === 'edit' ? `${EDIT_MODE_RULES}\n\n` : ''}${jsonOnlyInstruction()} Field meanings: "abv" and "ibu" are
 your best numeric estimate for the recipe (not a range). "notes" is AT MOST 2 short sentences covering grain
-bill, hop character, and yeast/fermentation guidance, since there's nowhere else in this format to put it —
-keep it brief, the "steps" array is what matters most. ${explanationFieldMeaning(mode)} ${suggestionsFieldMeaning()}
+bill, hop character, and yeast/fermentation guidance — keep it brief, the "steps", "grains" and "hops" arrays
+are what matter most. ALWAYS return the complete "grains" and "hops" lists, even when editing (copy the ones the
+request doesn't touch unchanged from the current recipe). ${explanationFieldMeaning(mode)} ${suggestionsFieldMeaning()}
 
 Example:
 ${mode === 'edit' ? EDIT_FEWSHOT : PICOPACK_FEWSHOT}
@@ -276,6 +294,8 @@ Required JSON shape:
     "abv": number,
     "ibu": number,
     "notes": string,
+    "grains": [ { "name": string, "amount": number } ],
+    "hops": [ { "name": string, "amount": number, "aa": number } ],
     "steps": [ { "name": string, "temperature": number, "stepTime": number, "drainTime": number, "location": number } ]
   },
   "explanation": string,
@@ -443,6 +463,8 @@ function normalizePicoPackRecipe(parsed: Record<string, unknown>): PicoPackAiRec
     ibu: num(parsed.ibu, 30),
     notes: str(parsed.notes).trim(),
     steps: normalizeMachineSteps(parsed.steps as RawPicoStep[] | undefined),
+    grains: Array.isArray(parsed.grains) ? rows(parsed.grains) : undefined,
+    hops: Array.isArray(parsed.hops) ? rows(parsed.hops) : undefined,
   };
 }
 
