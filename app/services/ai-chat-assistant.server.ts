@@ -198,6 +198,8 @@ export async function runGeneralChat(input: {
       system,
       user,
       maxTokens: 600,
+      // Reasoning models think before answering, and a linked page adds thousands of tokens of input.
+      timeoutMs: 120000,
       sessionId: 'repicobrew-general-chat',
     });
   } catch (error) {
