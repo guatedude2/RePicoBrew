@@ -4,7 +4,7 @@ import { searchWeb, type SearchResult } from '~/services/web-search.server';
 import type { ResolvedProvider } from '~/repositories/ai-settings.server';
 
 // Everything the AI Brewmaster is allowed to treat as "looked up" material for one request: pages the
-// user linked, and — when a search key is configured — pages found by searching for what they named.
+// user linked, and — when a SearXNG instance is configured — pages found by searching for what they named.
 
 export type GatheredReferences = {
   references: FetchedReference[];

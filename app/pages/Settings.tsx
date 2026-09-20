@@ -90,7 +90,7 @@ export const Settings: FC = () => {
     zenSettings,
     customSettings,
     activeProvider,
-    searchConfigured,
+    searchUrl,
     systemInfo,
   } = useLoaderData<typeof import('~/routes/_admin.settings').loader>();
   const adminData = useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin');
@@ -244,7 +244,7 @@ export const Settings: FC = () => {
   const [zenModel, setZenModel] = useState(zenSettings.model);
   const [zenModelOptions, setZenModelOptions] = useState<string[]>([]);
   const searchFetcher = useFetcher<{ error?: string }>();
-  const [searchApiKey, setSearchApiKey] = useState('');
+  const [searchUrlInput, setSearchUrlInput] = useState('');
   const isSearchSaving = searchFetcher.state !== 'idle';
   const zenFetcher = useFetcher<{ error?: string }>();
   const isZenSaving = zenFetcher.state !== 'idle';
@@ -885,26 +885,31 @@ export const Settings: FC = () => {
           <Card className="mt-4 flex flex-col p-6">
             <SectionHeading
               title="Web search"
-              description="Lets the AI Brewmaster look up a named beer or kit online and read the top pages, and cite them, instead of guessing from memory. Uses the Brave Search API — get a free key at brave.com/search/api."
+              description="Lets the AI Brewmaster look up a named beer or kit online, read the top pages and cite them, instead of guessing from memory. Uses a SearXNG instance you run yourself — free, no API key."
             />
-            {searchConfigured ? (
+            {searchUrl ? (
               <ConfiguredRow
-                label="Brave Search API key saved"
+                label={`SearXNG: ${searchUrl}`}
                 disabled={isSearchSaving}
-                onRemove={() => searchFetcher.submit({ intent: 'clearSearchApiKey' }, { method: 'post' })}
+                onRemove={() => searchFetcher.submit({ intent: 'clearSearchUrl' }, { method: 'post' })}
               />
             ) : (
               <div className="flex w-full flex-col gap-3 md:w-3/5">
                 <div>
-                  <FieldLabel htmlFor="search-api-key">Brave Search API key</FieldLabel>
+                  <FieldLabel htmlFor="search-url">SearXNG address</FieldLabel>
                   <Input
-                    id="search-api-key"
-                    type="password"
+                    id="search-url"
+                    inputMode="url"
                     autoComplete="off"
-                    placeholder="BSA…"
-                    value={searchApiKey}
-                    onChange={(event) => setSearchApiKey(event.target.value)}
+                    placeholder="http://192.168.1.50:8888"
+                    value={searchUrlInput}
+                    onChange={(event) => setSearchUrlInput(event.target.value)}
                   />
+                  <p className="mt-1.5 text-xs text-ink-text-faint">
+                    The instance must allow JSON results (add <code>json</code> under <code>search.formats</code> in its
+                    settings.yml) — public instances almost always block that, so run your own, e.g.{' '}
+                    <code>docker run -d -p 8888:8080 searxng/searxng</code>.
+                  </p>
                 </div>
                 {searchFetcher.data?.error ? (
                   <p className="text-xs text-danger-500">{searchFetcher.data.error}</p>
@@ -912,13 +917,12 @@ export const Settings: FC = () => {
                 <Button
                   variant="brand"
                   className="self-start"
-                  disabled={!searchApiKey.trim() || isSearchSaving}
+                  disabled={!searchUrlInput.trim() || isSearchSaving}
                   onClick={() => {
-                    searchFetcher.submit({ intent: 'saveSearchApiKey', apiKey: searchApiKey }, { method: 'post' });
-                    setSearchApiKey('');
+                    searchFetcher.submit({ intent: 'saveSearchUrl', url: searchUrlInput }, { method: 'post' });
                   }}
                 >
-                  {isSearchSaving ? 'Verifying…' : 'Save Key'}
+                  {isSearchSaving ? 'Checking…' : 'Save'}
                 </Button>
               </div>
             )}

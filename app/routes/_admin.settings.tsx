@@ -26,7 +26,7 @@ import {
 import { getSystemInfo } from '~/utils/system-info.server';
 import { checkInternetConnectivity } from '~/utils/wifi.server';
 import { TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
-import { verifySearchKey } from '~/services/web-search.server';
+import { normalizeSearchUrl, verifySearchUrl } from '~/services/web-search.server';
 
 // Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
 // `sudo`, see ~/utils/system-control.server) — restrict them to the same role tier that already
@@ -94,7 +94,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     zenSettings,
     customSettings,
     activeProvider,
-    searchConfigured: await AiSettingsRepository.hasSearchKey(),
+    searchUrl: await AiSettingsRepository.getSearchUrl(),
     systemInfo: getSystemInfo(),
   });
 };
@@ -173,25 +173,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { success: true };
   }
 
-  if (intent === 'saveSearchApiKey') {
-    const apiKey = (formData.get('apiKey') as string)?.trim();
-    if (!apiKey) {
-      return data({ error: 'Missing API key' }, { status: 400 });
-    }
+  if (intent === 'saveSearchUrl') {
+    let baseUrl: string;
     try {
-      await verifySearchKey(apiKey);
+      baseUrl = normalizeSearchUrl((formData.get('url') as string) ?? '');
     } catch (error) {
       return data(
-        { error: error instanceof Error ? error.message : 'Could not verify that API key.' },
+        {
+          error: error instanceof Error && error.message.startsWith('Enter') ? error.message : 'Enter a valid address.',
+        },
         { status: 400 },
       );
     }
-    await AiSettingsRepository.setSearchApiKey(apiKey);
+    try {
+      await verifySearchUrl(baseUrl);
+    } catch (error) {
+      return data(
+        { error: error instanceof Error ? error.message : 'Could not verify that address.' },
+        { status: 400 },
+      );
+    }
+    await AiSettingsRepository.setSearchUrl(baseUrl);
     return { success: true };
   }
 
-  if (intent === 'clearSearchApiKey') {
-    await AiSettingsRepository.clearSearchApiKey();
+  if (intent === 'clearSearchUrl') {
+    await AiSettingsRepository.clearSearchUrl();
     return { success: true };
   }
 
