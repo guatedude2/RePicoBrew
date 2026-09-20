@@ -1,6 +1,11 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { callAiProvider } from '~/services/ai-provider.server';
-import { fetchReferences, type FetchedReference } from '~/services/reference-fetch.server';
+import {
+  gatherReferences,
+  referenceBlock,
+  sourceLinesFor,
+  type GatheredReferences,
+} from '~/services/ai-references.server';
 import { normalizeMachineSteps, type PicoRecipeStep, type RawPicoStep } from '~/utils/pico-recipe-validation';
 
 // AI-powered recipe drafting/editing for the "AI Brewmaster" sidekick in both recipe editors (see
@@ -551,22 +556,6 @@ type RawGenerationResult =
   | { success: true; recipeRaw: Record<string, unknown>; explanation: string; suggestions: string[] }
   | { success: false; error: string };
 
-// Text of any pages the user linked, appended to the request so the model works from the real
-// recipe. Pages that couldn't be read are named too, so the model can't quietly pretend it saw them.
-function referenceBlockFor(references: FetchedReference[]): string {
-  if (references.length === 0) {
-    return '';
-  }
-  const parts = references.map((ref, i) =>
-    'text' in ref
-      ? `[${i + 1}] ${ref.url}\n${ref.text}`
-      : `[${i + 1}] ${ref.url}\n(COULD NOT BE READ: ${ref.error}. Do not claim to have used this page.)`,
-  );
-  return `\n\nReference material (fetched from the links the user gave; treat it as the source of truth and take quantities from it rather than guessing):\n${parts.join(
-    '\n\n',
-  )}`;
-}
-
 // The model's own "sources" list is a claim, and it has no way to look anything up — so it never
 // supplies URLs. Every link shown is one the server can vouch for: a page it actually read, or a web
 // search it built from the model's search phrases (so there is always at least one way to verify).
@@ -580,16 +569,11 @@ function withSources(
   explanation: string,
   modelSources: string[],
   verifyQueries: string[],
-  references: FetchedReference[],
+  gathered: GatheredReferences,
   instructionText: string,
 ): string {
-  const anyRead = references.some((ref) => 'text' in ref);
-  const lines: string[] = [];
-  for (const ref of references) {
-    lines.push(
-      'text' in ref ? `Read: [${ref.url}](${ref.url})` : `Could not read ${ref.url} (${ref.error}) — not used`,
-    );
-  }
+  const anyRead = gathered.references.some((ref) => 'text' in ref);
+  const lines: string[] = sourceLinesFor(gathered);
   // The model's own "Provided reference: <url>" entries would just repeat the server's "Read:" lines.
   lines.push(
     ...modelSources.filter((line) => line && !line.endsWith(':') && !(anyRead && /^provided reference/i.test(line))),
@@ -629,12 +613,12 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
   }
 
   const system = packKind === 'zpack' ? buildZPackSystemPrompt(input.mode) : buildPicoPackSystemPrompt(input.mode);
-  const references = await fetchReferences(instructionText);
+  const gathered = await gatherReferences(provider, instructionText);
   const userBase =
     input.mode === 'generate'
       ? `Draft a recipe for: ${instructionText}`
       : `Current recipe (JSON):\n${JSON.stringify(input.current)}\n\nRequested change: ${instructionText}`;
-  const user = userBase + referenceBlockFor(references);
+  const user = userBase + referenceBlock(gathered);
 
   let raw: string;
   try {
@@ -663,7 +647,7 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
   return {
     success: true,
     recipeRaw,
-    explanation: withSources(explanation, sources, verifyQueries, references, instructionText),
+    explanation: withSources(explanation, sources, verifyQueries, gathered, instructionText),
     suggestions,
   };
 }

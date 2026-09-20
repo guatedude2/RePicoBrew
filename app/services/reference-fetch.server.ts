@@ -98,3 +98,7 @@ async function fetchOne(rawUrl: string): Promise<FetchedReference> {
 export async function fetchReferences(userText: string): Promise<FetchedReference[]> {
   return Promise.all(extractUrls(userText).map(fetchOne));
 }
+
+export async function fetchUrls(urls: string[]): Promise<FetchedReference[]> {
+  return Promise.all(urls.map(fetchOne));
+}

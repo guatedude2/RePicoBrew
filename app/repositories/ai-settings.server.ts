@@ -12,6 +12,7 @@ const CLAUDE_MODEL_CONFIG = 'CLAUDE_MODEL';
 const ZEN_API_KEY_CONFIG = 'OPENCODE_ZEN_API_KEY';
 const ZEN_MODEL_CONFIG = 'OPENCODE_ZEN_MODEL';
 const ZEN_PLAN_CONFIG = 'OPENCODE_ZEN_PLAN';
+const SEARCH_API_KEY_CONFIG = 'BRAVE_SEARCH_API_KEY';
 const CUSTOM_BASE_URL_CONFIG = 'CUSTOM_AI_BASE_URL';
 const CUSTOM_MODEL_CONFIG = 'CUSTOM_AI_MODEL';
 const CUSTOM_API_KEY_CONFIG = 'CUSTOM_AI_API_KEY';
@@ -57,6 +58,25 @@ export type ResolvedProvider =
   | { kind: 'claude'; apiKey: string; model: string };
 
 export class AiSettingsRepository {
+  // ---- Web search (Brave Search API) ----
+  public static async hasSearchKey(): Promise<boolean> {
+    const value = await ConfigRepository.getConfig<EncryptedValue>(SEARCH_API_KEY_CONFIG);
+    return !!value?.encryptedData;
+  }
+
+  public static async setSearchApiKey(plainKey: string): Promise<void> {
+    await ConfigRepository.setConfig<EncryptedValue>(SEARCH_API_KEY_CONFIG, await encryptValue(plainKey));
+  }
+
+  public static async clearSearchApiKey(): Promise<void> {
+    await ConfigRepository.deleteConfig(SEARCH_API_KEY_CONFIG);
+  }
+
+  public static async getSearchApiKeyPlain(): Promise<string | null> {
+    const value = await ConfigRepository.getConfig<EncryptedValue>(SEARCH_API_KEY_CONFIG);
+    return decryptValue(value);
+  }
+
   // ---- OpenAI slot ----
   public static async hasOpenAiKey(): Promise<boolean> {
     const value = await ConfigRepository.getConfig<EncryptedValue>(OPENAI_API_KEY_CONFIG);

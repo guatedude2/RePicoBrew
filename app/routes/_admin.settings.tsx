@@ -26,6 +26,7 @@ import {
 import { getSystemInfo } from '~/utils/system-info.server';
 import { checkInternetConnectivity } from '~/utils/wifi.server';
 import { TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
+import { verifySearchKey } from '~/services/web-search.server';
 
 // Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
 // `sudo`, see ~/utils/system-control.server) — restrict them to the same role tier that already
@@ -93,6 +94,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     zenSettings,
     customSettings,
     activeProvider,
+    searchConfigured: await AiSettingsRepository.hasSearchKey(),
     systemInfo: getSystemInfo(),
   });
 };
@@ -168,6 +170,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'A user with that email already exists' }, { status: 400 });
     }
     await UserRepository.updateUser(id, { name, email, role });
+    return { success: true };
+  }
+
+  if (intent === 'saveSearchApiKey') {
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    if (!apiKey) {
+      return data({ error: 'Missing API key' }, { status: 400 });
+    }
+    try {
+      await verifySearchKey(apiKey);
+    } catch (error) {
+      return data(
+        { error: error instanceof Error ? error.message : 'Could not verify that API key.' },
+        { status: 400 },
+      );
+    }
+    await AiSettingsRepository.setSearchApiKey(apiKey);
+    return { success: true };
+  }
+
+  if (intent === 'clearSearchApiKey') {
+    await AiSettingsRepository.clearSearchApiKey();
     return { success: true };
   }
 

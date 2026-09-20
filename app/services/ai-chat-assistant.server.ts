@@ -9,7 +9,7 @@ import {
   type PicoPackAiRecipe,
   type ZPackAiRecipe,
 } from '~/services/ai-recipe-generator.server';
-import { fetchReferences } from '~/services/reference-fetch.server';
+import { gatherReferences, referenceBlock, sourceLinesFor } from '~/services/ai-references.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import { DeviceType } from '~/types';
 
@@ -179,18 +179,8 @@ export async function runGeneralChat(input: {
     deviceLines,
     recipeLines,
   });
-  const references = await fetchReferences(message);
-  const referenceText =
-    references.length === 0
-      ? ''
-      : `\n\nReference material (fetched from the links the user gave):\n${references
-          .map((ref, i) =>
-            'text' in ref
-              ? `[${i + 1}] ${ref.url}\n${ref.text}`
-              : `[${i + 1}] ${ref.url}\n(COULD NOT BE READ: ${ref.error}. Do not claim to have used this page.)`,
-          )
-          .join('\n\n')}`;
-  const user = (input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message) + referenceText;
+  const gathered = await gatherReferences(provider, message);
+  const user = (input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message) + referenceBlock(gathered);
 
   let raw: string;
   try {
@@ -217,7 +207,10 @@ export async function runGeneralChat(input: {
   }
 
   if (!rawAction) {
-    return { success: true, reply: replyText ?? FALLBACK_REPLY, action: null };
+    const sourceLines = sourceLinesFor(gathered);
+    const reply = replyText ?? FALLBACK_REPLY;
+    const sources = sourceLines.length > 0 ? `\n\n**Sources**\n\n${sourceLines.map((l) => `- ${l}`).join('\n')}` : '';
+    return { success: true, reply: reply + sources, action: null };
   }
 
   if (rawAction.type === 'edit_recipe' && input.editRecipeUrl) {

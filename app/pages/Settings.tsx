@@ -90,6 +90,7 @@ export const Settings: FC = () => {
     zenSettings,
     customSettings,
     activeProvider,
+    searchConfigured,
     systemInfo,
   } = useLoaderData<typeof import('~/routes/_admin.settings').loader>();
   const adminData = useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin');
@@ -242,6 +243,9 @@ export const Settings: FC = () => {
   const [zenPlan, setZenPlan] = useState<'zen' | 'go'>(zenSettings.plan);
   const [zenModel, setZenModel] = useState(zenSettings.model);
   const [zenModelOptions, setZenModelOptions] = useState<string[]>([]);
+  const searchFetcher = useFetcher<{ error?: string }>();
+  const [searchApiKey, setSearchApiKey] = useState('');
+  const isSearchSaving = searchFetcher.state !== 'idle';
   const zenFetcher = useFetcher<{ error?: string }>();
   const isZenSaving = zenFetcher.state !== 'idle';
   const zenModelsFetcher = useFetcher<{ models?: string[]; error?: string }>();
@@ -874,6 +878,48 @@ export const Settings: FC = () => {
                     {isCustomSaving ? 'Saving…' : 'Save Changes'}
                   </Button>
                 )}
+              </div>
+            )}
+          </Card>
+
+          <Card className="mt-4 flex flex-col p-6">
+            <SectionHeading
+              title="Web search"
+              description="Lets the AI Brewmaster look up a named beer or kit online and read the top pages, and cite them, instead of guessing from memory. Uses the Brave Search API — get a free key at brave.com/search/api."
+            />
+            {searchConfigured ? (
+              <ConfiguredRow
+                label="Brave Search API key saved"
+                disabled={isSearchSaving}
+                onRemove={() => searchFetcher.submit({ intent: 'clearSearchApiKey' }, { method: 'post' })}
+              />
+            ) : (
+              <div className="flex w-full flex-col gap-3 md:w-3/5">
+                <div>
+                  <FieldLabel htmlFor="search-api-key">Brave Search API key</FieldLabel>
+                  <Input
+                    id="search-api-key"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="BSA…"
+                    value={searchApiKey}
+                    onChange={(event) => setSearchApiKey(event.target.value)}
+                  />
+                </div>
+                {searchFetcher.data?.error ? (
+                  <p className="text-xs text-danger-500">{searchFetcher.data.error}</p>
+                ) : null}
+                <Button
+                  variant="brand"
+                  className="self-start"
+                  disabled={!searchApiKey.trim() || isSearchSaving}
+                  onClick={() => {
+                    searchFetcher.submit({ intent: 'saveSearchApiKey', apiKey: searchApiKey }, { method: 'post' });
+                    setSearchApiKey('');
+                  }}
+                >
+                  {isSearchSaving ? 'Verifying…' : 'Save Key'}
+                </Button>
               </div>
             )}
           </Card>
