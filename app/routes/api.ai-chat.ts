@@ -76,6 +76,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // DELETE /api/ai-chat?scope=...&scopeId=... — "Clear conversation": wipes that scope's messages.
+  if (request.method === 'DELETE') {
+    const url = new URL(request.url);
+    const clearScope = parseScope(url.searchParams.get('scope'));
+    if (!clearScope) {
+      return data({ error: 'Invalid scope' }, { status: 400 });
+    }
+    const parsed = parseScopeId(clearScope, url.searchParams.get('scopeId'));
+    if (!parsed.ok) {
+      return data({ error: 'Missing scopeId' }, { status: 400 });
+    }
+    await AiChatRepository.clearThread(clearScope, parsed.scopeId);
+    return { success: true };
+  }
+
   if (request.method !== 'POST') {
     return data({ error: 'Method not allowed' }, { status: 405 });
   }

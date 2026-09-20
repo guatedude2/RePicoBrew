@@ -32,6 +32,15 @@ export class AiChatRepository {
     }
   }
 
+  public static async clearThread(scope: AiChatScope, scopeId: number | null) {
+    const thread = await prisma.aiChatThread.findFirst({ where: { scope, scopeId } });
+    if (!thread) {
+      return 0;
+    }
+    const { count } = await prisma.aiChatMessage.deleteMany({ where: { threadId: thread.id } });
+    return count;
+  }
+
   public static async listMessages(threadId: number) {
     return prisma.aiChatMessage.findMany({ where: { threadId }, orderBy: { createdAt: 'asc' } });
   }

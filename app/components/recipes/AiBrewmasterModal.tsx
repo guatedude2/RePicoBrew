@@ -1,7 +1,7 @@
 import { useFetcher, useMatches, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GiHops } from 'react-icons/gi';
-import { MdClose, MdMenuBook, MdSend } from 'react-icons/md';
+import { MdClose, MdDeleteSweep, MdMenuBook, MdSend } from 'react-icons/md';
 import { useAiSidekickBridge } from './AiSidekickContext';
 import { ChatMarkdown } from './ChatMarkdown';
 import type { AiChatAction } from '~/services/ai-chat-assistant.server';
@@ -179,6 +179,8 @@ export function AiBrewmasterSidekick() {
   const [queue, setQueue] = useState<Array<{ id: number; text: string }>>([]);
   const [pendingText, setPendingText] = useState<string | null>(null);
   const nextQueueId = useRef(0);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clearFetcher = useFetcher();
 
   const historyFetcher = useFetcher<HistoryResponse>();
   const actionFetcher = useFetcher<RecipeGenResponse | GeneralChatResponse>();
@@ -194,6 +196,7 @@ export function AiBrewmasterSidekick() {
     setDynamicSuggestions(null);
     setPrompt('');
     setQueue([]);
+    setConfirmingClear(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
 
@@ -295,6 +298,21 @@ export function AiBrewmasterSidekick() {
     return () => clearTimeout(timer);
   }, [isSending, queue]);
 
+  const clearConversation = () => {
+    setConfirmingClear(false);
+    setQueue([]);
+    setDynamicSuggestions(null);
+    clearFetcher.submit(null, { method: 'delete', action: historyUrl(scope, scopeId) });
+  };
+
+  // Reload the (now empty) history once the delete has finished.
+  useEffect(() => {
+    if (clearFetcher.state === 'idle' && clearFetcher.data) {
+      historyFetcher.load(historyUrl(scope, scopeId));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearFetcher.state, clearFetcher.data]);
+
   const handleSubmit = () => submit(prompt);
   const handleChipClick = (example: string) => submit(example);
 
@@ -343,6 +361,16 @@ export function AiBrewmasterSidekick() {
             </div>
             <button
               type="button"
+              onClick={() => setConfirmingClear(true)}
+              disabled={messages.length === 0 || isSending || clearFetcher.state !== 'idle'}
+              className="flex-none text-ink-text-faint transition-colors hover:text-ink-text disabled:pointer-events-none disabled:opacity-30"
+              aria-label="Clear conversation"
+              title="Clear conversation"
+            >
+              <MdDeleteSweep className="size-[18px]" />
+            </button>
+            <button
+              type="button"
               onClick={() => setOpen(false)}
               className="flex-none text-ink-text-faint transition-colors hover:text-ink-text"
               aria-label="Close AI Brewmaster"
@@ -350,6 +378,28 @@ export function AiBrewmasterSidekick() {
               <MdClose className="size-4" />
             </button>
           </div>
+
+          {confirmingClear && (
+            <div className="flex items-center justify-between gap-2 border-b border-ink-divider bg-ink-bg px-4 py-2.5">
+              <p className="text-[12px] text-ink-text-secondary">Clear this conversation?</p>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(false)}
+                  className="rounded-md border border-ink-card-border px-2.5 py-1 text-[11.5px] text-ink-text-secondary hover:text-ink-text"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={clearConversation}
+                  className="rounded-md bg-danger-500 px-2.5 py-1 text-[11.5px] font-semibold text-white"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
             {(bridge || contextLabel) && (
