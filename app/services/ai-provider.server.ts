@@ -10,6 +10,11 @@ type ClaudeProvider = Extract<ResolvedProvider, { kind: 'claude' }>;
 // OpenAI, OpenCode Zen, and any self-hosted OpenAI-compatible server (Ollama, LM Studio, vLLM,
 // LocalAI, ...) all speak the same Chat Completions wire format, so one call function covers all
 // three; only the base URL/key/model differ per provider (see AiSettingsRepository.getActiveProvider).
+// Reasoning models (e.g. Kimi K3 on OpenCode Go) count their hidden thinking against max_tokens, so a
+// budget sized for the visible answer alone is often spent entirely on reasoning and the reply comes
+// back empty (finish_reason "length"). Non-reasoning models only treat this as an upper bound.
+const REASONING_TOKEN_HEADROOM = 4000;
+
 export async function callChatCompletions({
   baseUrl,
   apiKey,
@@ -36,7 +41,7 @@ export async function callChatCompletions({
     headers,
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens,
+      max_tokens: maxTokens + REASONING_TOKEN_HEADROOM,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -50,10 +55,14 @@ export async function callChatCompletions({
     throw new Error(`AI provider request failed (${response.status}): ${body.slice(0, 200)}`);
   }
 
-  const json = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
   const content = json.choices?.[0]?.message?.content?.trim();
   if (!content) {
-    throw new Error('AI provider response had no content');
+    throw new Error(
+      `AI provider response had no content (finish_reason: ${json.choices?.[0]?.finish_reason ?? 'n/a'})`,
+    );
   }
   return content;
 }
