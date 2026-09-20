@@ -19,6 +19,31 @@ export const DEFAULT_ICON_FOR_TYPE: Record<DeviceType, DeviceIconKind> = {
   [DeviceType.TILT]: 'tilt',
 };
 
+const ICON_KINDS: DeviceIconKind[] = [
+  'picoS',
+  'picoC',
+  'picoPro',
+  'zymatic',
+  'zseries',
+  'picoFerm',
+  'ispindel',
+  'tilt',
+];
+
+// The icon for a claimed device: the model the admin picked when pairing (stored as `modelIcon` in
+// its metadata JSON), else the default for its DeviceType.
+export function iconKindForDevice(deviceType: string, metadata: string | null): DeviceIconKind {
+  try {
+    const modelIcon = (metadata ? JSON.parse(metadata) : {}).modelIcon;
+    if (typeof modelIcon === 'string' && ICON_KINDS.includes(modelIcon as DeviceIconKind)) {
+      return modelIcon as DeviceIconKind;
+    }
+  } catch {
+    // malformed metadata — fall through to the type default
+  }
+  return DEFAULT_ICON_FOR_TYPE[deviceType as DeviceType] ?? 'picoC';
+}
+
 // A raw <svg>'s stroke/fill attributes need an actual CSS value, not a design-system token name —
 // map dash-separated tokens (e.g. "ink-text-secondary", "brand-500") onto the matching Tailwind
 // theme variable from app/tailwind.css's @theme block (e.g. --color-ink-text-secondary).

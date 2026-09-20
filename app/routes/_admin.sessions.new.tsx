@@ -5,6 +5,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
+import { cancelQueuedBrew, queueBrew } from '~/services/queued-brew.server';
 import { DeviceLogType, DeviceState, DeviceType, SessionType } from '~/types';
 import pubSub from '~/services/pubsub.server';
 import { NewSession } from '~/pages/NewSession';
@@ -18,11 +19,45 @@ export const loader = async (_args: LoaderFunctionArgs) => {
   ]);
   const brewDevices = devices.filter((d) => d.deviceType !== DeviceType.TILT);
   const tiltDevices = devices.filter((d) => d.deviceType === DeviceType.TILT);
-  return { recipes, brewDevices, tiltDevices };
+  return {
+    recipes,
+    // `online` is computed here (it needs the server's clock and the device's last check-in); the
+    // page shows it on each device tile.
+    brewDevices: brewDevices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
+    tiltDevices,
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
+  const intent = formData.get('intent');
+
+  // Pico flow: queue the brew for the device to pick up (see app/services/queued-brew.server.ts).
+  if (intent === 'queueBrew') {
+    const fermentDeviceIdRaw = formData.get('fermentDeviceId');
+    const carbMethod = String(formData.get('carbMethod') || 'Bottle');
+    const result = await queueBrew({
+      deviceId: Number(formData.get('deviceId')),
+      recipeId: Number(formData.get('recipeId')),
+      fermentDeviceId: fermentDeviceIdRaw ? Number(fermentDeviceIdRaw) : null,
+      carbMethod,
+      carbUnit: carbMethod === 'Forced (CO2)' ? 'hours' : 'weeks',
+      carbDuration: Number(formData.get('carbDuration') || 2),
+    });
+    if (!result.ok) {
+      return data({ error: result.error }, { status: result.status });
+    }
+    return { queuedSessionId: result.sessionId, recipeName: result.recipeName };
+  }
+
+  if (intent === 'cancelQueuedBrew') {
+    const result = await cancelQueuedBrew(Number(formData.get('sessionId')));
+    if (!result.ok) {
+      return data({ error: result.error }, { status: 409 });
+    }
+    return { cancelled: true };
+  }
+
   const recipeId = Number(formData.get('recipeId'));
   const deviceId = Number(formData.get('deviceId'));
   const fermentDeviceIdRaw = formData.get('fermentDeviceId');

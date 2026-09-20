@@ -1,6 +1,6 @@
 import prisma from '~/services/prisma.server';
-import type { SessionType } from '~/types';
-import { SessionState } from '~/types';
+import { SessionState, SessionType } from '~/types';
+import { QUEUE_EXPIRY_MS, QUEUED_STATUS_TEXT } from '~/utils/queued-brew';
 
 export type SessionLogData = Record<string, unknown>;
 
@@ -11,6 +11,7 @@ export class SessionRepository {
     deviceId: number,
     recipeId?: number,
     timeRemaining?: number,
+    statusText = 'Ready to Brew',
   ) {
     return await prisma.session.create({
       data: {
@@ -19,9 +20,25 @@ export class SessionRepository {
         deviceId,
         recipeId,
         state: SessionState.READY,
-        statusText: 'Ready to Brew',
+        statusText,
         timeRemaining,
       },
+    });
+  }
+
+  // The brew (if any) queued from the app for this device and not yet picked up on it — see
+  // app/utils/queued-brew.ts. Expired ones don't count.
+  public static async findQueuedBrew(deviceId: number) {
+    return await prisma.session.findFirst({
+      where: {
+        deviceId,
+        type: SessionType.BREWING,
+        state: SessionState.READY,
+        statusText: QUEUED_STATUS_TEXT,
+        createdAt: { gt: new Date(Date.now() - QUEUE_EXPIRY_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { recipe: true },
     });
   }
 
