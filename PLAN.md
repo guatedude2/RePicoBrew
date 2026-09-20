@@ -3,7 +3,7 @@ name: Pico Phase 1 Plan
 overview: 'Finish Phase 1 so users can brew on a Pico C and track brew progress in the UI: Pi AP hosting, harden machine APIs, Devices, full Recipe CRUD, live brew tracking Dashboard, and Session history.'
 todos:
   - id: stage-0-pi-ap
-    content: 'Stage 0: Pi AP + dnsmasq + nginx :80 → Remix + deploy docs/systemd'
+    content: 'Stage 0: Pi AP + dnsmasq + nginx :80 → React Router server + deploy docs/systemd'
     status: completed
   - id: stage-1-api-harden
     content: 'Stage 1: Fix getSession id bug, session complete/cancel, SSE from log, repo list/create helpers'
@@ -79,16 +79,16 @@ Progress tracking surfaces (must-have for Phase 1):
 sequenceDiagram
   participant User
   participant Pico
-  participant Remix
+  participant Server
   participant UI
 
   User->>UI: Approve device, create recipe
   User->>Pico: Pick recipe and start brew
-  Pico->>Remix: getRecipe then log stream
-  Remix->>UI: SSE session-update
+  Pico->>Server: getRecipe then log stream
+  Server->>UI: SSE session-update
   UI->>User: Live progress tracking
-  Pico->>Remix: log step complete
-  Remix->>UI: Session COMPLETED
+  Pico->>Server: log step complete
+  Server->>UI: Session COMPLETED
   User->>UI: Review session history
 ```
 
@@ -99,8 +99,8 @@ sequenceDiagram
 Goal: Pico joins the Pi and hits this app as `picobrew.com` on port 80.
 
 - Document and script AP setup (hostapd + dnsmasq): SSID/password, bridge/AP IP (e.g. `192.168.72.1`), `address=/picobrew.com/<pi-ip>`
-- Add nginx (or equivalent) reverse proxy: `:80` → Remix (`8080` today in [`package.json`](package.json)); map `/API/pico/*` and UI routes
-- Add deploy notes for Raspberry Pi: Node 18+, pnpm, Prisma SQLite path, systemd unit for `pnpm start`
+- Add nginx (or equivalent) reverse proxy: `:80` → React Router server (`8080` today in [`package.json`](package.json)); map `/API/pico/*` and UI routes
+- Add deploy notes for Raspberry Pi: Node 20+, pnpm, Prisma SQLite path, systemd unit for `pnpm start`
 - Smoke test from a laptop on the AP: resolve `picobrew.com`, hit `/API/pico/register?uid=...`
 
 Deliverable: Pico can reach register endpoint without code changes.
@@ -186,7 +186,7 @@ Acceptance = full **brew + track** loop on hardware:
 
 - Join AP → register → approve → create recipe → start brew on Pico → live progress on Dashboard → complete → history
 - Capture/compare against [`test.log`](test.log) sequence
-- Fix port/path mismatches (Remix routes are `api.pico.*` → ensure nginx exposes `/API/pico/...` casing the firmware expects)
+- Fix port/path mismatches (React Router routes are `api.pico.*` → ensure nginx exposes `/API/pico/...` casing the firmware expects)
 - Update [`TODO.md`](TODO.md) / README with Pi AP + Phase 1 brew runbook
 
 ---
@@ -348,4 +348,5 @@ For detailed stage-by-stage implementation notes, see [Phase 2 plan](/.cursor/pl
 - Analytics and reporting dashboard
 - Enhanced UX (PWA, notifications, multi-user)
 - ~~**First-time setup wizard**~~ — **Done.** `/setup` (`app/routes/setup.tsx` + `app/pages/Setup.tsx`), gated by `UserRepository.count() === 0` in `_admin.tsx`'s and `signin.tsx`'s loaders (and independently re-checked in `setup.tsx`'s own action, since that route has no auth gate). Steps: Welcome → admin account (name/email/password+confirm) → hostname → Access Point → Wi-Fi → devices (reuses the real `DevicesCard` component/pairing intents) → Finish (auto-signs the new admin in, then a success screen linking into the Dashboard). All fields are held in client state and only submitted in one `complete-setup` POST at the end, so an abandoned wizard just starts over on reload rather than needing partial-resume logic.
-- **Server maintenance settings tab** — a new Settings tab modeled on chiefwiggum's PicoBrew server admin page: Server Information (IP address(es), hostname), Server Version (running version vs. latest available, with an "Update/Restart Server" action), Raspberry Pi image version, and OS release info (`/etc/os-release`). The "Update/Restart" action is a real operational risk (it restarts the actual running server process, and "update" implies pulling new code/dependencies) — needs its own careful design pass before building: how "latest version" is determined, what "update" actually runs (git pull? systemd service restart?), and confirmation/rollback safety, given a failed update could take the whole Pi offline until someone SSHes in.
+- ~~**Server maintenance settings tab**~~ — **Partially done.** A new Settings → System tab (`app/pages/Settings.tsx`, `app/components/settings/SystemCard.tsx`, `app/routes/_admin.settings.tsx`) shows read-only Server Information — hostname, IP address(es) via Node's `os.networkInterfaces()`, the running app version (read from `package.json` at runtime, `app/utils/system-info.server.ts`), and OS release info parsed from `/etc/os-release` (gracefully `null` off-Linux, e.g. macOS dev machines) — plus confirm-gated "Restart Server" (`systemctl restart repicobrew.service`) and "Reboot Pi" (`systemctl reboot`) actions, restricted to non-`ReadOnly` users (there's no dedicated "Admin" role; see `requireSystemControlAccess` in `_admin.settings.tsx`). Both shell out via `child_process.execFile` with fixed argv arrays only — never string-interpolated — to a narrowly-scoped passwordless sudo rule (`/etc/sudoers.d/repicobrew-control`, granting the `pi` user NOPASSWD on exactly those two `systemctl` invocations and nothing else) installed by both `pi-image/chroot-provision.sh` and `DEPLOY_PI.md`. On a non-Pi dev machine both actions simply fail (no `pi` user/sudoers rule/systemd unit) and that failure is caught and shown as a normal UI error rather than crashing the server.
+  - **Still deliberately deferred**: an actual "Update" action (running version vs. latest available, Raspberry Pi image version, and a button that updates the software) was explicitly scoped out of the above change. It has its own distinct risk profile that needs a dedicated design pass first: what "update" even means here (`git pull`? which branch — is this even a git checkout on every install, e.g. the flashed image? dependency reinstall via `pnpm install`? a `pnpm build` before restarting?), how "latest version" would be determined (GitHub releases API? a version file?), and rollback safety — a failed update partway through could leave the Pi's only running copy of the app broken, offline until someone SSHes in and fixes it manually.

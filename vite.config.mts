@@ -5,6 +5,16 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [tailwindcss(), reactRouter()],
+  ssr: {
+    // react-icons@4.12.0's ESM entry points do directory imports (e.g. `react-icons/gi` resolving
+    // to a bare `lib/` directory) that Node's own strict ESM resolver rejects at runtime
+    // (`ERR_UNSUPPORTED_DIR_IMPORT`) once the project is "type": "module" — confirmed by actually
+    // running the built server bundle, not just building it. Left as an external SSR import (the
+    // Vite default for node_modules deps), that broken resolution happens live in production;
+    // bundling it here instead resolves it at build time, since every page that uses any icon gets
+    // server-rendered too.
+    noExternal: ['react-icons'],
+  },
   resolve: {
     alias: {
       '~': path.resolve(__dirname, 'app'),

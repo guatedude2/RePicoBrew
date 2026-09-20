@@ -16,13 +16,27 @@ Environment="PORT=8080"
 ExecStart=/usr/bin/env pnpm start
 Restart=on-failure
 RestartSec=10
+# The app holds open live-update (SSE) connections, so a polite SIGTERM stop can hang until systemd's
+# 90s default kills it; don't make every restart wait that long.
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=repicobrew
 
-# Security hardening
-NoNewPrivileges=true
-PrivateTmp=true
+# Security hardening. NOT NoNewPrivileges=true: that systemd flag sets the kernel's
+# PR_SET_NO_NEW_PRIVS bit on this process and everything it execs, which disables setuid escalation
+# entirely — including `sudo` itself, regardless of sudoers rules. This app deliberately relies on
+# a handful of narrowly-scoped passwordless sudo commands (see app/utils/system-control.server.ts,
+# app/utils/network-control.server.ts, /etc/sudoers.d/repicobrew-control) as the ONLY way this
+# unprivileged `pi`-run process can restart itself, reboot the Pi, or apply real network config —
+# confirmed the hard way: with this flag set, every one of those sudo calls fails with
+# "sudo: effective uid is not 0, is /usr/bin/sudo on a file system with the 'nosuid' option set...",
+# even though sudo itself is correctly setuid-root and the sudoers rule matches.
+#
+# Also NOT PrivateTmp=true: `wpa_cli` (the Setup/Settings Wi-Fi network scan, see
+# app/utils/wifi.server.ts) receives wpa_supplicant's replies on a socket it creates in /tmp. With a
+# private /tmp that socket is invisible to the wpa_supplicant daemon, so every scan failed even
+# though the same command works from a shell.
 
 [Install]
 WantedBy=multi-user.target

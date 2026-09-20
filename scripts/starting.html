@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta http-equiv="refresh" content="15" />
+    <title>RePicoBrew is starting…</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1113;
+        --text: #f2f3f5;
+        --dim: #9aa0a8;
+        --brand: #f0994f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        text-align: center;
+      }
+      main {
+        max-width: 420px;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 20px;
+        border: 3px solid var(--brand);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+      p {
+        margin: 0;
+        color: var(--dim);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>RePicoBrew is starting up</h1>
+      <p>
+        Please wait. This usually takes under a minute, and this page will refresh by itself as soon as the server is
+        ready.
+      </p>
+    </main>
+    <script>
+      // nginx keeps the original 5xx status while the app is down, so "up" means anything below 500.
+      async function check() {
+        try {
+          const response = await fetch('/favicon.ico?t=' + Date.now(), { cache: 'no-store' });
+          if (response.status < 500) {
+            location.reload();
+            return;
+          }
+        } catch (error) {
+          // Still unreachable — keep waiting.
+        }
+        setTimeout(check, 2000);
+      }
+      setTimeout(check, 2000);
+    </script>
+  </body>
+</html>

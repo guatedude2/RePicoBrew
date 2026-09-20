@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "sideEffects": false,
   "scripts": {
     "build": "react-router build",
@@ -85,5 +86,21 @@
     "node": ">=20",
     "pnpm": ">=9"
   },
-  "packageManager": "pnpm@9.7.1"
+  "packageManager": "pnpm@9.7.1",
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "darwin",
+        "linux"
+      ],
+      "cpu": [
+        "x64",
+        "arm64",
+        "arm"
+      ],
+      "libc": [
+        "glibc"
+      ]
+    }
+  }
 }

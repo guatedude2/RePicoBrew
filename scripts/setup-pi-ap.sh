@@ -1,6 +1,12 @@
 #!/bin/bash
 # RePicoBrew Raspberry Pi Access Point Setup
 # Sets up WiFi AP with DNS spoofing for picobrew.com
+#
+# The AP lives on the virtual `uap0` interface, NOT the physical `wlan0` radio — the Pi Zero W has
+# only one physical radio, and wlan0 needs to stay free to join the user's home Wi-Fi as a normal
+# client (see scripts/network/apply-wifi.sh) so the device has real internet access. `uap0` is
+# created at boot by create-uap0.service (scripts/network/create-uap0.sh), which must run before
+# this script's hostapd/dnsmasq config takes effect.
 
 set -e
 
@@ -12,7 +18,7 @@ AP_NETWORK="192.168.72.0"
 AP_NETMASK="255.255.255.0"
 DHCP_RANGE_START="192.168.72.10"
 DHCP_RANGE_END="192.168.72.100"
-WIFI_INTERFACE="wlan0"
+AP_INTERFACE="uap0"
 CHANNEL="7"
 
 echo "========================================="
@@ -25,7 +31,7 @@ echo "  Password: $PASSWORD"
 echo "  AP IP: $AP_IP"
 echo "  Network: $AP_NETWORK/$AP_NETMASK"
 echo "  DHCP Range: $DHCP_RANGE_START - $DHCP_RANGE_END"
-echo "  Interface: $WIFI_INTERFACE"
+echo "  Interface: $AP_INTERFACE"
 echo ""
 
 # Check if running as root
@@ -44,23 +50,32 @@ echo "Stopping services..."
 systemctl stop hostapd || true
 systemctl stop dnsmasq || true
 
-# Configure static IP for wlan0
-echo "Configuring static IP for $WIFI_INTERFACE..."
-# Not guaranteed to already exist (hit this building the pi-image pipeline: a fresh Bullseye Lite
-# image doesn't ship this directory until something else creates it first).
-mkdir -p /etc/dhcpcd.conf.d
-cat > /etc/dhcpcd.conf.d/picobrew.conf <<EOF
+# Configure static IP for uap0
+echo "Configuring static IP for $AP_INTERFACE..."
+# Written DIRECTLY into /etc/dhcpcd.conf, not a conf.d drop-in — confirmed on real hardware that
+# this dhcpcd build's `include /etc/dhcpcd.conf.d/*.conf` wildcard glob is a silent no-op.
+# `nohook wpa_supplicant` is REQUIRED on uap0: dhcpcd otherwise launches its own wpa_supplicant on
+# every Wi-Fi interface, including this hostapd-owned one, and that second supplicant keeps trying to
+# switch uap0 out of AP mode — the driver refuses (`brcmf_cfg80211_change_iface ... err=-16`, ~10x a
+# second), which keeps uap0 flapping DOWN so the SSID never (reliably) appears. wlan0 itself is left
+# as a normal dhcpcd+wpa_supplicant client interface (see scripts/network/apply-wifi.sh) so it can
+# join the user's home network. Guarded by a marker comment so re-running this script doesn't keep
+# appending duplicate blocks.
+if ! grep -q '^# RePicoBrew AP Configuration$' /etc/dhcpcd.conf 2>/dev/null; then
+  cat >> /etc/dhcpcd.conf <<EOF
+
 # RePicoBrew AP Configuration
-interface $WIFI_INTERFACE
+interface $AP_INTERFACE
     static ip_address=$AP_IP/24
     nohook wpa_supplicant
 EOF
+fi
 
 # Configure hostapd
 echo "Configuring hostapd..."
 cat > /etc/hostapd/hostapd.conf <<EOF
 # RePicoBrew AP - hostapd configuration
-interface=$WIFI_INTERFACE
+interface=$AP_INTERFACE
 driver=nl80211
 ssid=$SSID
 hw_mode=g
@@ -95,8 +110,8 @@ fi
 cat > /etc/dnsmasq.d/picobrew.conf <<EOF
 # RePicoBrew dnsmasq configuration
 
-# Listen on wlan0 only
-interface=$WIFI_INTERFACE
+# Listen on uap0 only — wlan0 is a normal client interface now, not part of the AP.
+interface=$AP_INTERFACE
 
 # DHCP range
 dhcp-range=$DHCP_RANGE_START,$DHCP_RANGE_END,$AP_NETMASK,24h
@@ -198,9 +213,9 @@ else
   echo "  sudo journalctl -u dnsmasq -n 50"
   echo ""
   echo "Common issues:"
-  echo "  - NetworkManager managing wlan0: sudo nmcli device set wlan0 managed no"
+  echo "  - uap0 doesn't exist yet: make sure create-uap0.service ran (systemctl status create-uap0)"
   echo "  - Another process using port 53: sudo netstat -tlnp | grep :53"
-  echo "  - Wrong WiFi interface name: check with 'ip addr' and update WIFI_INTERFACE"
+  echo "  - Wrong AP interface name: check with 'ip addr' and update AP_INTERFACE"
 fi
 
 echo ""

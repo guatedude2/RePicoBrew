@@ -9,8 +9,9 @@
 # How: loop-mounts the target image's root partition and chroots into it under qemu-user
 # emulation (pi-image/chroot-provision.sh), on THIS build machine, with THIS machine's real
 # internet access. Every package install, the Node.js runtime, `pnpm install`/`build`, and the
-# Prisma-migrated + seeded database all happen right here, baked into the image — not deferred to
-# the Pi. (An earlier version of this script tried to do this via `virt-customize --run-command`;
+# Prisma-migrated (schema only, no seed data) database all happen right here, baked into the
+# image — not deferred to the Pi. (An earlier version of this script tried to do this via
+# `virt-customize --run-command`;
 # libguestfs flatly refuses to execute guest commands across a host/guest architecture mismatch,
 # which is unavoidable for a Pi image. A real chroot + qemu-arm-static has no such restriction.)
 #
@@ -82,6 +83,14 @@ case "$TARGET" in
     # `readelf -A`: Tag_CPU_arch v7 vs. this build's v6KZ). unofficial-builds.nodejs.org
     # specifically maintains genuine ARMv6 builds for this exact hardware class.
     NODE_TARBALL_URL="https://unofficial-builds.nodejs.org/download/release/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-armv6l.tar.gz"
+    # qemu-arm-static's default emulated CPU is a modern ARMv7-class core, NOT the Zero W's real
+    # ARM1176JZF-S — confirmed the hard way: better-sqlite3, compiled from source during this
+    # chroot's `pnpm install` under that default emulation, crashed with "Illegal instruction" at
+    # RUNTIME on real hardware (gcc's own CPU auto-detection sees whatever qemu presents, not the
+    # real target). QEMU_CPU pins the emulated CPU to `arm1176` (a real, exact model qemu-arm-static
+    # supports — see `qemu-arm-static -cpu help`) so every native addon compiled in this chroot
+    # (better-sqlite3, @stoprocent/noble) targets the actual hardware instead.
+    export QEMU_CPU="arm1176"
     ;;
   pi4)
     ARCH="arm64"
@@ -90,6 +99,8 @@ case "$TARGET" in
     QEMU_STATIC_BIN="qemu-aarch64-static"
     # arm64/aarch64 has no ARMv6-style baseline split — the official build is fine.
     NODE_TARBALL_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz"
+    # No equivalent baseline-mismatch risk on arm64 — leave qemu-aarch64-static's default CPU as-is.
+    export QEMU_CPU=""
     ;;
   "")
     echo "Error: --target is required" >&2; usage; exit 1 ;;
@@ -143,6 +154,9 @@ rm -f "$RAW_IMG"
 # on disk (including uncommitted work-in-progress), which is what "build an image from what I
 # have right now" should mean. Excludes node_modules/.git/build (rebuilt fresh below) and
 # pi-image's own cache/work dirs (this script's scratch space, not app source).
+# prisma/picobrew.db* is excluded too — without this, the dev machine's own live database
+# (complete with real recipes/sessions/users, everything) ships inside the image. The image gets a
+# clean, schema-only database from `migrate deploy` instead (no seed data — see chroot-finish.sh).
 STAGE_DIR="$WORK_DIR/repo-stage"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
@@ -156,16 +170,32 @@ rsync -a \
   --exclude='.DS_Store' \
   --exclude='.cache' \
   --exclude='.claude' \
+  --exclude='prisma/picobrew.db*' \
   "$REPO_DIR/" "$STAGE_DIR/"
 
-# No node in this builder container — plain grep/sed instead of a JSON parser, just to pull
-# "pnpm@X.Y.Z" out of package.json's packageManager field.
+# Plain grep/sed instead of a JSON parser, just to pull "pnpm@X.Y.Z" out of package.json's
+# packageManager field.
 PNPM_VERSION="$(grep -o '"packageManager": *"pnpm@[^"]*"' "$REPO_DIR/package.json" | sed -E 's/.*pnpm@([^"]*)"/\1/')"
 PNPM_VERSION="${PNPM_VERSION:-9.7.1}"
 
+# --- 3b. Build the app entirely on this host, never under ARM emulation ------------------------
+# esbuild (vite's bundler, used by `pnpm build`) ships a prebuilt Go binary with no from-source
+# fallback at all — confirmed ARMv7-only via a real SIGILL once QEMU_CPU (below) correctly
+# restricted emulation to the Zero W's actual ARM1176 core. The build output itself
+# (build/client, build/server) is pure JS/CSS/HTML with no native code, so building it on this
+# host's own architecture and copying the result into the image afterward is both correct and
+# necessary — see chroot-provision.sh (still installs devDependencies for completeness, but
+# neutralizes esbuild's install-time crash since it's never actually invoked there) and
+# chroot-finish.sh (no longer runs `pnpm build` at all).
+HOST_BUILD_DIR="$WORK_DIR/host-build"
+echo "==> Building app on this host's own architecture (esbuild has no working ARM build)..."
+rm -rf "$HOST_BUILD_DIR"
+cp -a "$STAGE_DIR" "$HOST_BUILD_DIR"
+(cd "$HOST_BUILD_DIR" && HUSKY=0 pnpm install && pnpm build)
+
 # --- 4. Loop-mount the image and chroot in to provision it for real ----------------------------
 # This is the step that makes the Pi need zero internet on first boot: everything below — apt
-# packages, Node.js, `pnpm install`/`build`, even the migrated+seeded database — happens right
+# packages, Node.js, `pnpm install`/`build`, even the migrated (schema-only) database — happens right
 # here, on this build machine, under qemu-user emulation, with this machine's real network access,
 # and gets baked directly into the image. See chroot-provision.sh and the file header above for
 # why this replaced an earlier `virt-customize --run-command`-based approach.
@@ -215,6 +245,12 @@ cp /etc/resolv.conf "$ROOT_MNT/etc/resolv.conf"
 echo "$HOSTNAME" > "$ROOT_MNT/etc/hostname"
 sed -i "s/127.0.1.1.*/127.0.1.1\t$HOSTNAME/" "$ROOT_MNT/etc/hosts" 2>/dev/null || true
 touch "$BOOT_MNT/ssh"
+# Without this, the Zero W's GPIO serial console uses the "mini UART", whose clock is tied to the
+# CPU's core frequency and drifts under frequency scaling — producing garbled output. Also pins
+# core_freq to stabilize it. Confirmed necessary the hard way, debugging over a real UART cable.
+if ! grep -q '^enable_uart=1$' "$BOOT_MNT/config.txt" 2>/dev/null; then
+  printf '\n[all]\nenable_uart=1\n' >> "$BOOT_MNT/config.txt"
+fi
 
 mount --bind /dev "$ROOT_MNT/dev"
 mount -t proc proc "$ROOT_MNT/proc"
@@ -236,8 +272,13 @@ APP_DIR_HOST="$ROOT_MNT/home/pi/RePicoBrew"
 echo "==> Generating Prisma client + applying migrations (on build host, not under ARM emulation)..."
 (cd "$APP_DIR_HOST" && node node_modules/prisma/build/index.js generate)
 (cd "$APP_DIR_HOST" && node node_modules/prisma/build/index.js migrate deploy)
-# The two commands above run as this build host's own user (root, inside the builder container),
-# which would otherwise leave the generated client and the new picobrew.db owned by root —
+
+echo "==> Copying the host-built production bundle into the image..."
+rm -rf "$APP_DIR_HOST/build"
+cp -a "$HOST_BUILD_DIR/build" "$APP_DIR_HOST/build"
+
+# Everything above (Prisma generate/migrate output, the copied build/) runs/lands as this build
+# host's own user (root, inside the builder container), which would otherwise leave it all
 # unwritable by the `pi` user the app and `db seed` actually run as (both on the Pi and in the
 # chroot below).
 chown -R 1000:1000 "$APP_DIR_HOST"

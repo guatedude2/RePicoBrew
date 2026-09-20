@@ -1,0 +1,13 @@
+[Unit]
+Description=Create uap0 virtual AP interface for RePicoBrew
+After=network-pre.target
+Wants=network-pre.target
+Before=hostapd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/repicobrew-network/create-uap0.sh
+
+[Install]
+WantedBy=multi-user.target

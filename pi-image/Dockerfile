@@ -25,6 +25,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # emulation, where Prisma publishes no engine binary at all for 32-bit ARM (confirmed via 404s).
 # The generated client itself is pure JS+WASM (engineType="client"), so it doesn't matter which
 # machine produced it — see chroot-provision.sh/chroot-finish.sh for the split.
+# build-essential/python3: needed for the host-side `pnpm install` in build.sh to succeed at all —
+# native deps like @stoprocent/noble spawn node-gyp during install regardless of whether they'll
+# ever actually run on this host (confirmed: install hard-fails with ENOENT without these, even
+# though the resulting binary is never invoked — `pnpm build` never executes application code).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libguestfs-tools \
       "linux-image-$(dpkg --print-architecture)" \
@@ -38,7 +42,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       rsync \
       ca-certificates \
       nodejs \
+      build-essential \
+      python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# pnpm via its official standalone installer — neither npm nor corepack come with Debian's
+# `nodejs` package here (confirmed: both "not found" after installing it) — for the host-side
+# `pnpm install`+`pnpm build` in build.sh. esbuild's prebuilt `@esbuild/linux-arm` Go binary is
+# ARMv7-only (confirmed via a real SIGILL once QEMU_CPU correctly restricted emulation to genuine
+# ARMv6, and there's no from-source fallback for a prebuilt Go binary the way there is for a C
+# addon), so the app is built entirely here on the host's own architecture instead of under ARM
+# emulation — see build.sh and chroot-provision.sh (still installs devDependencies too, but
+# neutralizes esbuild's install-time crash there since it's never actually invoked in the chroot).
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH="$PNPM_HOME/bin:$PATH"
+RUN curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash sh -
+# node-gyp-build (used by @stoprocent/noble's install script) spawns a bare `node-gyp` off PATH
+# directly — the corepack-installed pnpm used inside the chroot bundles node-gyp internally and
+# exposes it that way, but this standalone install doesn't, so it needs installing explicitly
+# (confirmed: ENOENT spawning node-gyp otherwise, even with build-essential/python3 present).
+# Pinned to v10 — latest node-gyp (v13) pulls in undici@8, which itself needs Node runtime globals
+# newer than Debian bookworm's `nodejs` package (18.20.4) provides, and crashes with
+# `ReferenceError: File is not defined` just trying to load. v10 matches what the corepack-bundled
+# copy inside the chroot already uses successfully.
+RUN pnpm add -g node-gyp@10
 
 # libguestfs's supermin appliance needs a kernel it can boot under QEMU to inspect/modify the
 # image — the kernel installed above (unrelated to the Pi's own arm kernel, which lives inside the

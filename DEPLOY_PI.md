@@ -18,7 +18,7 @@ Pico C Device
 Raspberry Pi AP (192.168.72.1)
     ↓ dnsmasq: picobrew.com → 192.168.72.1
     ↓ nginx :80
-    ↓ Remix app :8080
+    ↓ React Router app :8080
     ↓ SQLite database
 ```
 
@@ -119,7 +119,7 @@ nslookup picobrew.com
 
 ### 3. Configure Nginx Reverse Proxy
 
-Nginx terminates HTTP on port 80 and proxies to Remix on port 8080.
+Nginx terminates HTTP on port 80 and proxies to the React Router app on port 8080.
 
 ```bash
 # Copy nginx config
@@ -187,6 +187,30 @@ sudo systemctl status repicobrew
 sudo journalctl -u repicobrew -f
 ```
 
+### 5b. Allow Settings → System to restart, reboot, shut down and update
+
+The Settings → System tab has Restart Server, Reboot Pi, Shut Down and Software Updates actions.
+The app runs as the unprivileged `pi` user, so it needs a few narrowly-scoped passwordless sudo
+rules — one per fixed-purpose root script, nothing broader (no general `systemctl`/`sudo` access).
+`scripts/deploy-to-pi.sh` does all of this for you; by hand:
+
+```bash
+sudo mkdir -p /usr/local/sbin/repicobrew-network
+sudo install -m 0755 -o root -g root ~/RePicoBrew/scripts/network/{power,check-updates,start-updates}.sh /usr/local/sbin/repicobrew-network/
+sudo tee /etc/sudoers.d/repicobrew-control > /dev/null <<'EOF'
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh restart
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh reboot
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh shutdown
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/check-updates.sh
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/start-updates.sh
+EOF
+sudo chmod 0440 /etc/sudoers.d/repicobrew-control
+sudo visudo -cf /etc/sudoers.d/repicobrew-control
+```
+
+Without this step, the buttons still appear but fail with a permission error when clicked — that's
+expected and harmless; re-run the steps above to fix it.
+
 ### 6. Verify End-to-End
 
 From a device connected to the `PICOBREW` WiFi:
@@ -198,7 +222,7 @@ nslookup picobrew.com
 
 # HTTP access
 curl http://picobrew.com/
-# Should return HTML from Remix
+# Should return HTML from the app
 
 # Test Pico API endpoint
 curl "http://picobrew.com/API/pico/register?uid=test12345678901234567890123456789012"
@@ -677,6 +701,6 @@ If any step fails, check:
 ## References
 
 - [chiefwigms/picobrew_pico](https://github.com/chiefwigms/picobrew_pico) - Original Python reference implementation
-- [Remix Docs](https://remix.run/docs) - Remix framework documentation
+- [React Router Docs](https://reactrouter.com/) - React Router framework documentation
 - [Raspberry Pi AP Guide](https://www.raspberrypi.org/documentation/configuration/wireless/access-point-routed.md)
 - Phase 1 Plan: See `.cursor/plans/pico_phase_1_plan_*.plan.md` for detailed implementation notes
