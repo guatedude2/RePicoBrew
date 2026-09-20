@@ -1,8 +1,9 @@
 import { useFetcher, useMatches, useNavigate } from 'react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GiHops } from 'react-icons/gi';
 import { MdClose, MdMenuBook, MdSend } from 'react-icons/md';
 import { useAiSidekickBridge } from './AiSidekickContext';
+import { ChatMarkdown } from './ChatMarkdown';
 import type { AiChatAction } from '~/services/ai-chat-assistant.server';
 import type { PicoPackAiRecipe, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 
@@ -173,6 +174,11 @@ export function AiBrewmasterSidekick() {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [dynamicSuggestions, setDynamicSuggestions] = useState<string[] | null>(null);
+  // Messages typed while a reply is still on its way. They're sent one at a time, in order, as each
+  // reply lands — so an edit request always goes out against the recipe the previous reply just changed.
+  const [queue, setQueue] = useState<Array<{ id: number; text: string }>>([]);
+  const [pendingText, setPendingText] = useState<string | null>(null);
+  const nextQueueId = useRef(0);
 
   const historyFetcher = useFetcher<HistoryResponse>();
   const actionFetcher = useFetcher<RecipeGenResponse | GeneralChatResponse>();
@@ -187,6 +193,7 @@ export function AiBrewmasterSidekick() {
     historyFetcher.load(historyUrl(scope, scopeId));
     setDynamicSuggestions(null);
     setPrompt('');
+    setQueue([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
 
@@ -195,7 +202,10 @@ export function AiBrewmasterSidekick() {
       return;
     }
     const result = actionFetcher.data;
+    setPendingText(null);
     if ('error' in result) {
+      // Whatever was queued was meant to follow a reply that never came — don't fire it blindly.
+      setQueue([]);
       return;
     }
     if ('recipe' in result) {
@@ -213,18 +223,15 @@ export function AiBrewmasterSidekick() {
         // sessionStorage can throw in a locked-down/private context — the chat reply still stands,
         // the user just won't see the pre-filled form on the other end.
       }
+      setQueue([]);
       navigate(action.to);
     }
-    setPrompt('');
     historyFetcher.load(historyUrl(scope, scopeId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionFetcher.state, actionFetcher.data]);
 
-  const submit = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || isSending) {
-      return;
-    }
+  const send = (trimmed: string) => {
+    setPendingText(trimmed);
     if (bridge) {
       const body =
         mode === 'edit'
@@ -256,11 +263,40 @@ export function AiBrewmasterSidekick() {
       });
     }
   };
-  const handleSubmit = () => submit(prompt);
-  const handleChipClick = (example: string) => {
-    setPrompt(example);
-    submit(example);
+  const submit = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    setPrompt('');
+    if (isSending || queue.length > 0) {
+      nextQueueId.current += 1;
+      const id = nextQueueId.current;
+      setQueue((q) => [...q, { id, text: trimmed }]);
+      return;
+    }
+    send(trimmed);
   };
+  const sendRef = useRef(send);
+  sendRef.current = send;
+
+  // Send the next queued message once the current reply is fully handled. The short delay lets the
+  // reply's effects (e.g. the editor applying a generated recipe) land first, so the next request
+  // is built from up-to-date state rather than the pre-reply one.
+  useEffect(() => {
+    if (isSending || queue.length === 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      const [next, ...rest] = queue;
+      setQueue(rest);
+      sendRef.current(next.text);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isSending, queue]);
+
+  const handleSubmit = () => submit(prompt);
+  const handleChipClick = (example: string) => submit(example);
 
   const error = actionFetcher.data && 'error' in actionFetcher.data ? actionFetcher.data.error : null;
   const examples = useMemo(() => {
@@ -280,6 +316,15 @@ export function AiBrewmasterSidekick() {
 
   const messages = historyFetcher.data && 'messages' in historyFetcher.data ? historyFetcher.data.messages : [];
   const isLoadingHistory = historyFetcher.state === 'loading' && !historyFetcher.data;
+
+  // Keep the newest message in view: on open, when history loads, as replies arrive, and as
+  // messages are sent or queued.
+  const endOfMessagesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) {
+      endOfMessagesRef.current?.scrollIntoView({ block: 'end' });
+    }
+  }, [open, messages.length, queue.length, pendingText, isSending, error]);
 
   return (
     <>
@@ -332,15 +377,41 @@ export function AiBrewmasterSidekick() {
                 }
               >
                 {m.role === 'assistant' && <GiHops className="mt-0.5 size-3.5 shrink-0" style={{ color: ACCENT }} />}
-                <p>{m.content}</p>
+                {m.role === 'assistant' ? <ChatMarkdown>{m.content}</ChatMarkdown> : <p>{m.content}</p>}
               </div>
             ))}
 
-            {messages.length === 0 && !isLoadingHistory && (
+            {pendingText && (
+              <div className="ml-6 self-end rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text">
+                <p>{pendingText}</p>
+              </div>
+            )}
+
+            {queue.map((item) => (
+              <div
+                key={item.id}
+                className="ml-6 flex items-start gap-2 self-end rounded-lg rounded-tr-sm border border-dashed border-ink-border-strong bg-ink-bg px-3 py-2 text-[12.5px] text-ink-text-secondary"
+              >
+                <div className="min-w-0">
+                  <p>{item.text}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-[0.4px] text-ink-text-faint">Queued</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQueue((q) => q.filter((x) => x.id !== item.id))}
+                  aria-label="Remove queued message"
+                  className="flex-none text-ink-text-faint transition-colors hover:text-ink-text"
+                >
+                  <MdClose className="size-3.5" />
+                </button>
+              </div>
+            ))}
+
+            {messages.length === 0 && !isLoadingHistory && !pendingText && (
               <p className="text-[12.5px] text-ink-text-secondary">{emptyStateTextFor(mode, scope)}</p>
             )}
 
-            {!isSending && (
+            {!isSending && queue.length === 0 && (
               <div className="flex flex-col gap-1.5">
                 {examples.map((example) => (
                   <button
@@ -367,6 +438,7 @@ export function AiBrewmasterSidekick() {
                 {error}
               </p>
             )}
+            <div ref={endOfMessagesRef} />
           </div>
 
           <div className="border-t border-ink-divider p-3">
@@ -380,15 +452,14 @@ export function AiBrewmasterSidekick() {
                     handleSubmit();
                   }
                 }}
-                placeholder={placeholderFor(mode)}
-                disabled={isSending}
+                placeholder={isSending ? 'Type another — it will be queued…' : placeholderFor(mode)}
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-text placeholder:text-ink-text-faintest focus:outline-none"
               />
               <button
                 type="button"
-                disabled={!prompt.trim() || isSending}
+                disabled={!prompt.trim()}
                 onClick={handleSubmit}
-                aria-label={sendButtonLabelFor(mode)}
+                aria-label={isSending ? 'Queue message' : sendButtonLabelFor(mode)}
                 className="flex size-8 flex-none items-center justify-center rounded-full text-white transition-opacity disabled:pointer-events-none disabled:opacity-40"
                 style={{ backgroundColor: ACCENT }}
               >
