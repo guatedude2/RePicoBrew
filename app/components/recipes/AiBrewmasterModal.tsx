@@ -401,7 +401,7 @@ export function AiBrewmasterSidekick() {
             </div>
           )}
 
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+          <div className="flex flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden p-4">
             {(bridge || contextLabel) && (
               <div
                 className="flex w-fit max-w-full items-center gap-1.5 rounded-full border border-ink-divider bg-ink-bg px-2.5 py-1 text-[11px] text-ink-text-faint"
@@ -422,8 +422,8 @@ export function AiBrewmasterSidekick() {
                 key={m.id}
                 className={
                   m.role === 'user'
-                    ? 'ml-6 self-end rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text'
-                    : 'mr-6 flex items-start gap-2 rounded-lg rounded-tl-sm border border-ink-card-border bg-ink-bg px-3 py-2.5 text-[12.5px] text-ink-text-secondary'
+                    ? 'ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text'
+                    : 'mr-6 flex min-w-0 items-start gap-2 [overflow-wrap:anywhere] rounded-lg rounded-tl-sm border border-ink-card-border bg-ink-bg px-3 py-2.5 text-[12.5px] text-ink-text-secondary'
                 }
               >
                 {m.role === 'assistant' && <GiHops className="mt-0.5 size-3.5 shrink-0" style={{ color: ACCENT }} />}
@@ -432,7 +432,7 @@ export function AiBrewmasterSidekick() {
             ))}
 
             {pendingText && (
-              <div className="ml-6 self-end rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text">
+              <div className="ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text">
                 <p>{pendingText}</p>
               </div>
             )}
@@ -440,7 +440,7 @@ export function AiBrewmasterSidekick() {
             {queue.map((item) => (
               <div
                 key={item.id}
-                className="ml-6 flex items-start gap-2 self-end rounded-lg rounded-tr-sm border border-dashed border-ink-border-strong bg-ink-bg px-3 py-2 text-[12.5px] text-ink-text-secondary"
+                className="ml-6 flex min-w-0 max-w-[calc(100%-1.5rem)] items-start gap-2 self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm border border-dashed border-ink-border-strong bg-ink-bg px-3 py-2 text-[12.5px] text-ink-text-secondary"
               >
                 <div className="min-w-0">
                   <p>{item.text}</p>
