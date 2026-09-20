@@ -7,14 +7,45 @@ import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
+import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
 import type { PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
-import { PicoLocationMap, RecipePackType } from '~/types';
+import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
+import type { RecipeEditorIngredient } from './index';
+
+const RECIPE_FORM_ID = 'recipe-form';
 
 const newId = () => Math.random().toString(36).slice(2);
+
+// What goes into the pak: grain in the main compartment, hops in the numbered hop compartments.
+// Listed for the person filling the physical pak — the machine itself only runs the steps below.
+type PakRow = { id: string; name: string; amount?: number; aa?: number };
+
+const pakRowsFor = (ingredients: RecipeEditorIngredient[] | undefined, section: IngredientSection): PakRow[] =>
+  (ingredients ?? [])
+    .filter((i) => i.section === section)
+    .map((i) => ({ id: newId(), name: i.name, amount: i.amount ?? undefined, aa: i.aa ?? undefined }));
+
+const pakRowsToIngredients = (rows: PakRow[], section: IngredientSection): RecipeEditorIngredient[] =>
+  rows
+    .filter((r) => r.name.trim() !== '')
+    .map((r) => ({
+      section,
+      name: r.name,
+      amount: r.amount ?? null,
+      unit: null,
+      color: null,
+      aa: section === IngredientSection.BOIL_HOP ? r.aa ?? null : null,
+      time: null,
+      temp: null,
+      days: null,
+      hours: null,
+    }));
+
+const stripPakRowIds = (rows: PakRow[]) => rows.map(({ id: _id, ...rest }) => rest);
 
 const machineStepToRow = (s: {
   name: string;
@@ -57,6 +88,7 @@ export type PicoPackEditorData = {
   abv: number;
   ibu: number;
   steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
+  ingredients?: RecipeEditorIngredient[];
 };
 
 export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: string; readOnly?: boolean }> = ({
@@ -83,6 +115,16 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const [machineSteps, setMachineSteps] = useState<MachineStepRow[]>(
     recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS,
   );
+  const [grains, setGrains] = useState<PakRow[]>(() => pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE));
+  const [hops, setHops] = useState<PakRow[]>(() => pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP));
+  const pakRowActions = (setter: (fn: (rows: PakRow[]) => PakRow[]) => void) => ({
+    onChange: (id: string, key: keyof PakRow, value: string | number) =>
+      setter((rows) => rows.map((r) => (r.id === id ? { ...r, [key]: value } : r))),
+    onAdd: (template: Partial<PakRow> = {}) => setter((rows) => [...rows, { id: newId(), name: '', ...template }]),
+    onRemove: (id: string) => setter((rows) => rows.filter((r) => r.id !== id)),
+  });
+  const grainActions = pakRowActions(setGrains);
+  const hopActions = pakRowActions(setHops);
   const [modalOpen, setModalOpen] = useState(false);
   const [stepsExpanded, setStepsExpanded] = useState(true);
 
@@ -100,6 +142,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
+      grains: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE)),
+      hops: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP)),
     }),
   ).current;
   const isDirty = useMemo(
@@ -111,8 +155,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         abv,
         ibu,
         steps: machineSteps.map(({ id: _id, ...rest }) => rest),
+        grains: stripPakRowIds(grains),
+        hops: stripPakRowIds(hops),
       }) !== initialSnapshot,
-    [name, style, notes, abv, ibu, machineSteps, initialSnapshot],
+    [name, style, notes, abv, ibu, machineSteps, grains, hops, initialSnapshot],
   );
 
   // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors how a manual edit would
@@ -213,13 +259,18 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       photoUrl: photoUrl ?? undefined,
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
-      ingredients: [],
+      ingredients: [
+        ...pakRowsToIngredients(grains, IngredientSection.FERMENTABLE),
+        ...pakRowsToIngredients(hops, IngredientSection.BOIL_HOP),
+      ],
     }),
-    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps],
+    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps, grains, hops],
   );
 
   const FormWrapper = readOnly ? 'div' : Form;
-  const formWrapperProps = readOnly ? {} : { method: 'post' as const, encType: 'multipart/form-data' as const };
+  const formWrapperProps = readOnly
+    ? {}
+    : { id: RECIPE_FORM_ID, method: 'post' as const, encType: 'multipart/form-data' as const };
 
   return (
     <>
@@ -243,6 +294,11 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               Edit Recipe
             </Button>
           </Link>
+        )}
+        {!readOnly && (
+          <Button type="submit" form={RECIPE_FORM_ID} variant="brand" size="sm" disabled={hasErrors || isSubmitting}>
+            {isSubmitting ? 'Saving…' : 'Save Recipe'}
+          </Button>
         )}
       </div>
 
@@ -278,14 +334,6 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   {err}
                 </p>
               ))}
-            </div>
-          )}
-
-          {!readOnly && (
-            <div className="flex justify-end gap-2">
-              <Button type="submit" variant="brand" disabled={hasErrors || isSubmitting}>
-                {isSubmitting ? 'Saving…' : 'Save Recipe'}
-              </Button>
             </div>
           )}
 
@@ -392,6 +440,54 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               />
             )}
           </Card>
+
+          {(!readOnly || grains.length > 0 || hops.length > 0) && (
+            <Card className="gap-4 p-[22px]">
+              <div>
+                <p className="text-[15px] font-bold">Pak Contents</p>
+                <p className="mt-1 text-[12px] text-ink-text-faint">
+                  What to load into the PicoPak — grain in the main compartment, hops in the hop compartments.
+                </p>
+              </div>
+              {(!readOnly || grains.length > 0) && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Grains</p>
+                  <EditableRowList
+                    rows={grains}
+                    templateColumns="1.6fr 0.9fr"
+                    columns={[
+                      { key: 'name', label: 'Grain', type: 'text' },
+                      { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                    ]}
+                    onChange={grainActions.onChange}
+                    onAdd={() => grainActions.onAdd({ amount: 16 })}
+                    onRemove={grainActions.onRemove}
+                    addLabel="Add Grain"
+                    readOnly={readOnly}
+                  />
+                </div>
+              )}
+              {(!readOnly || hops.length > 0) && (
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Hops</p>
+                  <EditableRowList
+                    rows={hops}
+                    templateColumns="1.4fr 0.8fr 0.7fr"
+                    columns={[
+                      { key: 'name', label: 'Hop Type', type: 'text' },
+                      { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                      { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
+                    ]}
+                    onChange={hopActions.onChange}
+                    onAdd={() => hopActions.onAdd({ amount: 0.5, aa: 5 })}
+                    onRemove={hopActions.onRemove}
+                    addLabel="Add Hop"
+                    readOnly={readOnly}
+                  />
+                </div>
+              )}
+            </Card>
+          )}
 
           <Card className="gap-3.5 p-[22px]">
             <div>
