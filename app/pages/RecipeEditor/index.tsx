@@ -13,6 +13,7 @@ import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-edit
 import { cn } from '~/lib/utils';
 import type { AiIngredientRow, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
+import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
@@ -588,11 +589,20 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     ],
   );
 
+  // The payload covers every field (unlike isDirty above, which only tracks what drives validation),
+  // so it's the right yardstick for "has anything been edited that isn't saved yet".
+  const initialPayloadJson = useRef<string | null>(null);
+  if (initialPayloadJson.current === null) {
+    initialPayloadJson.current = JSON.stringify(payload);
+  }
+  const hasUnsavedChanges = !readOnly && JSON.stringify(payload) !== initialPayloadJson.current;
+
   const FormWrapper = readOnly ? 'div' : Form;
   const formWrapperProps = readOnly ? {} : { method: 'post' as const, encType: 'multipart/form-data' as const };
 
   return (
     <>
+      <UnsavedChangesPrompt when={hasUnsavedChanges} />
       <div className="mb-1 flex items-center gap-3">
         <button
           type="button"

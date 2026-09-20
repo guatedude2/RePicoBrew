@@ -2,6 +2,7 @@ import { Form, Link, useNavigate, useNavigation } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
+import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -222,6 +223,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
 
   return (
     <>
+      <UnsavedChangesPrompt when={!readOnly && isDirty} />
       <div className="mb-1 flex items-center gap-3">
         <button
           type="button"
