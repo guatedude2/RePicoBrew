@@ -7,9 +7,10 @@ import { UserRepository } from '~/repositories/user.server';
 import { authenticateUser, isAuthenticated, sessionKey } from '~/services/auth.server';
 import { sessionStorage } from '~/services/session.server';
 import type { DeviceType } from '~/types';
+import { applyAccessPoint, applyHostname, applyWifi } from '~/utils/network-control.server';
 import { isRaspberryPi } from '~/utils/platform.server';
 import { serializeDates } from '~/utils/serialize.server';
-import { listNearbyNetworks } from '~/utils/wifi.server';
+import { checkInternetConnectivity } from '~/utils/wifi.server';
 
 export const meta = () => [{ title: 'First-Time Setup | RePicoBrew' }];
 
@@ -20,16 +21,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw redirect(session ? '/' : '/signin');
   }
 
-  const [devices, discoveredDevices, nearbyNetworks] = await Promise.all([
+  const [devices, discoveredDevices] = await Promise.all([
     DeviceRepository.listDevices(),
     DeviceRepository.listDiscoveredDevices(),
-    listNearbyNetworks(),
   ]);
 
   return serializeDates({
     devices: devices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
     discoveredDevices,
-    nearbyNetworks,
     isRpi: isRaspberryPi(),
   });
 };
@@ -96,6 +95,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { success: true };
   }
 
+  if (intent === 'apply-wifi') {
+    const ssid = (formData.get('ssid') as string)?.trim();
+    const password = (formData.get('password') as string)?.trim();
+    if (!ssid || !password) {
+      return data({ error: 'Missing Wi-Fi network name or password' }, { status: 400 });
+    }
+    if (!isRaspberryPi()) {
+      // Dev machine: nothing to actually join, so let the wizard proceed unblocked — matches the
+      // RpiOnlyHint copy already shown for this step.
+      return { success: true, connected: true };
+    }
+    const result = await applyWifi(ssid, password);
+    if (!result.success) {
+      return data({ error: `Could not join that network: ${result.error}` }, { status: 400 });
+    }
+    const connected = await checkInternetConnectivity();
+    if (!connected) {
+      // apply-wifi.sh's own success just means the config was written and dhcpcd restarted — a
+      // wrong password fails association asynchronously in the driver, not as a script error, so
+      // this is also how a bad password surfaces: no route ever comes up, and the check times out.
+      return data(
+        { error: 'Could not reach the internet on that network — check the password and try again.' },
+        { status: 400 },
+      );
+    }
+    return { success: true, connected: true };
+  }
+
   if (intent === 'complete-setup') {
     const body = setupSchema.safeParse(Object.fromEntries(formData));
     if (!body.success) {
@@ -114,6 +141,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ConfigRepository.setConfig('ACCESS_POINT', { name: apName, password: apPassword }),
       ConfigRepository.setConfig('WIFI', { name: wifiName, password: wifiPassword }),
     ]);
+
+    // Wi-Fi was already applied and internet-verified by the 'apply-wifi' intent when the user
+    // left that wizard step — re-joining here would just be a second, redundant restart+wait.
+    // Hostname/AP have no equivalent live-validation step, so apply them now, best-effort: a
+    // failure here (e.g. a non-Pi dev machine, or a stale sudoers rule) shouldn't block finishing
+    // setup, since the admin account and Wi-Fi — the two things that actually matter for a usable
+    // device — are already in place.
+    if (isRaspberryPi()) {
+      await applyHostname(hostname);
+      await applyAccessPoint(apName, apPassword);
+    }
 
     // Sign the new admin straight in so "Go to Dashboard" doesn't dead-end at another sign-in form.
     const session = await authenticateUser(email, password);

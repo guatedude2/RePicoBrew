@@ -89,7 +89,7 @@ const RpiOnlyHint: FC = () => (
 );
 
 export const Setup: FC = () => {
-  const { devices, discoveredDevices, nearbyNetworks, isRpi } = useLoaderData<typeof import('~/routes/setup').loader>();
+  const { devices, discoveredDevices, isRpi } = useLoaderData<typeof import('~/routes/setup').loader>();
   const [stepIndex, setStepIndex] = useState(0);
   const step = STEPS[stepIndex];
 
@@ -106,6 +106,7 @@ export const Setup: FC = () => {
   const [wifiName, setWifiName] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
   const [manualWifiEntry, setManualWifiEntry] = useState(false);
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
 
   const setupFetcher = useFetcher<{ success?: boolean; error?: string }>();
   const isApplying = setupFetcher.state !== 'idle';
@@ -116,6 +117,8 @@ export const Setup: FC = () => {
       setShowFinish(true);
     }
   }, [setupFetcher.state, setupFetcher.data]);
+
+  const hasDevices = devices.length > 0;
 
   const passwordTooShort = password.length > 0 && password.length < 8;
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
@@ -131,6 +134,23 @@ export const Setup: FC = () => {
 
   const goNext = () => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0));
+
+  // The Wi-Fi step gets its own fetcher (rather than reusing setupFetcher) because it needs to
+  // actually join the network and verify real internet access before letting the wizard advance —
+  // everything else here is a plain client-side `isStepValid` gate with no server round trip.
+  const wifiApplyFetcher = useFetcher<{ success?: boolean; connected?: boolean; error?: string }>();
+  const isApplyingWifi = wifiApplyFetcher.state !== 'idle';
+
+  useEffect(() => {
+    if (wifiApplyFetcher.state === 'idle' && wifiApplyFetcher.data?.success) {
+      goNext();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wifiApplyFetcher.state, wifiApplyFetcher.data]);
+
+  const handleWifiContinue = () => {
+    wifiApplyFetcher.submit({ intent: 'apply-wifi', ssid: wifiName, password: wifiPassword }, { method: 'post' });
+  };
 
   const handleFinishSetup = () => {
     setupFetcher.submit(
@@ -375,25 +395,60 @@ export const Setup: FC = () => {
                   <div>
                     <FieldLabel htmlFor="setup-wifi-name">Network Name</FieldLabel>
                     <WifiNetworkPicker
-                      networks={nearbyNetworks}
                       selectedSsid={wifiName}
                       onSelect={setWifiName}
                       manualMode={manualWifiEntry}
                       onEnterManually={() => setManualWifiEntry(true)}
+                      onShowList={() => setManualWifiEntry(false)}
                       manualValue={wifiName}
                       onManualChange={setWifiName}
                     />
                   </div>
-                  <div>
-                    <FieldLabel htmlFor="setup-wifi-password">Password</FieldLabel>
-                    <Input
-                      id="setup-wifi-password"
-                      type="password"
-                      value={wifiPassword}
-                      onChange={(e) => setWifiPassword(e.target.value)}
-                    />
-                    {!isRpi && <RpiOnlyHint />}
-                  </div>
+                  {wifiName.trim() && (
+                    <div>
+                      <FieldLabel htmlFor="setup-wifi-password">
+                        Password for &ldquo;{wifiName.trim()}&rdquo;
+                      </FieldLabel>
+                      <div className="relative">
+                        <Input
+                          id="setup-wifi-password"
+                          type={showWifiPassword ? 'text' : 'password'}
+                          className="pr-10"
+                          autoFocus={!manualWifiEntry}
+                          disabled={isApplyingWifi}
+                          value={wifiPassword}
+                          onChange={(e) => setWifiPassword(e.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && isStepValid.wifi && !isApplyingWifi) {
+                              handleWifiContinue();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          aria-label={showWifiPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowWifiPassword((v) => !v)}
+                          className="absolute inset-y-0 right-3 flex items-center text-ink-text-faint"
+                        >
+                          {showWifiPassword ? (
+                            <RiEyeCloseLine className="size-4" />
+                          ) : (
+                            <MdOutlineRemoveRedEye className="size-4" />
+                          )}
+                        </button>
+                      </div>
+                      {!isRpi && <RpiOnlyHint />}
+                    </div>
+                  )}
+                  {wifiApplyFetcher.data?.error ? (
+                    <p className="text-sm text-danger-500">{wifiApplyFetcher.data.error}</p>
+                  ) : null}
+                  {isApplyingWifi ? (
+                    <p className="flex items-center gap-2 text-sm text-ink-text-dim">
+                      <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+                      Connecting &amp; checking internet access… this can take up to 30 seconds.
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -404,6 +459,11 @@ export const Setup: FC = () => {
                     <p className="mt-1 text-[13px] text-ink-text-dim">
                       Pair each device to give it a name. You can skip this and add devices later from Settings.
                     </p>
+                  </div>
+                  <div className="rounded-lg border border-ink-card-border bg-ink-bg px-3.5 py-3 text-[13px] text-ink-text-dim">
+                    Your device should connect to the <span className="font-semibold text-ink-text">{apName}</span>{' '}
+                    Wi-Fi network with password{' '}
+                    <span className="font-mono font-semibold text-ink-text">{apPassword}</span>
                   </div>
                   <DevicesCard devices={devices} discoveredDevices={discoveredDevices} />
                 </div>
@@ -418,8 +478,19 @@ export const Setup: FC = () => {
                   <span />
                 )}
                 {step === 'devices' ? (
-                  <Button variant="brand" disabled={isApplying} onClick={handleFinishSetup}>
-                    Finish Setup
+                  <div className="flex items-center gap-2">
+                    {!hasDevices && (
+                      <Button variant="outline" disabled={isApplying} onClick={handleFinishSetup}>
+                        Skip
+                      </Button>
+                    )}
+                    <Button variant="brand" disabled={isApplying || !hasDevices} onClick={handleFinishSetup}>
+                      Finish Setup
+                    </Button>
+                  </div>
+                ) : step === 'wifi' ? (
+                  <Button variant="brand" disabled={!isStepValid[step] || isApplyingWifi} onClick={handleWifiContinue}>
+                    {isApplyingWifi ? 'Connecting…' : 'Continue'}
                   </Button>
                 ) : (
                   <Button variant="brand" disabled={!isStepValid[step]} onClick={goNext}>

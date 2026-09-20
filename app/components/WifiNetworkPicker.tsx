@@ -1,7 +1,9 @@
-import type { FC } from 'react';
+import { useFetcher } from 'react-router';
+import { useEffect, type FC } from 'react';
 import {
   MdCheck,
   MdLock,
+  MdRefresh,
   MdSignalWifi0Bar,
   MdSignalWifi1Bar,
   MdSignalWifi2Bar,
@@ -48,13 +50,15 @@ const NetworkRow: FC<{ network: NearbyNetwork; selected: boolean; onSelect: () =
   </button>
 );
 
+const linkButton = 'text-xs font-semibold text-brand-500 hover:underline disabled:opacity-50';
+
 interface WifiNetworkPickerProps {
-  networks: NearbyNetwork[];
   knownSsid?: string | null;
   selectedSsid: string;
   onSelect: (ssid: string) => void;
   manualMode: boolean;
   onEnterManually: () => void;
+  onShowList: () => void;
   manualValue: string;
   onManualChange: (value: string) => void;
   disabled?: boolean;
@@ -63,25 +67,63 @@ interface WifiNetworkPickerProps {
 // Modeled on macOS's Wi-Fi picker: a grouped list of scanned networks (the previously-configured
 // one, if still in range, called out separately) with an "Other…" escape hatch for hidden/
 // out-of-range networks — rather than a plain text field nobody can spell-check against reality.
+// Scans on its own once mounted (a scan takes several seconds on a Pi Zero W, so it can't sit in a
+// page loader) and can be re-run from the "Rescan" button.
 export const WifiNetworkPicker: FC<WifiNetworkPickerProps> = ({
-  networks,
   knownSsid,
   selectedSsid,
   onSelect,
   manualMode,
   onEnterManually,
+  onShowList,
   manualValue,
   onManualChange,
   disabled,
 }) => {
-  if (networks.length === 0 || manualMode) {
+  const fetcher = useFetcher<{ networks?: NearbyNetwork[] }>();
+  const scanning = fetcher.state !== 'idle';
+  const scanned = fetcher.data !== undefined;
+  const networks = fetcher.data?.networks ?? [];
+  const scan = () => fetcher.load('/api/wifi-networks');
+
+  useEffect(() => {
+    if (!disabled) {
+      scan();
+    }
+    // Scan once when the picker first appears; the button handles later rescans.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const noneFound = scanned && !scanning && networks.length === 0;
+
+  if (disabled || manualMode || noneFound) {
     return (
-      <Input
-        placeholder="Network Name"
-        value={manualValue}
-        disabled={disabled}
-        onChange={(event) => onManualChange(event.target.value)}
-      />
+      <div className="flex flex-col gap-2">
+        <Input
+          placeholder="Network Name"
+          value={manualValue}
+          disabled={disabled}
+          onChange={(event) => onManualChange(event.target.value)}
+        />
+        {!disabled && (
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-ink-text-faint">
+              {noneFound ? 'No networks found — enter the name manually or scan again.' : ''}
+            </p>
+            <button
+              type="button"
+              disabled={scanning}
+              onClick={() => {
+                onShowList();
+                scan();
+              }}
+              className={linkButton}
+            >
+              {scanning ? 'Scanning…' : 'Scan for networks'}
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -91,35 +133,50 @@ export const WifiNetworkPicker: FC<WifiNetworkPickerProps> = ({
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-lg border border-ink-card-border">
-        {known && (
-          <div>
-            <p className="bg-ink-bg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-text-faint">
-              Known Network
-            </p>
-            <NetworkRow network={known} selected={selectedSsid === known.ssid} onSelect={() => onSelect(known.ssid)} />
+        {scanning && networks.length === 0 ? (
+          <div className="flex items-center gap-2.5 px-3.5 py-4 text-sm text-ink-text-dim">
+            <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            Scanning for networks…
           </div>
+        ) : (
+          <>
+            {known && (
+              <div>
+                <p className="bg-ink-bg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-text-faint">
+                  Known Network
+                </p>
+                <NetworkRow
+                  network={known}
+                  selected={selectedSsid === known.ssid}
+                  onSelect={() => onSelect(known.ssid)}
+                />
+              </div>
+            )}
+            <div>
+              <p className="bg-ink-bg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-text-faint">
+                {known ? 'Other Networks' : 'Networks'}
+              </p>
+              {others.map((network) => (
+                <NetworkRow
+                  key={network.ssid}
+                  network={network}
+                  selected={selectedSsid === network.ssid}
+                  onSelect={() => onSelect(network.ssid)}
+                />
+              ))}
+            </div>
+          </>
         )}
-        <div>
-          <p className="bg-ink-bg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-text-faint">
-            {known ? 'Other Networks' : 'Networks'}
-          </p>
-          {others.map((network) => (
-            <NetworkRow
-              key={network.ssid}
-              network={network}
-              selected={selectedSsid === network.ssid}
-              onSelect={() => onSelect(network.ssid)}
-            />
-          ))}
-        </div>
       </div>
-      <button
-        type="button"
-        onClick={onEnterManually}
-        className="self-end text-xs font-semibold text-brand-500 hover:underline"
-      >
-        Other…
-      </button>
+      <div className="flex items-center justify-between">
+        <button type="button" disabled={scanning} onClick={scan} className={cn(linkButton, 'flex items-center gap-1')}>
+          <MdRefresh className={cn('size-3.5', scanning && 'animate-spin')} />
+          {scanning ? 'Scanning…' : 'Rescan'}
+        </button>
+        <button type="button" onClick={onEnterManually} className={linkButton}>
+          Other…
+        </button>
+      </div>
     </div>
   );
 };

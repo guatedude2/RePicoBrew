@@ -12,7 +12,7 @@ const hostnameValidator = z
     'Invalid hostname',
   );
 
-export type SaveState = 'idle' | 'saving' | 'restarting';
+export type SaveState = 'idle' | 'saving';
 
 interface ReducerState {
   isGeneralSectionDirty: boolean;
