@@ -165,6 +165,20 @@ const stepperSwatch = (done: boolean, active: boolean) => {
   return { bg: 'bg-ink-card', color: 'text-ink-text-faint', border: 'border-ink-border-strong' };
 };
 
+// 5475 -> "1h 31m 15s", 915 -> "15m 15s", 45 -> "45s" — hours only once there's at least one.
+const formatCountdown = (totalSeconds: number) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+};
+
 const formatDuration = (start: Date | string) => {
   const hours = Math.floor((Date.now() - new Date(start).getTime()) / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
@@ -657,9 +671,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           {batch.phase === BatchPhase.BREWING && liveBrew?.timeLeft ? (
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-ink-text-faint">Time Remaining</p>
-              <p className="font-mono text-lg font-bold text-brand-500">
-                {Math.floor(brewSecondsLeft / 60)}m {brewSecondsLeft % 60}s
-              </p>
+              <p className="font-mono text-lg font-bold text-brand-500">{formatCountdown(brewSecondsLeft)}</p>
             </div>
           ) : null}
 
