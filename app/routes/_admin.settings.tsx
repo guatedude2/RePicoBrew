@@ -25,6 +25,7 @@ import {
 } from '~/utils/system-control.server';
 import { getSystemInfo } from '~/utils/system-info.server';
 import { checkInternetConnectivity } from '~/utils/wifi.server';
+import { TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
 
 // Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
 // `sudo`, see ~/utils/system-control.server) — restrict them to the same role tier that already
@@ -167,6 +168,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'A user with that email already exists' }, { status: 400 });
     }
     await UserRepository.updateUser(id, { name, email, role });
+    return { success: true };
+  }
+
+  if (intent === 'saveTimeFormat') {
+    const timeFormat = formData.get('timeFormat');
+    if (timeFormat !== '12h' && timeFormat !== '24h') {
+      return data({ error: 'Invalid time format' }, { status: 400 });
+    }
+    await ConfigRepository.setConfig(TIME_FORMAT_CONFIG_KEY, timeFormat);
     return { success: true };
   }
 

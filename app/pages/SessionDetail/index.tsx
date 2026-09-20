@@ -29,6 +29,7 @@ import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 import { useServerSideEvent } from '~/utils/sse';
+import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
@@ -477,6 +478,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   });
 
   const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
+  const timeFormat = useTimeFormat();
   const [aiAdviceList, setAiAdviceList] = useState<AiAdviceRow[]>(aiAdvice);
   useServerSideEvent<{ batchId: number; advice: AiAdviceRow }>('ai-advice-ready', (data) => {
     if (data.batchId === batch.id) {
@@ -730,14 +732,25 @@ export const SessionDetail: FC<SessionDetailData> = ({
                       stroke: { width: 2, curve: 'smooth' },
                       dataLabels: { enabled: false },
                       legend: { show: false },
-                      xaxis: { type: 'datetime', labels: { style: { colors: 'oklch(0.6 0.008 260)' } } },
+                      xaxis: {
+                        type: 'datetime',
+                        labels: {
+                          style: { colors: 'oklch(0.6 0.008 260)' },
+                          datetimeUTC: false,
+                          datetimeFormatter: { hour: chartTimeToken(timeFormat), minute: chartTimeToken(timeFormat) },
+                        },
+                      },
                       yaxis: {
                         min: 0,
                         title: { text: 'TEMP (°F)', style: { color: 'oklch(0.6 0.008 260)' } },
                         labels: { style: { colors: 'oklch(0.6 0.008 260)' } },
                       },
                       grid: { borderColor: 'oklch(0.24 0.008 260)', padding: { bottom: stepLabelAreaPx } },
-                      tooltip: { theme: 'dark', shared: true, x: { format: 'MMM d, h:mm:ss TT' } },
+                      tooltip: {
+                        theme: 'dark',
+                        shared: true,
+                        x: { format: `MMM d, ${chartTimeToken(timeFormat, true)}` },
+                      },
                       annotations: {
                         xaxis: brewChart.stepMarkers.map((m, i) => ({
                           x: m.x,
@@ -1179,7 +1192,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
               <p className="mt-0.5 text-[13px] text-ink-text-dim">{batch.recipe?.style ?? ' '}</p>
               <div className="mt-2.5 flex items-center gap-[18px]">
                 <div>
-                  <p className="text-[11px] text-ink-text-faint">Progress</p>
+                  <p className="text-[11px] text-ink-text-faint">
+                    {PHASES.indexOf(batch.phase as BatchPhase) >= 0 && batch.phase !== BatchPhase.COMPLETED
+                      ? `${phaseTitle(batch.phase as BatchPhase)} progress`
+                      : 'Progress'}
+                  </p>
                   <p className="font-mono text-xl font-bold text-brand-500">{overallProgress}%</p>
                 </div>
                 {batch.recipe && (
@@ -1243,8 +1260,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
             <DialogTitle>End this session?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-ink-text-secondary">
-            This stops {batch.name} now and marks the session as canceled. This can&apos;t be undone.
+            This marks {batch.name} as canceled in RePicoBrew. This can&apos;t be undone.
           </p>
+          {batch.phase === BatchPhase.BREWING && (
+            <p className="rounded-lg border border-brand-500 bg-brand-100 px-3 py-2 text-sm text-ink-text">
+              This does not stop your PicoBrew. If it&apos;s still brewing, stop it from the device itself.
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEndModalOpen(false)}>
               Keep Brewing

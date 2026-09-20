@@ -25,7 +25,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { BatchRepository } from '~/repositories/batch.server';
 import { BatchPhase } from '~/types';
-import { batchNeedsAttention, phaseAccent, phaseLabel } from '~/utils/batch-phase';
+import {
+  batchNeedsAttention,
+  batchOverallProgress,
+  batchStageRemainingMs,
+  phaseAccent,
+  phaseLabel,
+} from '~/utils/batch-phase';
+import { formatClockTime, useTimeFormat } from '~/utils/time-format';
 
 export const meta = () => [{ title: 'Sessions | RePicoBrew' }];
 
@@ -51,13 +58,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const dirParam = url.searchParams.get('dir');
   const dir: SortDir = dirParam === 'asc' || dirParam === 'desc' ? dirParam : DEFAULT_DIR[sort];
   const { batches, total } = await BatchRepository.listPaginated(page, PAGE_SIZE, sort, dir);
-  return { batches, total, page, pageSize: PAGE_SIZE, sort, dir };
+  const batchesWithTiming = batches.map((batch) => ({
+    ...batch,
+    progress: batchOverallProgress(batch),
+    stageRemainingMs: batchStageRemainingMs(batch),
+  }));
+  return { batches: batchesWithTiming, total, page, pageSize: PAGE_SIZE, sort, dir };
 };
 
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-const formatTime = (date: Date | string) =>
-  new Date(date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+// 5475000 -> "1h 31m", 915000 -> "15m", 20000 -> "<1m"; days once past 48 hours.
+const formatRemaining = (ms: number) => {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) {
+    return '<1m';
+  }
+  if (minutes >= 48 * 60) {
+    return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+};
 
 const columns = '1.4fr 1.2fr 1.1fr 1.1fr 60px';
 
@@ -88,6 +111,7 @@ const SessionRow: FC<{ batch: BatchRow; onRequestCancel: (batch: BatchRow) => vo
   onRequestCancel,
 }) => {
   const navigate = useNavigate();
+  const timeFormat = useTimeFormat();
   const archiveFetcher = useFetcher();
   const primarySession = batch.sessions[0];
   const isLive = LIVE_PHASES.includes(batch.phase);
@@ -105,30 +129,38 @@ const SessionRow: FC<{ batch: BatchRow; onRequestCancel: (batch: BatchRow) => vo
         <span className="size-[7px] shrink-0 rounded-full bg-brand-500" />
         <span className="truncate">{primarySession?.device?.name || 'Unknown'}</span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span
-          className="rounded-md px-2.5 py-[3px] text-[11px] font-bold"
-          style={{
-            backgroundColor: `oklch(${phaseAccent(batch.phase)} / 0.18)`,
-            color: `oklch(${phaseAccent(batch.phase)})`,
-          }}
-        >
-          {phaseLabel(batch.phase)}
-        </span>
-        {needsAttention && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="flex">
-                <MdWarning className="size-[15px] text-orange-400" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Needs your input to continue</TooltipContent>
-          </Tooltip>
+      <div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="rounded-md px-2.5 py-[3px] text-[11px] font-bold"
+            style={{
+              backgroundColor: `oklch(${phaseAccent(batch.phase)} / 0.18)`,
+              color: `oklch(${phaseAccent(batch.phase)})`,
+            }}
+          >
+            {phaseLabel(batch.phase)}
+          </span>
+          {needsAttention && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex">
+                  <MdWarning className="size-[15px] text-orange-400" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Needs your input to continue</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+        {isLive && batch.stageRemainingMs !== null && (
+          <p className="mt-1 text-[11px] text-ink-text-faint">
+            {batch.progress}% &middot;{' '}
+            {batch.stageRemainingMs > 0 ? `~${formatRemaining(batch.stageRemainingMs)} left` : 'estimate elapsed'}
+          </p>
         )}
       </div>
       <div>
         <p className="text-[13px] font-semibold">{formatDate(batch.createdAt)}</p>
-        <p className="text-[11px] text-ink-text-faint">{formatTime(batch.createdAt)}</p>
+        <p className="text-[11px] text-ink-text-faint">{formatClockTime(batch.createdAt, timeFormat)}</p>
       </div>
       <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
         {(isLive || isArchivable) && (

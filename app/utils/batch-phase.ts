@@ -83,13 +83,7 @@ export function attentionMessage(phase: string): string {
   }
 }
 
-const clampPct = (start: number, totalMs: number) =>
-  totalMs > 0 ? Math.max(0, Math.min(99, Math.round(((Date.now() - start) / totalMs) * 100))) : 0;
-
-// Rough progress for the batch's current phase, derived from real elapsed time vs. an estimated
-// duration — shared by the Dashboard's ongoing-brews list and the Session Detail header so both
-// show the same number for a given batch.
-export function batchOverallProgress(batch: {
+type StageTimingInput = {
   phase: string;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -98,31 +92,54 @@ export function batchOverallProgress(batch: {
   carbStartedAt: string | Date | null;
   recipe: { fermentDays: number | null; steps: Array<{ stepTime: number; drainTime: number }> } | null;
   sessions: Array<{ type: number; createdAt: string | Date }>;
-}): number {
-  if (batch.phase === BatchPhase.COMPLETED) {
-    return 100;
-  }
-  if (batch.phase === BatchPhase.CANCELED) {
-    return 0;
-  }
+};
+
+// Estimated start + duration of the batch's current phase; null when the phase has no timed window
+// (bottling, completed, canceled).
+function currentStageWindow(batch: StageTimingInput): { startMs: number; totalMs: number } | null {
   if (batch.phase === BatchPhase.BREWING) {
     const brewMs = (batch.recipe?.steps ?? []).reduce((sum, s) => sum + s.stepTime + s.drainTime, 0) * 60000;
-    return clampPct(new Date(batch.createdAt).getTime(), brewMs);
+    return { startMs: new Date(batch.createdAt).getTime(), totalMs: brewMs };
   }
   if (batch.phase === BatchPhase.COOLING) {
-    return clampPct(new Date(batch.updatedAt).getTime(), 24 * 3600000);
+    return { startMs: new Date(batch.updatedAt).getTime(), totalMs: 24 * 3600000 };
   }
   if (batch.phase === BatchPhase.FERMENTING) {
     const fermSession = batch.sessions.find((s) => s.type === FERMENTATION_SESSION_TYPE);
-    const fermStart = new Date(fermSession?.createdAt ?? batch.updatedAt).getTime();
-    const fermMs = (batch.recipe?.fermentDays ?? 7) * 86400000;
-    return clampPct(fermStart, fermMs);
+    return {
+      startMs: new Date(fermSession?.createdAt ?? batch.updatedAt).getTime(),
+      totalMs: (batch.recipe?.fermentDays ?? 7) * 86400000,
+    };
   }
-  if (batch.phase === BatchPhase.BOTTLING) {
+  if (batch.phase === BatchPhase.CARBONATING) {
+    return {
+      startMs: new Date(batch.carbStartedAt ?? batch.updatedAt).getTime(),
+      totalMs: batch.carbDuration ? carbMsFor(batch.carbDuration, batch.carbUnit ?? 'weeks') : 14 * 86400000,
+    };
+  }
+  return null;
+}
+
+// Rough progress for the batch's current phase, derived from real elapsed time vs. an estimated
+// duration — shared by the Dashboard's ongoing-brews list, the sessions list and the Session Detail
+// header so all show the same number for a given batch.
+export function batchOverallProgress(batch: StageTimingInput): number {
+  if (batch.phase === BatchPhase.COMPLETED) {
+    return 100;
+  }
+  const window = currentStageWindow(batch);
+  if (!window || window.totalMs <= 0) {
     return 0;
   }
-  // Carbonating
-  const carbMs = batch.carbDuration ? carbMsFor(batch.carbDuration, batch.carbUnit ?? 'weeks') : 14 * 86400000;
-  const carbStart = new Date(batch.carbStartedAt ?? batch.updatedAt).getTime();
-  return clampPct(carbStart, carbMs);
+  return Math.max(0, Math.min(99, Math.round(((Date.now() - window.startMs) / window.totalMs) * 100)));
+}
+
+// Estimated milliseconds left in the current phase (0 once the estimate has elapsed), or null when
+// the phase has no timed window.
+export function batchStageRemainingMs(batch: StageTimingInput): number | null {
+  const window = currentStageWindow(batch);
+  if (!window || window.totalMs <= 0) {
+    return null;
+  }
+  return Math.max(0, window.startMs + window.totalMs - Date.now());
 }

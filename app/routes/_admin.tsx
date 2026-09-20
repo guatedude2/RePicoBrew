@@ -4,10 +4,12 @@ import { MainLayout } from '~/layouts/MainLayout';
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
+import { ConfigRepository } from '~/repositories/config.server';
 import { UserRepository } from '~/repositories/user.server';
 import authenticator from '~/services/auth.server';
 import type { SessionData } from '~/services/session.server';
 import { ServerSideEventsProvider } from '~/utils/sse';
+import { parseTimeFormat, TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   // A fresh install/disk image has no users yet — send it through first-time setup instead of
@@ -28,16 +30,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   void import('~/services/ai-scheduler.server');
   void import('~/services/device-monitor.server');
 
-  const [deviceStatus, attentionBatches, hasAiKey] = await Promise.all([
+  const [deviceStatus, attentionBatches, hasAiKey, timeFormat] = await Promise.all([
     DeviceRepository.getStatus(),
     BatchRepository.listNeedingAttention(),
     AiSettingsRepository.hasActiveKey(),
+    ConfigRepository.getConfig(TIME_FORMAT_CONFIG_KEY),
   ]);
 
   return {
     session,
     deviceStatus,
     hasAiKey,
+    timeFormat: parseTimeFormat(timeFormat),
     attentionBatches: attentionBatches.map((batch) => ({
       id: batch.id,
       name: batch.name,

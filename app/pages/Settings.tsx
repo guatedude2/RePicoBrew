@@ -15,6 +15,7 @@ import { UsersCard } from '~/components/settings/UsersCard';
 
 import type { SaveState } from './Settings/settings-reducer';
 import { useSettingsReducer } from './Settings/settings-reducer';
+import { useTimeFormat } from '~/utils/time-format';
 
 const SectionHeading: FC<{ title: string; description: string }> = ({ title, description }) => (
   <>
@@ -118,6 +119,9 @@ export const Settings: FC = () => {
   }, []);
 
   const generalFetcher = useFetcher();
+  const timeFormatFetcher = useFetcher<{ error?: string }>();
+  const savedTimeFormat = useTimeFormat();
+  const timeFormat = (timeFormatFetcher.formData?.get('timeFormat') as string | null | undefined) ?? savedTimeFormat;
   const apFetcher = useFetcher();
   const wifiFetcher = useFetcher();
 
@@ -329,6 +333,29 @@ export const Settings: FC = () => {
               <p className="mt-2 text-xs text-danger-500">{generalFetcher.data.error}</p>
             ) : null}
             <SaveButton saveState={state.generalSaveState} onClick={saveGeneralSection} disabled={!isRpi} />
+          </Card>
+
+          <Card className="mt-4 flex flex-col p-6">
+            <SectionHeading title="Time format" description="How times are shown on graphs and in the session list." />
+            <div className="w-full md:w-3/5">
+              <FieldLabel htmlFor="time-format">Clock</FieldLabel>
+              <Select
+                id="time-format"
+                value={timeFormat}
+                onChange={(event) =>
+                  timeFormatFetcher.submit(
+                    { intent: 'saveTimeFormat', timeFormat: event.target.value },
+                    { method: 'post' },
+                  )
+                }
+              >
+                <option value="12h">12-hour (3:45 PM)</option>
+                <option value="24h">24-hour (15:45)</option>
+              </Select>
+              {timeFormatFetcher.data?.error ? (
+                <p className="mt-1.5 text-xs text-danger-500">{timeFormatFetcher.data.error}</p>
+              ) : null}
+            </div>
           </Card>
         </TabsContent>
 

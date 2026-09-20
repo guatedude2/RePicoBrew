@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { Chart } from '~/components/charts/Chart.client';
+import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
 
 interface FermentationChartProps {
   sessionId: number;
@@ -38,6 +39,7 @@ const TEXT_COLOR = 'oklch(0.75 0.006 260)';
 const GRID_COLOR = 'oklch(0.24 0.008 260)';
 
 export default function FermentationChart({ sessionId }: FermentationChartProps) {
+  const timeFormat = useTimeFormat();
   const [data, setData] = useState<DataPoint[]>([]);
 
   // Fetch historical data
@@ -104,6 +106,7 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
       labels: {
         style: { colors: TEXT_COLOR, fontSize: '12px' },
         datetimeUTC: false,
+        datetimeFormatter: { hour: chartTimeToken(timeFormat), minute: chartTimeToken(timeFormat) },
       },
       axisBorder: { color: GRID_COLOR },
       axisTicks: { color: GRID_COLOR },
@@ -123,7 +126,7 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
     ],
     tooltip: {
       theme: 'dark',
-      x: { format: 'MMM dd, HH:mm' },
+      x: { format: `MMM dd, ${chartTimeToken(timeFormat)}` },
       y: [{ formatter: (val) => `${val.toFixed(1)}°F` }, { formatter: (val) => `${val.toFixed(3)} SG` }],
     },
     legend: { labels: { colors: TEXT_COLOR } },
