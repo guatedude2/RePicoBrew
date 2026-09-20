@@ -306,8 +306,8 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="danger" onClick={handleDelete}>
-              Remove Device
+            <Button variant="danger" disabled={deleteFetcher.state !== 'idle'} onClick={handleDelete}>
+              {deleteFetcher.state !== 'idle' ? 'Removing…' : 'Remove Device'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -347,8 +347,8 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" disabled={!name || !selected} onClick={handlePair}>
-              Pair Device
+            <Button variant="brand" disabled={!name || !selected || pairFetcher.state !== 'idle'} onClick={handlePair}>
+              {pairFetcher.state !== 'idle' ? 'Pairing…' : 'Pair Device'}
             </Button>
           </DialogFooter>
         </DialogContent>

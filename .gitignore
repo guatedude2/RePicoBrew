@@ -10,6 +10,7 @@ node_modules
 pnpm-debug.log*
 .pnpm-store/**
 public/_proto*
+prisma/*.db
 prisma/*.db-journal
 prisma/*.db-wal
 prisma/*.db-shm

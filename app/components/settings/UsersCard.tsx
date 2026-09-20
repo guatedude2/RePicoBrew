@@ -197,8 +197,12 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
             <Button variant="ghost" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" disabled={!name || !email || !password} onClick={handleAdd}>
-              Add User
+            <Button
+              variant="brand"
+              disabled={!name || !email || !password || addFetcher.state !== 'idle'}
+              onClick={handleAdd}
+            >
+              {addFetcher.state !== 'idle' ? 'Adding…' : 'Add User'}
             </Button>
           </DialogFooter>
         </DialogContent>

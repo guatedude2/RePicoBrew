@@ -1,4 +1,4 @@
-import { Outlet, useRouteLoaderData } from 'react-router';
+import { Outlet, useRevalidator, useRouteLoaderData } from 'react-router';
 import { ToastProvider, createToast } from '~/components/Toasts/ToastProvider';
 import { AiBrewmasterSidekick } from '~/components/recipes/AiBrewmasterModal';
 import { AiSidekickProvider } from '~/components/recipes/AiSidekickContext';
@@ -18,10 +18,16 @@ const DETECTED_DEVICE_LABEL: Partial<Record<DeviceType, string>> = {
 };
 
 export const MainLayout = () => {
+  const revalidator = useRevalidator();
   useServerSideEvent<DeviceDetectedData>('device-detected', (data) => {
     if (data.isRegistered) {
       return;
     }
+
+    // Reload the current page's data so a newly discovered device shows up in Settings > Devices
+    // right away — the loaders only run on navigation, so without this the list stays stale until
+    // the page is manually refreshed.
+    revalidator.revalidate();
 
     // Pico S/C/Pro all hit the same registration endpoint, so the model can't be told apart yet —
     // the admin picks it when pairing from the Devices settings page.

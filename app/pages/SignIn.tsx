@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Link, useActionData } from 'react-router';
+import { Form, Link, useActionData, useNavigation } from 'react-router';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
 import { Button } from '~/components/ui/button';
@@ -38,8 +38,14 @@ const Logo = () => (
 
 export const SignIn = () => {
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const [show, setShow] = React.useState(false);
   const handleClick = () => setShow(!show);
+
+  // Covers both the sign-in POST and the redirect target's own loader (e.g. /dashboard) — on the
+  // Pi Zero W's single ARMv6 core, that loader can take several seconds, and without this the
+  // button just sits there looking unresponsive after a correct password.
+  const isSubmitting = navigation.state !== 'idle';
 
   const isEmailError = Boolean(actionData && 'email' in actionData.error);
   const errorMessage = actionData && 'message' in actionData.error ? getErrorMessage(actionData.error.message) : null;
@@ -95,8 +101,15 @@ export const SignIn = () => {
                 <p className="text-[13px] font-semibold text-brand-500">Forgot password?</p>
               </Link>
             </div>
-            <Button type="submit" variant="brand" size="lg" className="mt-1">
-              Sign In
+            <Button type="submit" variant="brand" size="lg" className="mt-1" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Signing in…
+                </span>
+              ) : (
+                'Sign In'
+              )}
             </Button>
           </Form>
         </div>
