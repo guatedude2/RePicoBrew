@@ -885,11 +885,15 @@ export const Settings: FC = () => {
           <Card className="mt-4 flex flex-col p-6">
             <SectionHeading
               title="Web search"
-              description="Lets the AI Brewmaster look up a named beer or kit online, read the top pages and cite them, instead of guessing from memory. Uses a SearXNG instance you run yourself — free, no API key."
+              description="Lets the AI Brewmaster look up a named beer or kit online, read the top pages and cite them, instead of guessing from memory. Free, no API key: it uses a SearXNG instance, which the Raspberry Pi install sets up on this device automatically. You can also point it at your own instance."
             />
             {searchUrl ? (
               <ConfiguredRow
-                label={`SearXNG: ${searchUrl}`}
+                label={
+                  /^https?:\/\/(127\.0\.0\.1|localhost)[:/]?/.test(searchUrl)
+                    ? 'Built-in search (SearXNG on this device)'
+                    : `SearXNG: ${searchUrl}`
+                }
                 disabled={isSearchSaving}
                 onRemove={() => searchFetcher.submit({ intent: 'clearSearchUrl' }, { method: 'post' })}
               />

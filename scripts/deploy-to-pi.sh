@@ -125,6 +125,15 @@ $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-ap.sh
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-wifi.sh *
 EOF
 
+  # Private web search for the AI Brewmaster: a local-only SearXNG instance. Installed once (10-20 min);
+  # later deploys skip it.
+  if ssh "$TARGET" 'test -x /opt/searxng/venv/bin/python && systemctl is-active --quiet searxng'; then
+    echo "==> SearXNG (AI web search) already installed."
+  else
+    echo "==> Installing SearXNG for the AI Brewmaster's web search (10-20 minutes the first time)..."
+    ssh "$TARGET" "APP_DIR='$APP_DIR' bash -s" <"$REPO_DIR/scripts/setup-searxng.sh"
+  fi
+
   install_service
 }
 
