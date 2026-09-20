@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData } from 'react-router';
+import { useFetcher, useLoaderData, useRouteLoaderData } from 'react-router';
 import { useEffect, useRef, useState, type FC } from 'react';
 import { MdCheckCircle, MdInfoOutline, MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
@@ -9,6 +9,7 @@ import { Label } from '~/components/ui/label';
 import { Select } from '~/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { DevicesCard } from '~/components/settings/DevicesCard';
+import { SystemCard } from '~/components/settings/SystemCard';
 import { WifiNetworkPicker } from '~/components/WifiNetworkPicker';
 import { UsersCard } from '~/components/settings/UsersCard';
 
@@ -31,16 +32,16 @@ const FieldLabel: FC<{ htmlFor?: string; children: React.ReactNode }> = ({ htmlF
 const SAVE_LABEL: Record<SaveState, string> = {
   idle: 'Save Changes',
   saving: 'Saving…',
-  restarting: 'Restarting device…',
 };
 
-const SaveButton: FC<{ saveState: SaveState; onClick: () => void; disabled?: boolean }> = ({
+const SaveButton: FC<{ saveState: SaveState; onClick: () => void; disabled?: boolean; savingLabel?: string }> = ({
   saveState,
   onClick,
   disabled,
+  savingLabel,
 }) => (
   <Button variant="brand" className="mt-4 self-start" disabled={disabled || saveState !== 'idle'} onClick={onClick}>
-    {SAVE_LABEL[saveState]}
+    {saveState === 'saving' && savingLabel ? savingLabel : SAVE_LABEL[saveState]}
   </Button>
 );
 
@@ -50,12 +51,6 @@ const RpiOnlyNotice: FC = () => (
     These are Raspberry Pi settings. This server isn&apos;t running on a Raspberry Pi, so they&apos;re read-only here.
   </div>
 );
-
-// Restarting a Pi's network services after a config change takes a few seconds — this simulates
-// that wait client-side once the save itself succeeds, matching the design's saving -> restarting
-// -> idle sequence. The actual hostapd/wpa_supplicant/hostname restart isn't wired up yet; that's
-// infrastructure-specific and belongs behind the corresponding Pi-side service call.
-const RESTART_DELAY_MS = 2200;
 
 const AI_PROVIDER_LABEL: Record<string, string> = {
   openai: 'OpenAI',
@@ -88,14 +83,16 @@ export const Settings: FC = () => {
     hostname,
     accessPoint,
     wifi,
-    nearbyNetworks,
     isRpi,
     openAiSettings,
     claudeSettings,
     zenSettings,
     customSettings,
     activeProvider,
+    systemInfo,
   } = useLoaderData<typeof import('~/routes/_admin.settings').loader>();
+  const adminData = useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin');
+  const canControlSystem = adminData?.session?.role !== 'ReadOnly';
   const { state, actions, dispatch } = useSettingsReducer();
   // Bypasses a generics-inference quirk in the shared tiny-reducer helper that collapses these
   // three action creators' payload type to `never` when mixed with the larger reducer map; the
@@ -130,44 +127,29 @@ export const Settings: FC = () => {
     fetcher.submit(body, { method: 'post' });
   };
 
+  // The backend action itself now actually applies (and, for Wi-Fi, verifies internet access)
+  // before responding, so the fetcher's own submitting -> idle transition already spans the real
+  // operation — no more client-side fake "restarting" delay needed.
   useEffect(() => {
-    if (generalFetcher.state !== 'idle' || !generalFetcher.data) {
-      return;
+    if (generalFetcher.state === 'idle' && state.generalSaveState === 'saving') {
+      setGeneralSaveState('idle');
     }
-    if (state.generalSaveState !== 'saving') {
-      return;
-    }
-    setGeneralSaveState('restarting');
-    const t = setTimeout(() => setGeneralSaveState('idle'), RESTART_DELAY_MS);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generalFetcher.state, generalFetcher.data]);
+  }, [generalFetcher.state]);
 
   useEffect(() => {
-    if (apFetcher.state !== 'idle' || !apFetcher.data) {
-      return;
+    if (apFetcher.state === 'idle' && state.apSaveState === 'saving') {
+      setApSaveState('idle');
     }
-    if (state.apSaveState !== 'saving') {
-      return;
-    }
-    setApSaveState('restarting');
-    const t = setTimeout(() => setApSaveState('idle'), RESTART_DELAY_MS);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apFetcher.state, apFetcher.data]);
+  }, [apFetcher.state]);
 
   useEffect(() => {
-    if (wifiFetcher.state !== 'idle' || !wifiFetcher.data) {
-      return;
+    if (wifiFetcher.state === 'idle' && state.wifiSaveState === 'saving') {
+      setWifiSaveState('idle');
     }
-    if (state.wifiSaveState !== 'saving') {
-      return;
-    }
-    setWifiSaveState('restarting');
-    const t = setTimeout(() => setWifiSaveState('idle'), RESTART_DELAY_MS);
-    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wifiFetcher.state, wifiFetcher.data]);
+  }, [wifiFetcher.state]);
 
   const saveGeneralSection = () => {
     actions.validateHostnameSection((valid) => {
@@ -319,6 +301,7 @@ export const Settings: FC = () => {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="devices">Devices</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -342,6 +325,9 @@ export const Settings: FC = () => {
               />
               {state.isHostNameError ? <p className="mt-1.5 text-xs text-danger-500">{state.isHostNameError}</p> : null}
             </div>
+            {generalFetcher.data?.error ? (
+              <p className="mt-2 text-xs text-danger-500">{generalFetcher.data.error}</p>
+            ) : null}
             <SaveButton saveState={state.generalSaveState} onClick={saveGeneralSection} disabled={!isRpi} />
           </Card>
         </TabsContent>
@@ -396,6 +382,7 @@ export const Settings: FC = () => {
                 </div>
               </div>
             </div>
+            {apFetcher.data?.error ? <p className="mt-2 text-xs text-danger-500">{apFetcher.data.error}</p> : null}
             <SaveButton saveState={state.apSaveState} onClick={saveAccessPoint} disabled={!isRpi} />
           </Card>
         </TabsContent>
@@ -411,12 +398,12 @@ export const Settings: FC = () => {
               <div>
                 <FieldLabel htmlFor="wifi-name">Network Name</FieldLabel>
                 <WifiNetworkPicker
-                  networks={nearbyNetworks}
                   knownSsid={wifi.name || null}
                   selectedSsid={state.wifiNetworkName}
                   onSelect={actions.setWifiNetworkName}
                   manualMode={manualWifiEntry}
                   onEnterManually={() => setManualWifiEntry(true)}
+                  onShowList={() => setManualWifiEntry(false)}
                   manualValue={state.wifiNetworkName}
                   onManualChange={actions.setWifiNetworkName}
                   disabled={!isRpi}
@@ -452,7 +439,13 @@ export const Settings: FC = () => {
                 </div>
               </div>
             </div>
-            <SaveButton saveState={state.wifiSaveState} onClick={saveWifi} disabled={!isRpi} />
+            {wifiFetcher.data?.error ? <p className="mt-2 text-xs text-danger-500">{wifiFetcher.data.error}</p> : null}
+            <SaveButton
+              saveState={state.wifiSaveState}
+              onClick={saveWifi}
+              disabled={!isRpi}
+              savingLabel="Connecting & checking internet…"
+            />
           </Card>
         </TabsContent>
 
@@ -857,6 +850,10 @@ export const Settings: FC = () => {
               </div>
             )}
           </Card>
+        </TabsContent>
+
+        <TabsContent value="system">
+          <SystemCard systemInfo={systemInfo} isRpi={isRpi} canControlSystem={canControlSystem} />
         </TabsContent>
       </Tabs>
     </div>

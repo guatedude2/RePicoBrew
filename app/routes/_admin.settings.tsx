@@ -10,10 +10,39 @@ import {
   listOpenAiModels,
   verifyChatCompletionsAccess,
 } from '~/services/ai-models.server';
+import authenticator from '~/services/auth.server';
 import type { DeviceType } from '~/types';
+import { applyAccessPoint, applyHostname, applyWifi } from '~/utils/network-control.server';
 import { isRaspberryPi } from '~/utils/platform.server';
 import { serializeDates } from '~/utils/serialize.server';
-import { listNearbyNetworks } from '~/utils/wifi.server';
+import {
+  checkForUpdates,
+  getUpdateStatus,
+  rebootPi,
+  restartServer,
+  shutdownPi,
+  startUpdates,
+} from '~/utils/system-control.server';
+import { getSystemInfo } from '~/utils/system-info.server';
+import { checkInternetConnectivity } from '~/utils/wifi.server';
+
+// Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
+// `sudo`, see ~/utils/system-control.server) — restrict them to the same role tier that already
+// gates the rest of admin-only capability in this app. There's no dedicated "Admin" role
+// (UserRepository/prisma schema only define "Regular" | "ReadOnly"), so "not ReadOnly" is the
+// existing stand-in for "trusted/elevated user" — matches how ReadOnly is treated everywhere else
+// this app talks about roles (app/components/settings/UsersCard.tsx, app/pages/Profile.tsx).
+// Returns an error response to return from the action, or null if the caller may proceed.
+async function requireSystemControlAccess(request: Request) {
+  const session = await authenticator.isAuthenticated(request);
+  if (!session) {
+    return data({ error: 'Not authenticated' }, { status: 401 });
+  }
+  if (session.role === 'ReadOnly') {
+    return data({ error: 'You do not have permission to do that.' }, { status: 403 });
+  }
+  return null;
+}
 
 export const meta = () => [
   { title: 'Settings | RePicoBrew' },
@@ -30,7 +59,6 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     hostname,
     accessPoint,
     wifi,
-    nearbyNetworks,
     openAiSettings,
     claudeSettings,
     zenSettings,
@@ -43,7 +71,6 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     ConfigRepository.getConfig<string>('SERVER_HOSTNAME'),
     ConfigRepository.getConfig<WifiConfig>('ACCESS_POINT'),
     ConfigRepository.getConfig<WifiConfig>('WIFI'),
-    listNearbyNetworks(),
     AiSettingsRepository.getOpenAiSettings(),
     AiSettingsRepository.getClaudeSettings(),
     AiSettingsRepository.getZenSettings(),
@@ -57,7 +84,6 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     hostname: hostname ?? '',
     accessPoint: accessPoint ?? { name: '', password: '' },
     wifi: wifi ?? { name: '', password: '' },
-    nearbyNetworks,
     isRpi: isRaspberryPi(),
     hasAiKey:
       openAiSettings.configured || claudeSettings.configured || zenSettings.configured || customSettings.configured,
@@ -66,6 +92,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     zenSettings,
     customSettings,
     activeProvider,
+    systemInfo: getSystemInfo(),
   });
 };
 
@@ -144,34 +171,68 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === 'saveGeneral') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
     const hostname = formData.get('hostname') as string;
     if (!hostname) {
       return data({ error: 'Missing hostname' }, { status: 400 });
     }
+    if (isRaspberryPi()) {
+      const result = await applyHostname(hostname);
+      if (!result.success) {
+        return data({ error: `Could not apply hostname: ${result.error}` }, { status: 400 });
+      }
+    }
     await ConfigRepository.setConfig('SERVER_HOSTNAME', hostname);
-    // A real Pi deployment would also re-run `hostnamectl set-hostname`/avahi restart here.
     return { success: true };
   }
 
   if (intent === 'saveAccessPoint') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
     const name = formData.get('name') as string;
     const password = formData.get('password') as string;
     if (!name || !password) {
       return data({ error: 'Missing AP network name or password' }, { status: 400 });
     }
+    if (isRaspberryPi()) {
+      const result = await applyAccessPoint(name, password);
+      if (!result.success) {
+        return data({ error: `Could not apply access point settings: ${result.error}` }, { status: 400 });
+      }
+    }
     await ConfigRepository.setConfig<WifiConfig>('ACCESS_POINT', { name, password });
-    // A real Pi deployment would also rewrite hostapd.conf and restart the hostapd service here.
     return { success: true };
   }
 
   if (intent === 'saveWifi') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
     const name = formData.get('name') as string;
     const password = formData.get('password') as string;
     if (!name || !password) {
       return data({ error: 'Missing Wi-Fi network name or password' }, { status: 400 });
     }
+    if (isRaspberryPi()) {
+      const result = await applyWifi(name, password);
+      if (!result.success) {
+        return data({ error: `Could not join that network: ${result.error}` }, { status: 400 });
+      }
+      const connected = await checkInternetConnectivity();
+      if (!connected) {
+        return data(
+          { error: 'Could not reach the internet on that network — check the password and try again.' },
+          { status: 400 },
+        );
+      }
+    }
     await ConfigRepository.setConfig<WifiConfig>('WIFI', { name, password });
-    // A real Pi deployment would also rewrite wpa_supplicant.conf and restart networking here.
     return { success: true };
   }
 
@@ -326,6 +387,74 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === 'clearCustomSettings') {
     await AiSettingsRepository.clearCustomSettings();
     return { success: true };
+  }
+
+  if (intent === 'restartServer') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await restartServer();
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'rebootPi') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await rebootPi();
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'shutdownPi') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await shutdownPi();
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'checkUpdates') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await checkForUpdates();
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true, updates: result.updates };
+  }
+
+  if (intent === 'applyUpdates') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await startUpdates();
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'updateStatus') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    return { success: true, status: await getUpdateStatus() };
   }
 
   if (intent === 'deleteUser') {
