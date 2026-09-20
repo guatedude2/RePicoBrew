@@ -1,5 +1,6 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { callAiProvider } from '~/services/ai-provider.server';
+import { fetchReferences, type FetchedReference } from '~/services/reference-fetch.server';
 import { normalizeMachineSteps, type PicoRecipeStep, type RawPicoStep } from '~/utils/pico-recipe-validation';
 
 // AI-powered recipe drafting/editing for the "AI Brewmaster" sidekick in both recipe editors (see
@@ -241,6 +242,23 @@ bitterness" plausibly means adjusting or adding a hop addition's amount/timing, 
 recipe) — and leave every other field exactly as it was unless the change genuinely requires touching it.
 Always return the FULL recipe object in "recipe" (every field, not just the ones you changed).`;
 
+// The model cannot browse or look anything up, so a "recipe from <brand/kit/book>" request can only be
+// answered from memory — which is where invented quantities come from. These rules make it say so
+// instead of presenting a guess as the real thing.
+const SOURCING_RULES = `SOURCING — you cannot browse the web or look anything up. Never present a recipe as coming from a
+specific brand, brewery, kit, book, website or person unless the text of that recipe was given to you below under
+"Reference material". If the user asks for a named commercial or kit recipe and no reference material is provided,
+say plainly in "explanation" that you don't have the official recipe and that this is your approximation from
+general knowledge of the style, and suggest they paste the recipe text or a link to get exact quantities. Never
+invent URLs, page titles, or quotes. The "sources" array lists where the recipe's content came from — each entry a
+short plain-text string, one of: "Provided reference: <the link the user gave>" (only if reference material was
+supplied and you used it), "User's instructions" (changes taken directly from what the user asked), or
+"General knowledge of <style/technique> — not an official <name> recipe" for anything from your own memory. Always
+include at least one entry. Also return "verifyQueries": 1-3 short web-search phrases a brewer could use to check the
+recipe against real sources (e.g. "Sierra Nevada Torpedo IPA recipe homebrew clone", "Brooklyn Brew Shop Everyday IPA
+ingredients") — name the actual beer, kit or style the recipe is based on. The app turns these into search links;
+never write URLs yourself.`;
+
 function jsonOnlyInstruction(): string {
   return (
     'Respond with ONLY a single JSON object of the exact shape ' +
@@ -266,6 +284,9 @@ function suggestionsFieldMeaning(): string {
 
 type GenerationMode = 'generate' | 'edit';
 
+// Generous enough to paste a full kit recipe's ingredient list and steps.
+const MAX_INSTRUCTION_CHARS = 6000;
+
 function buildPicoPackSystemPrompt(mode: GenerationMode): string {
   return `${PERSONA}
 
@@ -276,6 +297,8 @@ OUNCES, AA% is the alpha acid percentage) — one entry per hop-addition step in
 4. Encode the mash/boil timing in "steps"; yeast guidance goes in "notes".
 
 ${MACHINE_STEP_RULES}
+
+${SOURCING_RULES}
 
 ${mode === 'edit' ? `${EDIT_MODE_RULES}\n\n` : ''}${jsonOnlyInstruction()} Field meanings: "abv" and "ibu" are
 your best numeric estimate for the recipe (not a range). "notes" is AT MOST 2 short sentences covering grain
@@ -299,6 +322,8 @@ Required JSON shape:
     "steps": [ { "name": string, "temperature": number, "stepTime": number, "drainTime": number, "location": number } ]
   },
   "explanation": string,
+  "sources": [string],
+  "verifyQueries": [string],
   "suggestions": [string, string, string]
 }`;
 }
@@ -310,6 +335,8 @@ You are drafting or editing a ZPack recipe: PicoBrew's full brew-science format,
 hop schedule, yeast, mash steps, and target OG/FG/SRM, plus the machine step sequence the Pico runs.
 
 ${MACHINE_STEP_RULES}
+
+${SOURCING_RULES}
 
 ${mode === 'edit' ? `${EDIT_MODE_RULES}\n\n` : ''}${jsonOnlyInstruction()} Field meanings: "og"/"fg" are
 specific gravity (e.g. 1.056); "colorSRM" is color in SRM; "batchSize" is gallons; "boilTime" minutes,
@@ -340,6 +367,8 @@ Required JSON shape:
     "steps": [ { "name": string, "temperature": number, "stepTime": number, "drainTime": number, "location": number } ]
   },
   "explanation": string,
+  "sources": [string],
+  "verifyQueries": [string],
   "suggestions": [string, string, string]
 }`;
 }
@@ -375,6 +404,8 @@ function extractEnvelope(parsed: Record<string, unknown>): {
   recipeRaw: Record<string, unknown>;
   explanation: string;
   suggestions: string[];
+  sources: string[];
+  verifyQueries: string[];
 } {
   const recipeRaw =
     parsed.recipe && typeof parsed.recipe === 'object' ? (parsed.recipe as Record<string, unknown>) : parsed;
@@ -382,6 +413,25 @@ function extractEnvelope(parsed: Record<string, unknown>): {
     recipeRaw,
     explanation: str(parsed.explanation).trim(),
     suggestions: sanitizeSuggestions(parsed.suggestions),
+    sources: Array.isArray(parsed.sources)
+      ? parsed.sources
+          // The model can't look anything up, so any link it writes is invented: keep the text only.
+          .map((entry) =>
+            str(entry)
+              .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+              .replace(/https?:\/\/\S+/g, '')
+              .replace(/\s+/g, ' ')
+              .trim(),
+          )
+          .filter(Boolean)
+          .slice(0, 5)
+      : [],
+    verifyQueries: Array.isArray(parsed.verifyQueries)
+      ? parsed.verifyQueries
+          .map((entry) => str(entry).trim())
+          .filter(Boolean)
+          .slice(0, 3)
+      : [],
   };
 }
 
@@ -501,6 +551,62 @@ type RawGenerationResult =
   | { success: true; recipeRaw: Record<string, unknown>; explanation: string; suggestions: string[] }
   | { success: false; error: string };
 
+// Text of any pages the user linked, appended to the request so the model works from the real
+// recipe. Pages that couldn't be read are named too, so the model can't quietly pretend it saw them.
+function referenceBlockFor(references: FetchedReference[]): string {
+  if (references.length === 0) {
+    return '';
+  }
+  const parts = references.map((ref, i) =>
+    'text' in ref
+      ? `[${i + 1}] ${ref.url}\n${ref.text}`
+      : `[${i + 1}] ${ref.url}\n(COULD NOT BE READ: ${ref.error}. Do not claim to have used this page.)`,
+  );
+  return `\n\nReference material (fetched from the links the user gave; treat it as the source of truth and take quantities from it rather than guessing):\n${parts.join(
+    '\n\n',
+  )}`;
+}
+
+// The model's own "sources" list is a claim, and it has no way to look anything up — so it never
+// supplies URLs. Every link shown is one the server can vouch for: a page it actually read, or a web
+// search it built from the model's search phrases (so there is always at least one way to verify).
+const searchLink = (query: string) =>
+  `[Search: ${query.replace(/[[\]]/g, '')}](https://duckduckgo.com/?q=${encodeURIComponent(query).replace(
+    /[()]/g,
+    (c) => `%${c.charCodeAt(0).toString(16)}`,
+  )})`;
+
+function withSources(
+  explanation: string,
+  modelSources: string[],
+  verifyQueries: string[],
+  references: FetchedReference[],
+  instructionText: string,
+): string {
+  const anyRead = references.some((ref) => 'text' in ref);
+  const lines: string[] = [];
+  for (const ref of references) {
+    lines.push(
+      'text' in ref ? `Read: [${ref.url}](${ref.url})` : `Could not read ${ref.url} (${ref.error}) — not used`,
+    );
+  }
+  // The model's own "Provided reference: <url>" entries would just repeat the server's "Read:" lines.
+  lines.push(
+    ...modelSources.filter((line) => line && !line.endsWith(':') && !(anyRead && /^provided reference/i.test(line))),
+  );
+  const queries =
+    verifyQueries.length > 0
+      ? verifyQueries
+      : [
+          `${instructionText
+            .replace(/https?:\/\/\S+/g, '')
+            .trim()
+            .slice(0, 80)} recipe`,
+        ];
+  lines.push(...queries.map((query) => `Verify: ${searchLink(query)}`));
+  return `${explanation}\n\n**Sources**\n\n${lines.map((l) => `- ${l}`).join('\n')}`.trim();
+}
+
 async function runGeneration(packKind: PackKind, input: GenerationInput): Promise<RawGenerationResult> {
   const instructionText = input.mode === 'generate' ? input.prompt.trim() : input.instruction.trim();
   if (!instructionText) {
@@ -510,8 +616,11 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
         input.mode === 'generate' ? 'Describe the beer you want to brew first.' : 'Describe the change you want first.',
     };
   }
-  if (instructionText.length > 2000) {
-    return { success: false, error: 'That description is too long — try to keep it under 2000 characters.' };
+  if (instructionText.length > MAX_INSTRUCTION_CHARS) {
+    return {
+      success: false,
+      error: `That message is too long — try to keep it under ${MAX_INSTRUCTION_CHARS} characters.`,
+    };
   }
 
   const provider = await AiSettingsRepository.getActiveProvider();
@@ -520,10 +629,12 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
   }
 
   const system = packKind === 'zpack' ? buildZPackSystemPrompt(input.mode) : buildPicoPackSystemPrompt(input.mode);
-  const user =
+  const references = await fetchReferences(instructionText);
+  const userBase =
     input.mode === 'generate'
       ? `Draft a recipe for: ${instructionText}`
       : `Current recipe (JSON):\n${JSON.stringify(input.current)}\n\nRequested change: ${instructionText}`;
+  const user = userBase + referenceBlockFor(references);
 
   let raw: string;
   try {
@@ -548,8 +659,13 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
     return { success: false, error: 'The AI response could not be understood. Try rephrasing your prompt.' };
   }
 
-  const { recipeRaw, explanation, suggestions } = extractEnvelope(parsed);
-  return { success: true, recipeRaw, explanation, suggestions };
+  const { recipeRaw, explanation, suggestions, sources, verifyQueries } = extractEnvelope(parsed);
+  return {
+    success: true,
+    recipeRaw,
+    explanation: withSources(explanation, sources, verifyQueries, references, instructionText),
+    suggestions,
+  };
 }
 
 export async function generatePicoPackRecipe(prompt: string): Promise<GenerateRecipeResult<PicoPackAiRecipe>> {

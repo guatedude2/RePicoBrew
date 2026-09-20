@@ -9,6 +9,7 @@ import {
   type PicoPackAiRecipe,
   type ZPackAiRecipe,
 } from '~/services/ai-recipe-generator.server';
+import { fetchReferences } from '~/services/reference-fetch.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import { DeviceType } from '~/types';
 
@@ -41,8 +42,11 @@ export type AiChatResult =
 const GENERAL_PERSONA =
   'You are "AI Brewmaster", a friendly, knowledgeable homebrewing assistant embedded in RePicoBrew, a home-brewing ' +
   'tracker/control app for PicoBrew machines (Pico, Zymatic, Z Series) plus Tilt/PicoFerm sensors. Chat naturally ' +
-  'about brewing, troubleshooting, and using the app. Keep replies short and practical — at most 3-4 sentences of ' +
-  'plain prose, no markdown, no headers, no bullet points.';
+  'about brewing, troubleshooting, and using the app. Keep replies short and practical. Light markdown is fine and ' +
+  'is rendered (**bold**, short bullet or numbered lists when listing several items) — no headers, no tables. You cannot browse the web, open links, or look anything up, ' +
+  "and you have no access to any brand's or brewery's actual recipes: never say or imply that you checked, " +
+  'verified, or matched something against a real source unless the text was given to you under "Reference material". ' +
+  'If asked whether something is accurate or made up, be honest about what is general knowledge versus a guess.';
 
 const ACTIONS_INSTRUCTIONS = `You can also trigger two concrete actions when the user clearly asks for them — never
 volunteer them unprompted:
@@ -175,7 +179,18 @@ export async function runGeneralChat(input: {
     deviceLines,
     recipeLines,
   });
-  const user = input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message;
+  const references = await fetchReferences(message);
+  const referenceText =
+    references.length === 0
+      ? ''
+      : `\n\nReference material (fetched from the links the user gave):\n${references
+          .map((ref, i) =>
+            'text' in ref
+              ? `[${i + 1}] ${ref.url}\n${ref.text}`
+              : `[${i + 1}] ${ref.url}\n(COULD NOT BE READ: ${ref.error}. Do not claim to have used this page.)`,
+          )
+          .join('\n\n')}`;
+  const user = (input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message) + referenceText;
 
   let raw: string;
   try {
