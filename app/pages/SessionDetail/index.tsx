@@ -410,9 +410,26 @@ export const SessionDetail: FC<SessionDetailData> = ({
   };
 
   // Live brew telemetry
-  const [liveBrew, setLiveBrew] = useState<{ step: string; wort: number; therm: number; timeLeft: number } | null>(
-    null,
-  );
+  // `receivedAt` is when this reading arrived (browser clock), so the countdown below can keep
+  // ticking between readings — the Pico only reports about every 25 seconds.
+  const [liveBrew, setLiveBrew] = useState<{
+    step: string;
+    wort: number;
+    therm: number;
+    timeLeft: number;
+    receivedAt: number;
+  } | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!liveBrew) {
+      return;
+    }
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [liveBrew]);
+  const brewSecondsLeft = liveBrew
+    ? Math.max(0, liveBrew.timeLeft - Math.max(0, Math.floor((nowMs - liveBrew.receivedAt) / 1000)))
+    : 0;
   // Readings that have arrived over SSE since the last loader revalidation — plotted immediately
   // so the chart grows in real time instead of waiting for a page refresh to pick them up.
   const [liveChartPoints, setLiveChartPoints] = useState<{
@@ -423,8 +440,8 @@ export const SessionDetail: FC<SessionDetailData> = ({
     'session-update',
     (data) => {
       if (brewSession && data.sessionId === brewSession.id) {
-        setLiveBrew(data);
         const t = Date.now();
+        setLiveBrew({ ...data, receivedAt: t });
         setLiveChartPoints((prev) => ({
           wort: [...prev.wort, { x: t, y: data.wort }],
           therm: [...prev.therm, { x: t, y: data.therm }],
@@ -641,7 +658,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-ink-text-faint">Time Remaining</p>
               <p className="font-mono text-lg font-bold text-brand-500">
-                {Math.floor(liveBrew.timeLeft / 60)}m {liveBrew.timeLeft % 60}s
+                {Math.floor(brewSecondsLeft / 60)}m {brewSecondsLeft % 60}s
               </p>
             </div>
           ) : null}
