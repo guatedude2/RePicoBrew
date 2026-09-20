@@ -50,7 +50,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Check if brew is complete (step contains "complete")
   const isComplete = body.data.step.toLowerCase().includes('complete');
-  const sessionState = isComplete ? SessionState.COMPLETED : SessionState.IN_PROGRESS;
+  // Canceling on the device sends a normal log line with the step "Brew Canceled" (then a
+  // picoChangeState back to READY about a minute later) — that log is the only cancel signal.
+  const isCanceled = !isComplete && body.data.step.toLowerCase().includes('cancel');
+  let sessionState = SessionState.IN_PROGRESS;
+  if (isComplete) {
+    sessionState = SessionState.COMPLETED;
+  } else if (isCanceled || session.state === SessionState.CANCELED) {
+    sessionState = SessionState.CANCELED;
+  }
 
   // update device state
   if (isComplete) {
@@ -60,6 +68,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await DeviceRepository.updateDeviceState(session.deviceId, DeviceState.READY);
     if (session.batchId) {
       await BatchRepository.advancePhase(session.batchId, BatchPhase.BREWING, BatchPhase.COOLING);
+    }
+  } else if (sessionState === SessionState.CANCELED) {
+    await DeviceRepository.updateDeviceState(session.deviceId, DeviceState.READY);
+    if (isCanceled && session.batchId) {
+      await BatchRepository.endBatch(session.batchId);
     }
   } else {
     await DeviceRepository.updateDeviceState(session.deviceId, getStateFromType(body.data.sesType));

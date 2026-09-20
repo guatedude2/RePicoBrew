@@ -1,6 +1,7 @@
 import prisma from '~/services/prisma.server';
 import { BatchPhase, SessionState, SessionType } from '~/types';
 import { batchNeedsAttention } from '~/utils/batch-phase';
+import { QUEUED_STATUS_TEXT } from '~/utils/queued-brew';
 
 export class BatchRepository {
   public static async createBatch(
@@ -158,7 +159,7 @@ export class BatchRepository {
         orderBy: { createdAt: 'desc' as const },
         include: { device: true, _count: { select: { logs: true } } },
       },
-      recipe: { select: { fermentDays: true } },
+      recipe: { select: { fermentDays: true, steps: { select: { stepTime: true, drainTime: true } } } },
     };
 
     // Device isn't a direct Batch column (it comes from the most recent session's relation), so it
@@ -258,6 +259,12 @@ export class BatchRepository {
   }
 
   public static async endBatch(id: number) {
+    // A brew still waiting on the device (queued from the app, see app/utils/queued-brew.ts) is
+    // withdrawn too — otherwise the Pico's recipe list would keep offering a canceled brew.
+    await prisma.session.updateMany({
+      where: { batchId: id, statusText: QUEUED_STATUS_TEXT },
+      data: { state: SessionState.CANCELED, statusText: 'Canceled' },
+    });
     return await prisma.batch.update({ where: { id }, data: { phase: BatchPhase.CANCELED } });
   }
 

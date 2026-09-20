@@ -3,7 +3,7 @@ import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
 import prisma from '~/services/prisma.server';
-import { DeviceType, SessionType } from '~/types';
+import { DeviceType, SessionState, SessionType } from '~/types';
 import { generatePakId } from '~/utils/pak';
 import { QUEUED_STATUS_TEXT } from '~/utils/queued-brew';
 
@@ -89,7 +89,7 @@ export async function cancelQueuedBrew(sessionId: number): Promise<{ ok: true } 
 // Where a queued brew stands, for the New Session page's waiting screen.
 export async function getQueuedBrewStatus(deviceId: number, sessionId: number): Promise<'waiting' | 'picked' | 'gone'> {
   const session = await SessionRepository.getSessionById(sessionId);
-  if (!session || session.deviceId !== deviceId) {
+  if (!session || session.deviceId !== deviceId || session.state === SessionState.CANCELED) {
     return 'gone';
   }
   if (session.statusText === QUEUED_STATUS_TEXT) {
