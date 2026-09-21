@@ -17,6 +17,10 @@ import readline from 'node:readline';
 import Database from 'better-sqlite3';
 
 const MIN_LENGTH = 8;
+// Key codes for the hidden password prompt.
+const CTRL_C = 3;
+const CTRL_D = 4;
+const DELETE = 127;
 const dbPath = process.env.DB_PATH || 'prisma/picobrew.db';
 
 if (!existsSync(dbPath)) {
@@ -63,18 +67,19 @@ async function askHidden(question) {
     let value = '';
     const onData = (chunk) => {
       for (const char of chunk.toString('utf8')) {
-        if (char === '\r' || char === '\n' || char === '') {
+        const code = char.charCodeAt(0);
+        if (char === '\r' || char === '\n' || code === CTRL_D) {
           process.stdin.setRawMode(false);
           process.stdin.off('data', onData);
           process.stdout.write('\n');
           resolve(value);
           return;
         }
-        if (char === '') {
+        if (code === CTRL_C) {
           process.stdout.write('\n');
           process.exit(130);
         }
-        if (char === '' || char === '\b') {
+        if (code === DELETE || char === '\b') {
           value = value.slice(0, -1);
         } else {
           value += char;
