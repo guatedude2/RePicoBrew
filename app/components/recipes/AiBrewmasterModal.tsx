@@ -314,6 +314,16 @@ export function AiBrewmasterSidekick() {
   }, [clearFetcher.state, clearFetcher.data]);
 
   const handleSubmit = () => submit(prompt);
+
+  // Grow the input with its text (up to its max height, then it scrolls), and shrink back when cleared.
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = promptRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [prompt, open]);
   const handleChipClick = (example: string) => submit(example);
 
   const error = actionFetcher.data && 'error' in actionFetcher.data ? actionFetcher.data.error : null;
@@ -422,7 +432,7 @@ export function AiBrewmasterSidekick() {
                 key={m.id}
                 className={
                   m.role === 'user'
-                    ? 'ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text'
+                    ? 'ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text whitespace-pre-wrap'
                     : 'mr-6 flex min-w-0 items-start gap-2 [overflow-wrap:anywhere] rounded-lg rounded-tl-sm border border-ink-card-border bg-ink-bg px-3 py-2.5 text-[12.5px] text-ink-text-secondary'
                 }
               >
@@ -432,7 +442,7 @@ export function AiBrewmasterSidekick() {
             ))}
 
             {pendingText && (
-              <div className="ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text">
+              <div className="ml-6 min-w-0 max-w-[calc(100%-1.5rem)] self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text whitespace-pre-wrap">
                 <p>{pendingText}</p>
               </div>
             )}
@@ -443,7 +453,7 @@ export function AiBrewmasterSidekick() {
                 className="ml-6 flex min-w-0 max-w-[calc(100%-1.5rem)] items-start gap-2 self-end [overflow-wrap:anywhere] rounded-lg rounded-tr-sm border border-dashed border-ink-border-strong bg-ink-bg px-3 py-2 text-[12.5px] text-ink-text-secondary"
               >
                 <div className="min-w-0">
-                  <p>{item.text}</p>
+                  <p className="whitespace-pre-wrap">{item.text}</p>
                   <p className="mt-0.5 text-[10px] uppercase tracking-[0.4px] text-ink-text-faint">Queued</p>
                 </div>
                 <button
@@ -492,18 +502,21 @@ export function AiBrewmasterSidekick() {
           </div>
 
           <div className="border-t border-ink-divider p-3">
-            <div className="flex items-center gap-2 rounded-full border border-ink-input-border bg-ink-input-bg py-1 pl-4 pr-1.5">
-              <input
+            <div className="flex items-end gap-2 rounded-2xl border border-ink-input-border bg-ink-input-bg py-1 pl-4 pr-1.5">
+              <textarea
+                ref={promptRef}
+                rows={1}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  // Enter sends; Shift+Enter adds a line. Ignore Enter while an IME is composing text.
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     handleSubmit();
                   }
                 }}
                 placeholder={isSending ? 'Type another — it will be queued…' : placeholderFor(mode)}
-                className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-text placeholder:text-ink-text-faintest focus:outline-none"
+                className="max-h-[132px] min-w-0 flex-1 resize-none bg-transparent py-[7px] text-[13px] leading-[18px] text-ink-text placeholder:text-ink-text-faintest focus:outline-none"
               />
               <button
                 type="button"

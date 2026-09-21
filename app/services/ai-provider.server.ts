@@ -22,12 +22,14 @@ export async function callChatCompletions({
   system,
   user,
   extraHeaders,
+  reasoningEffort,
   maxTokens = 800,
   timeoutMs = 45000,
 }: ChatCompletionsProvider & {
   system: string;
   user: string;
   extraHeaders?: Record<string, string>;
+  reasoningEffort?: 'low';
   maxTokens?: number;
   timeoutMs?: number;
 }): Promise<string> {
@@ -36,19 +38,27 @@ export async function callChatCompletions({
     headers.Authorization = `Bearer ${apiKey}`;
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens + REASONING_TOKEN_HEADROOM,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const send = (withReasoningEffort: boolean) =>
+    fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens + REASONING_TOKEN_HEADROOM,
+        ...(withReasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+  let response = await send(Boolean(reasoningEffort));
+  // Not every model behind a gateway accepts reasoning_effort — retry once without it rather than fail.
+  if (reasoningEffort && response.status === 400) {
+    response = await send(false);
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -142,5 +152,8 @@ export async function callAiProvider(
         maxTokens: args.maxTokens,
         timeoutMs: args.timeoutMs,
         extraHeaders,
+        // OpenCode's gateway serves reasoning models (e.g. Kimi K3) that otherwise think for 30-60s and can
+        // spend the whole token budget doing it; these tasks (recipe JSON, short chat replies) don't need it.
+        reasoningEffort: isOpenCodeGateway(provider) ? 'low' : undefined,
       });
 }
