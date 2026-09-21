@@ -14,6 +14,7 @@ import { cn } from '~/lib/utils';
 import type { AiIngredientRow, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
+import { RecipeActionsMenu } from '~/components/recipes/RecipeActionsMenu';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
@@ -627,6 +628,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             </Button>
           </Link>
         )}
+        {readOnly && recipe && <RecipeActionsMenu recipe={{ id: recipe.id, name: recipe.name }} />}
         {!readOnly && (
           <Button type="submit" form={RECIPE_FORM_ID} variant="brand" size="sm" disabled={hasErrors || isSubmitting}>
             {isSubmitting ? 'Saving…' : 'Save Recipe'}

@@ -92,8 +92,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === 'duplicate') {
     const id = parseInt(formData.get('id') as string);
-    await RecipeRepository.duplicateRecipe(id);
-    return { success: true };
+    const copy = await RecipeRepository.duplicateRecipe(id);
+    return { success: true, id: copy.id };
   }
 
   return data({ error: 'Unknown intent' }, { status: 400 });
