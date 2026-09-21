@@ -155,7 +155,8 @@ model AiAdvice {
   batchId   Int
   batch     Batch    @relation(fields: [batchId], references: [id])
   phase     String // Brewing | Fermenting at time of generation
-  trigger   String // scheduled | manual | phase-change
+  step      String? // the brew step the batch was on when this was written (Brewing advice only)
+  trigger   String // scheduled | manual | phase-change | step
   content   String
   model     String // e.g. gpt-4o-mini
   createdAt DateTime @default(now())

@@ -1,6 +1,6 @@
 import prisma from '~/services/prisma.server';
 
-export type AiAdviceTrigger = 'scheduled' | 'manual' | 'phase-change';
+export type AiAdviceTrigger = 'scheduled' | 'manual' | 'phase-change' | 'step';
 
 export class AiAdviceRepository {
   public static async listForBatch(batchId: number, limit = 10) {
@@ -28,6 +28,7 @@ export class AiAdviceRepository {
   public static async create(input: {
     batchId: number;
     phase: string;
+    step?: string | null;
     trigger: AiAdviceTrigger;
     content: string;
     model: string;

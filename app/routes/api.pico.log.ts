@@ -4,6 +4,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { BatchPhase, SessionState, SessionType, DeviceState } from '~/types';
+import { adviseOnStepChange } from '~/services/ai-step-advice.server';
 import pubSub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
@@ -78,6 +79,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await DeviceRepository.updateDeviceState(session.deviceId, getStateFromType(body.data.sesType));
   }
 
+  const stepChanged = session.statusText !== body.data.step;
+
   // update the session status
   await SessionRepository.updateSessionState(
     session.id,
@@ -97,6 +100,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     timeLeft: body.data.timeLeft,
     shutScale: body.data.shutScale,
   });
+
+  // A new brew step gets fresh AI advice (skipped for cancel/complete, which aren't steps to advise on).
+  if (stepChanged && session.batchId && !isComplete && !isCanceled) {
+    void adviseOnStepChange(session.batchId).catch(() => undefined);
+  }
 
   // Publish session update event for live UI
   pubSub.publish('session-update', {

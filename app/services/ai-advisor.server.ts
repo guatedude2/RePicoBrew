@@ -15,9 +15,8 @@ type AnalyzeResult =
 
 const BREW_SESSION_TYPES: number[] = [SessionType.BREWING, SessionType.MANUAL_BREW, SessionType.COLD_BREW];
 
-type BrewLogRow = { wort?: number; therm?: number; step?: string };
+type BrewLogRow = { wort?: number; therm?: number; step?: string; timeLeft?: number };
 type FermLogRow = { temp?: number; gravity?: number };
-
 function summarizeNumbers(values: number[]) {
   if (values.length === 0) {
     return null;
@@ -28,10 +27,14 @@ function summarizeNumbers(values: number[]) {
   return { min: Math.round(min * 100) / 100, max: Math.round(max * 100) / 100, avg: Math.round(avg * 100) / 100 };
 }
 
-function buildBrewSummary(logs: Array<{ data: string }>) {
+type RecipeStepInfo = { name: string; temperature: number; stepTime: number; drainTime: number };
+
+function buildBrewSummary(logs: Array<{ data: string }>, recipeSteps: RecipeStepInfo[] = []) {
   const wort: number[] = [];
   const therm: number[] = [];
+  const stepsSeen: string[] = [];
   let lastStep: string | null = null;
+  let timeLeft: number | null = null;
   for (const log of logs) {
     try {
       const row = JSON.parse(log.data) as BrewLogRow;
@@ -43,6 +46,12 @@ function buildBrewSummary(logs: Array<{ data: string }>) {
       }
       if (typeof row.step === 'string' && row.step) {
         lastStep = row.step;
+        if (stepsSeen[stepsSeen.length - 1] !== row.step) {
+          stepsSeen.push(row.step);
+        }
+      }
+      if (typeof row.timeLeft === 'number') {
+        timeLeft = row.timeLeft;
       }
     } catch {
       // skip malformed rows
@@ -51,13 +60,31 @@ function buildBrewSummary(logs: Array<{ data: string }>) {
   const wortStats = summarizeNumbers(wort);
   const thermStats = summarizeNumbers(therm);
   const lines = [`Current step: ${lastStep ?? 'unknown'}.`];
+  const target = lastStep ? recipeSteps.find((step) => step.name.toLowerCase() === lastStep.toLowerCase()) : undefined;
+  if (target) {
+    lines.push(
+      `The recipe calls for ${target.temperature}°F for ${target.stepTime} min${
+        target.drainTime ? ` then ${target.drainTime} min draining` : ''
+      } on this step.`,
+    );
+  }
+  if (stepsSeen.length > 1) {
+    lines.push(`Steps so far: ${stepsSeen.join(' → ')}.`);
+  }
+  if (timeLeft !== null) {
+    lines.push(`About ${Math.max(0, Math.round(timeLeft / 60))} minutes of the whole brew remain.`);
+  }
+  const latestWort = wort[wort.length - 1];
+  if (latestWort !== undefined) {
+    lines.push(`Latest wort temp ${latestWort}°F.`);
+  }
   if (wortStats) {
     lines.push(`Wort temp so far — min ${wortStats.min}°F, max ${wortStats.max}°F, avg ${wortStats.avg}°F.`);
   }
   if (thermStats) {
     lines.push(`ThermoBlock temp so far — min ${thermStats.min}°F, max ${thermStats.max}°F, avg ${thermStats.avg}°F.`);
   }
-  return lines.join(' ');
+  return { summary: lines.join(' '), step: lastStep };
 }
 
 function buildFermentSummary(logs: Array<{ data: string; time: Date }>) {
@@ -108,10 +135,13 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
     : 'No recipe details attached to this batch.';
 
   let stageSummary = '';
+  let step: string | null = null;
   if (batch.phase === BatchPhase.BREWING) {
     const brewSession = batch.sessions.find((s: { type: number }) => BREW_SESSION_TYPES.includes(s.type));
     const logs = brewSession ? await SessionRepository.listSessionLogs(brewSession.id) : [];
-    stageSummary = buildBrewSummary(logs);
+    const brew = buildBrewSummary(logs, batch.recipe?.steps ?? []);
+    stageSummary = brew.summary;
+    step = brew.step;
   } else if (batch.phase === BatchPhase.FERMENTING) {
     const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION);
     const logs = fermSession ? await SessionRepository.listSessionLogs(fermSession.id) : [];
@@ -123,13 +153,15 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
   const basePrompt =
     'You are an experienced, encouraging homebrew brewmaster embedded in RePicoBrew, a home brewing tracker app. ' +
     'Given the current stage and telemetry summary for a batch, give concise, specific, actionable advice in 2-4 short ' +
-    'sentences of plain prose (no markdown, no headers, no bullet points — it renders in a small card). Flag genuine ' +
+    'sentences of plain prose (no markdown, no headers, no bullet points — it renders in a small card). While brewing, ' +
+    'focus on the step the brew is on right now: what is happening, what to watch for, and what comes next. Flag genuine ' +
     "anomalies (stalled fermentation, temperature swings outside a safe range, mash temp off target) but don't invent " +
     'problems from normal readings — a brief reassurance that things look on track is a perfectly good response.';
 
   return {
     system: `${basePrompt}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`,
     user: userMessage,
+    step,
   };
 }
 
@@ -156,13 +188,14 @@ export async function analyzeBatch(batchId: number, trigger: AiAdviceTrigger): P
   }
 
   try {
-    const { system, user } = await buildPrompt(batch);
+    const { system, user, step } = await buildPrompt(batch);
     // OpenCode's gateway (Zen/Go) routes and prompt-caches by a stable per-conversation session id;
     // without it Go's /chat/completions rejects the request outright (MissingSessionID).
     const content = await callAiProvider(provider, { system, user, sessionId: `repicobrew-batch-${batchId}` });
     const advice = await AiAdviceRepository.create({
       batchId,
       phase: batch.phase,
+      step,
       trigger,
       content,
       model: provider.model,

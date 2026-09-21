@@ -287,7 +287,10 @@ const AiAdviceBlock: FC<{
       {latest ? (
         <>
           <p className="text-[13px] text-ink-text-secondary">{latest.content}</p>
-          <p className="text-[11px] text-ink-text-faintest">{formatRelativeTime(latest.createdAt)}</p>
+          <p className="text-[11px] text-ink-text-faintest">
+            {latest.step ? `${latest.step} · ` : ''}
+            {formatRelativeTime(latest.createdAt)}
+          </p>
         </>
       ) : (
         <p className="text-[13px] text-ink-text-faint">
