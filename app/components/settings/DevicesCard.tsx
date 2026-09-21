@@ -291,6 +291,19 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
             );
           })
         )}
+
+        {/* Devices announce themselves when they connect (there's no active scan to trigger), so this just
+            shows that the list is live and new ones will appear here on their own. */}
+        <div
+          role="status"
+          className="flex items-center gap-2.5 border-t border-ink-divider pt-3.5 text-[13px] text-ink-text-faint"
+        >
+          <span
+            className="size-3.5 flex-none animate-spin rounded-full border-2 border-brand-500 border-t-transparent"
+            aria-hidden
+          />
+          Searching for devices…
+        </div>
       </Card>
 
       <Dialog open={!!deleteTarget} onOpenChange={(isOpen) => !isOpen && setDeleteTarget(null)}>
