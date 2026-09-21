@@ -434,6 +434,10 @@ export const SessionDetail: FC<SessionDetailData> = ({
     wort: Array<{ x: number; y: number }>;
     therm: Array<{ x: number; y: number }>;
   }>({ wort: [], therm: [] });
+  // Step changes seen over SSE since the last loader refresh, so the chart marks a new step as it starts
+  // instead of only after a page reload. lastLoggedStepRef holds the last step already in the saved log.
+  const [liveStepMarkers, setLiveStepMarkers] = useState<Array<{ x: number; label: string }>>([]);
+  const lastLoggedStepRef = useRef<string | null>(null);
   useServerSideEvent<{ sessionId: number; step: string; wort: number; therm: number; timeLeft: number }>(
     'session-update',
     (data) => {
@@ -444,12 +448,17 @@ export const SessionDetail: FC<SessionDetailData> = ({
           wort: [...prev.wort, { x: t, y: data.wort }],
           therm: [...prev.therm, { x: t, y: data.therm }],
         }));
+        setLiveStepMarkers((prev) => {
+          const lastStep = prev.length > 0 ? prev[prev.length - 1].label : lastLoggedStepRef.current;
+          return data.step && data.step !== lastStep ? [...prev, { x: t, label: data.step }] : prev;
+        });
       }
     },
   );
   // Once brewLogs is refetched, those points are already in it — drop the live-only buffer.
   useEffect(() => {
     setLiveChartPoints({ wort: [], therm: [] });
+    setLiveStepMarkers([]);
   }, [brewLogs]);
 
   // Live fermentation telemetry (Tilt)
@@ -496,6 +505,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
     });
     return { wort, therm, stepMarkers };
   }, [brewLogs]);
+  lastLoggedStepRef.current =
+    brewChart.stepMarkers.length > 0 ? brewChart.stepMarkers[brewChart.stepMarkers.length - 1].label : null;
+  // Saved markers plus any step changes that arrived live since.
+  const stepMarkers = useMemo(
+    () => [...brewChart.stepMarkers, ...liveStepMarkers],
+    [brewChart.stepMarkers, liveStepMarkers],
+  );
 
   const combinedWort = useMemo(
     () => [...brewChart.wort, ...liveChartPoints.wort],
@@ -524,7 +540,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
     }
     const pxPerMs = g.gridWidth / (g.maxX - g.minX);
     const minX = g.minX;
-    const rows = computeStepLabelRows(brewChart.stepMarkers, pxPerMs, minX);
+    const rows = computeStepLabelRows(stepMarkers, pxPerMs, minX);
 
     const group: Element | null | undefined = chartContext?.el?.querySelector?.('.apexcharts-xaxis-annotations');
     if (!group) {
@@ -545,7 +561,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
     }
     const { rectY: baseRectY, textY: baseTextY } = stepLabelBaseline.current;
 
-    brewChart.stepMarkers.forEach((_, i) => {
+    stepMarkers.forEach((_, i) => {
       const row = Math.min(rows[i] ?? 0, STEP_LABEL_ROWS_RESERVED - 1);
       const line = children[i * 3];
       const rect = children[i * 3 + 1];
@@ -561,14 +577,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
   // Until a fresh SSE update arrives, fall back to the last known step/reading (from the
   // session's persisted status and log history) instead of resetting to "Preparing" — otherwise
   // the vessel animation snaps back to the very first stage on every refresh or navigation.
-  const lastLoggedStep =
-    brewChart.stepMarkers.length > 0 ? brewChart.stepMarkers[brewChart.stepMarkers.length - 1].label : null;
+  const lastLoggedStep = stepMarkers.length > 0 ? stepMarkers[stepMarkers.length - 1].label : null;
   const lastLoggedWort = brewChart.wort.length > 0 ? brewChart.wort[brewChart.wort.length - 1].y : null;
   const fallbackStep = brewSession?.statusText ?? lastLoggedStep;
 
   // Steps already seen this session (a live step that isn't logged yet has just started, so all logged steps
   // are earlier ones; otherwise the current step is the last logged one).
-  const stepHistory = brewChart.stepMarkers.map((marker) => marker.label);
+  const stepHistory = stepMarkers.map((marker) => marker.label);
   const currentStep = liveBrew?.step ?? fallbackStep;
   const earlierSteps =
     currentStep && stepHistory[stepHistory.length - 1] === currentStep ? stepHistory.slice(0, -1) : stepHistory;
@@ -736,7 +751,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
                         x: { format: `MMM d, ${chartTimeToken(timeFormat, true)}` },
                       },
                       annotations: {
-                        xaxis: brewChart.stepMarkers.map((m, i) => ({
+                        xaxis: stepMarkers.map((m, i) => ({
                           x: m.x,
                           borderColor: 'oklch(0.32 0.01 260)',
                           label: {
