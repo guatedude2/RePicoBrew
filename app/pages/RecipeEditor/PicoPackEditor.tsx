@@ -22,14 +22,54 @@ const newId = () => Math.random().toString(36).slice(2);
 
 // What goes into the pak: grain in the main compartment, hops in the numbered hop compartments.
 // Listed for the person filling the physical pak — the machine itself only runs the steps below.
-type PakRow = { id: string; name: string; amount?: number; aa?: number };
+type PakRow = { id: string; name: string; amount?: number; aa?: number; compartment?: string };
 
-const pakRowsFor = (ingredients: RecipeEditorIngredient[] | undefined, section: IngredientSection): PakRow[] =>
-  (ingredients ?? [])
+// A PicoPak has four hop compartments; each drops into the boil at its own hop step (step locations
+// Adjunct1-4). Stored on the ingredient's `unit` column, which nothing else uses for hops here.
+const HOP_COMPARTMENTS = ['Adjunct1', 'Adjunct2', 'Adjunct3', 'Adjunct4'];
+const nextFreeCompartment = (rows: PakRow[]) =>
+  HOP_COMPARTMENTS.find((c) => !rows.some((r) => r.compartment === c)) ?? HOP_COMPARTMENTS[0];
+
+// Hops saved before compartments existed (or drafted without one) get the first free compartments, in order.
+const withCompartments = (rows: PakRow[]): PakRow[] => {
+  const used = new Set<string>();
+  const kept = rows.map((row) => {
+    if (row.compartment && HOP_COMPARTMENTS.includes(row.compartment) && !used.has(row.compartment)) {
+      used.add(row.compartment);
+      return row;
+    }
+    return { ...row, compartment: undefined };
+  });
+  return kept.map((row) => {
+    if (row.compartment) {
+      return row;
+    }
+    const free = HOP_COMPARTMENTS.find((c) => !used.has(c)) ?? HOP_COMPARTMENTS[HOP_COMPARTMENTS.length - 1];
+    used.add(free);
+    return { ...row, compartment: free };
+  });
+};
+
+const pakRowsFor = (ingredients: RecipeEditorIngredient[] | undefined, section: IngredientSection): PakRow[] => {
+  const rows = (ingredients ?? [])
     .filter((i) => i.section === section)
-    .map((i) => ({ id: newId(), name: i.name, amount: i.amount ?? undefined, aa: i.aa ?? undefined }));
+    .map((i) => ({
+      id: newId(),
+      name: i.name,
+      amount: i.amount ?? undefined,
+      aa: i.aa ?? undefined,
+      compartment: section === IngredientSection.BOIL_HOP ? i.unit ?? undefined : undefined,
+    }));
+  return section === IngredientSection.BOIL_HOP ? withCompartments(rows) : rows;
+};
 
-const aiRowToPakRow = (r: AiIngredientRow): PakRow => ({ id: newId(), name: r.name, amount: r.amount, aa: r.aa });
+const aiRowToPakRow = (r: AiIngredientRow): PakRow => ({
+  id: newId(),
+  name: r.name,
+  amount: r.amount,
+  aa: r.aa,
+  compartment: r.compartment,
+});
 
 const pakRowsToIngredients = (rows: PakRow[], section: IngredientSection): RecipeEditorIngredient[] =>
   rows
@@ -38,7 +78,7 @@ const pakRowsToIngredients = (rows: PakRow[], section: IngredientSection): Recip
       section,
       name: r.name,
       amount: r.amount ?? null,
-      unit: null,
+      unit: section === IngredientSection.BOIL_HOP ? r.compartment ?? null : null,
       color: null,
       aa: section === IngredientSection.BOIL_HOP ? r.aa ?? null : null,
       time: null,
@@ -180,7 +220,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       setGrains(aiRecipe.grains.map(aiRowToPakRow));
     }
     if (aiRecipe.hops) {
-      setHops(aiRecipe.hops.map(aiRowToPakRow));
+      setHops(withCompartments(aiRecipe.hops.map(aiRowToPakRow)));
     }
     setStepsExpanded(true);
   };
@@ -252,9 +292,13 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
     if (!name.trim()) {
       errs.push('Recipe name is required');
     }
+    const used = hops.filter((h) => h.name.trim()).map((h) => h.compartment);
+    if (new Set(used).size !== used.length) {
+      errs.push('Each hop needs its own compartment (Adjunct 1-4)');
+    }
     errs.push(...machineValidation.errors);
     return errs;
-  }, [name, machineValidation.errors]);
+  }, [name, hops, machineValidation.errors]);
   const hasErrors = errors.length > 0;
 
   const payload = useMemo(
@@ -456,7 +500,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               <div>
                 <p className="text-[15px] font-bold">Pak Contents</p>
                 <p className="mt-1 text-[12px] text-ink-text-faint">
-                  What to load into the PicoPak — grain in the main compartment, hops in the hop compartments.
+                  What to load into the PicoPak — grain in the main compartment, one hop in each of the four hop
+                  compartments (Adjunct 1-4).
                 </p>
               </div>
               {(!readOnly || grains.length > 0) && (
@@ -482,14 +527,16 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Hops</p>
                   <EditableRowList
                     rows={hops}
-                    templateColumns="1.4fr 0.8fr 0.7fr"
+                    templateColumns="1.3fr 0.8fr 0.6fr 1fr"
                     columns={[
                       { key: 'name', label: 'Hop Type', type: 'text' },
                       { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
                       { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
+                      { key: 'compartment', label: 'Compartment', type: 'select', options: HOP_COMPARTMENTS },
                     ]}
+                    maxRows={HOP_COMPARTMENTS.length}
                     onChange={hopActions.onChange}
-                    onAdd={() => hopActions.onAdd({ amount: 0.5, aa: 5 })}
+                    onAdd={() => hopActions.onAdd({ amount: 0.5, aa: 5, compartment: nextFreeCompartment(hops) })}
                     onRemove={hopActions.onRemove}
                     addLabel="Add Hop"
                     readOnly={readOnly}

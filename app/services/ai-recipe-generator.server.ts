@@ -39,6 +39,8 @@ export type AiIngredientRow = {
   temp?: number;
   days?: number;
   hours?: number;
+  // PicoPak hops only: which of the pak's four hop compartments (Adjunct1-Adjunct4) the hop goes in.
+  compartment?: string;
 };
 
 export type PicoPackAiRecipe = {
@@ -117,10 +119,10 @@ JSON response:
       { "name": "Chocolate Malt", "amount": 4 }
     ],
     "hops": [
-      { "name": "Magnum", "amount": 0.4, "aa": 12 },
-      { "name": "East Kent Goldings", "amount": 0.4, "aa": 5 },
-      { "name": "Fuggle", "amount": 0.3, "aa": 4.5 },
-      { "name": "Fuggle", "amount": 0.3, "aa": 4.5 }
+      { "name": "Magnum", "amount": 0.4, "aa": 12, "compartment": "Adjunct1" },
+      { "name": "East Kent Goldings", "amount": 0.4, "aa": 5, "compartment": "Adjunct2" },
+      { "name": "Fuggle", "amount": 0.3, "aa": 4.5, "compartment": "Adjunct4" },
+      { "name": "Fuggle", "amount": 0.3, "aa": 4.5, "compartment": "Adjunct3" }
     ],
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
@@ -297,9 +299,10 @@ function buildPicoPackSystemPrompt(mode: GenerationMode): string {
 
 You are drafting or editing a PicoPak recipe: PicoBrew's format for a fixed 5-liter batch, driven by the machine
 step sequence. The "grains" and "hops" lists say what to load into the physical pak: grain goes in the main
-compartment (amounts in OUNCES, roughly 20-60 oz total), and each hop is a separate hop compartment (amounts in
-OUNCES, AA% is the alpha acid percentage) — one entry per hop-addition step in "steps", in the same order, at most
-4. Encode the mash/boil timing in "steps"; yeast guidance goes in "notes".
+compartment (amounts in OUNCES, roughly 20-60 oz total), and each hop goes in its own hop compartment (amounts in
+OUNCES, AA% is the alpha acid percentage) — one entry per hop-addition step in "steps", at most 4. Every hop has
+a "compartment": "Adjunct1", "Adjunct2", "Adjunct3" or "Adjunct4", each used at most once, and it MUST match the
+location of that hop's step (step location 3 = Adjunct1, 4 = Adjunct2, 6 = Adjunct3, 5 = Adjunct4). Encode the mash/boil timing in "steps"; yeast guidance goes in "notes".
 
 ${MACHINE_STEP_RULES}
 
@@ -323,7 +326,7 @@ Required JSON shape:
     "ibu": number,
     "notes": string,
     "grains": [ { "name": string, "amount": number } ],
-    "hops": [ { "name": string, "amount": number, "aa": number } ],
+    "hops": [ { "name": string, "amount": number, "aa": number, "compartment": "Adjunct1" | "Adjunct2" | "Adjunct3" | "Adjunct4" } ],
     "steps": [ { "name": string, "temperature": number, "stepTime": number, "drainTime": number, "location": number } ]
   },
   "explanation": string,
@@ -504,6 +507,10 @@ function rows(value: unknown): AiIngredientRow[] {
       }
       if (r.hours != null) {
         row.hours = num(r.hours, 0);
+      }
+      const compartment = str(r.compartment).trim();
+      if (/^Adjunct[1-4]$/.test(compartment)) {
+        row.compartment = compartment;
       }
       return row;
     })

@@ -1,10 +1,12 @@
 import { MdAdd, MdDeleteOutline } from 'react-icons/md';
 import { Input } from '~/components/ui/input';
+import { Select } from '~/components/ui/select';
 
 export type RowColumn<T> = {
   key: Extract<keyof T, string>;
   label: string;
-  type: 'text' | 'number';
+  type: 'text' | 'number' | 'select';
+  options?: string[];
   step?: number;
   placeholder?: string;
 };
@@ -18,6 +20,7 @@ export function EditableRowList<T extends { id: string }>({
   onRemove,
   addLabel,
   minRows = 0,
+  maxRows,
   readOnly = false,
 }: {
   rows: T[];
@@ -28,6 +31,7 @@ export function EditableRowList<T extends { id: string }>({
   onRemove: (id: string) => void;
   addLabel: string;
   minRows?: number;
+  maxRows?: number;
   readOnly?: boolean;
 }) {
   const rowTemplateColumns = readOnly ? templateColumns : `${templateColumns} 32px`;
@@ -55,6 +59,19 @@ export function EditableRowList<T extends { id: string }>({
               >
                 {(row[col.key] as string | number | undefined) ?? '—'}
               </p>
+            ) : col.type === 'select' ? (
+              <Select
+                key={col.key}
+                value={(row[col.key] as string | undefined) ?? ''}
+                onChange={(e) => onChange(row.id, col.key, e.target.value)}
+                className="h-[34px] rounded-md bg-ink-bg text-[13px]"
+              >
+                {(col.options ?? []).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
             ) : (
               <Input
                 key={col.key}
@@ -83,7 +100,7 @@ export function EditableRowList<T extends { id: string }>({
             ))}
         </div>
       ))}
-      {!readOnly && (
+      {!readOnly && (maxRows === undefined || rows.length < maxRows) && (
         <button
           type="button"
           onClick={onAdd}
