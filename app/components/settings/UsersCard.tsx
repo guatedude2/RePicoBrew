@@ -103,7 +103,24 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
     setRole('Regular');
   };
 
+  // Admin password reset: sets a new password for the user being edited, without knowing their old one.
+  const resetFetcher = useFetcher<{ success?: boolean; error?: string }>();
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const resetMismatch = resetConfirm.length > 0 && resetPassword !== resetConfirm;
+  const canReset = resetPassword.length >= 8 && resetPassword === resetConfirm && resetFetcher.state === 'idle';
+
+  useEffect(() => {
+    if (resetFetcher.state === 'idle' && resetFetcher.data?.success) {
+      setResetPassword('');
+      setResetConfirm('');
+    }
+  }, [resetFetcher.state, resetFetcher.data]);
+
   const openEdit = (user: User) => {
+    resetFetcher.reset();
+    setResetPassword('');
+    setResetConfirm('');
     setEditTarget(user);
     setEditName(user.name);
     setEditEmail(user.email);
@@ -237,6 +254,57 @@ export const UsersCard: FC<UsersCardProps> = ({ users }) => {
                   </option>
                 ))}
               </Select>
+            </div>
+            <div className="border-t border-ink-divider pt-4">
+              <p className="text-[13px] font-semibold">Reset password</p>
+              <p className="mt-0.5 text-xs text-ink-text-faint">
+                Set a new password for this user without knowing their current one.
+              </p>
+              <div className="mt-3 flex flex-col gap-3">
+                <div>
+                  <Label htmlFor="reset-password">New password</Label>
+                  <Input
+                    id="reset-password"
+                    type="password"
+                    autoComplete="new-password"
+                    className="mt-1.5"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="reset-confirm">Confirm new password</Label>
+                  <Input
+                    id="reset-confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    className="mt-1.5"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                  />
+                </div>
+                {resetMismatch && <p className="text-xs text-danger-500">Passwords don&apos;t match.</p>}
+                {resetFetcher.data?.error && <p className="text-xs text-danger-500">{resetFetcher.data.error}</p>}
+                {resetFetcher.data?.success && <p className="text-xs text-success-500">Password updated.</p>}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  disabled={!canReset}
+                  onClick={() => {
+                    if (!editTarget) {
+                      return;
+                    }
+                    resetFetcher.submit(
+                      { intent: 'resetUserPassword', id: String(editTarget.id), newPassword: resetPassword },
+                      { method: 'post' },
+                    );
+                  }}
+                >
+                  {resetFetcher.state !== 'idle' ? 'Setting…' : 'Set New Password'}
+                </Button>
+                <p className="text-[11px] text-ink-text-faintest">At least 8 characters.</p>
+              </div>
             </div>
           </div>
           <DialogFooter>

@@ -4,6 +4,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { BatchPhase, SessionState, SessionType, DeviceType } from '~/types';
+import { requireUser, requireWriter } from '~/services/auth.server';
 
 // Device types that can serve as a fermentation-tracking hydrometer/monitor and plug into this
 // same session/batch lifecycle (Tilt, PicoFerm, iSpindel are functionally identical in this role).
@@ -14,7 +15,8 @@ const FERMENTATION_DEVICE_TYPES: DeviceType[] = [DeviceType.TILT, DeviceType.PIC
  * List all fermentation-tracking devices (Tilt, PicoFerm, iSpindel), plus batches currently
  * fermenting without a tracker yet
  */
-export async function loader(_args: LoaderFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
+  await requireUser(request);
   const devices = await DeviceRepository.listDevices();
   const tiltDevices = devices.filter((d) => FERMENTATION_DEVICE_TYPES.includes(d.deviceType as DeviceType));
 
@@ -43,6 +45,7 @@ export async function loader(_args: LoaderFunctionArgs) {
  * - batchId?: number — batch to attach this tracking session to (start only)
  */
 export async function action({ request }: ActionFunctionArgs) {
+  await requireWriter(request);
   const body = await request.json();
   const { action: actionType, deviceId, batchId } = body;
 

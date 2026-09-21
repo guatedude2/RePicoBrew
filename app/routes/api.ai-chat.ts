@@ -5,6 +5,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { describeBatchForChat } from '~/services/ai-advisor.server';
 import { runGeneralChat } from '~/services/ai-chat-assistant.server';
+import { requireUser } from '~/services/auth.server';
 
 // -1 is this app's "not set" sentinel for ABV/IBU (see app/utils/brew-stats.ts) — skip rather than
 // show a misleading "-1% ABV" to the AI.
@@ -59,6 +60,7 @@ function parseScopeId(scope: AiChatScope, raw: string | null): { ok: true; scope
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await requireUser(request);
   const url = new URL(request.url);
   const scope = parseScope(url.searchParams.get('scope'));
   if (!scope) {
@@ -77,6 +79,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  await requireUser(request);
   // DELETE /api/ai-chat?scope=...&scopeId=... — "Clear conversation": wipes that scope's messages.
   if (request.method === 'DELETE') {
     const url = new URL(request.url);

@@ -4,6 +4,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data } from 'react-router';
 import { IngredientSection, RecipeRepository, type CreateRecipeInput } from '~/repositories/recipe.server';
 import { DeviceType, PicoLocationMap, RecipePackType } from '~/types';
+import { requireUser, requireWriter } from '~/services/auth.server';
 
 // Two local data snapshots — both re-synced via the scripts noted below, not fetched live:
 //  - ZPak/Community: github.com/Justin-Credible/picobrew-recipes (unlicensed/open source; see
@@ -96,6 +97,7 @@ async function loadPicopakIndex(): Promise<PicoPakIndexEntry[]> {
 type SortKey = 'name' | 'abv' | 'ibu';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await requireUser(request);
   const url = new URL(request.url);
   const tabParam = url.searchParams.get('tab');
   const tab: Tab = tabParam === 'community' || tabParam === 'picopak' ? tabParam : 'zpak';
@@ -325,6 +327,7 @@ function mapPicoPakToRecipeInput(r: PicoPakRecipe): CreateRecipeInput {
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  await requireWriter(request);
   const body = await request.json();
 
   if (body.intent !== 'import') {

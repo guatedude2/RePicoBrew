@@ -9,6 +9,7 @@ import {
   type PicoPackAiRecipe,
   type ZPackAiRecipe,
 } from '~/services/ai-recipe-generator.server';
+import { requireUser } from '~/services/auth.server';
 
 // POST /api/ai-recipe
 // Body (generate): { mode: 'generate', prompt: string, packType: 'picopack' | 'zpack', threadScope?, threadScopeId? }
@@ -26,6 +27,7 @@ import {
 // id when editing an already-saved recipe, 'general' (no id) when drafting on a blank/new-recipe
 // page. Persistence is best-effort: a logging failure never fails the recipe generation itself.
 export const action = async ({ request }: ActionFunctionArgs) => {
+  await requireUser(request);
   if (request.method !== 'POST') {
     return data({ error: 'Method not allowed' }, { status: 405 });
   }

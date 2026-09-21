@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from 'react-router';
+import type { LoaderFunctionArgs, MiddlewareFunction } from 'react-router';
 import { redirect } from 'react-router';
 import { MainLayout } from '~/layouts/MainLayout';
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
@@ -10,6 +10,19 @@ import authenticator from '~/services/auth.server';
 import type { SessionData } from '~/services/session.server';
 import { ServerSideEventsProvider } from '~/utils/sse';
 import { parseTimeFormat, TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
+
+// Runs before every loader and action under the admin layout, including direct `.data` and form-action
+// requests (which do not go through this layout's loader). Anyone not logged in is sent to sign in.
+export const middleware: MiddlewareFunction[] = [
+  async ({ request }) => {
+    if ((await UserRepository.count()) === 0) {
+      throw redirect('/setup');
+    }
+    if (!(await authenticator.isAuthenticated(request))) {
+      throw redirect('/signin');
+    }
+  },
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   // A fresh install/disk image has no users yet — send it through first-time setup instead of

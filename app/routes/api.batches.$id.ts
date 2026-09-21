@@ -3,12 +3,14 @@ import { data } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
 import { analyzeBatch } from '~/services/ai-advisor.server';
 import { BatchPhase } from '~/types';
+import { requireWriter } from '~/services/auth.server';
 
 /**
  * POST /api/batches/:id
  * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice', ... }
  */
 export async function action({ request, params }: ActionFunctionArgs) {
+  await requireWriter(request);
   const id = Number(params.id);
   const body = await request.json();
   const { intent } = body;

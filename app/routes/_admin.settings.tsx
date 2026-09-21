@@ -35,6 +35,8 @@ import { normalizeSearchUrl, verifySearchUrl } from '~/services/web-search.serve
 // existing stand-in for "trusted/elevated user" — matches how ReadOnly is treated everywhere else
 // this app talks about roles (app/components/settings/UsersCard.tsx, app/pages/Profile.tsx).
 // Returns an error response to return from the action, or null if the caller may proceed.
+const MIN_PASSWORD_LENGTH = 8;
+
 async function requireSystemControlAccess(request: Request) {
   const session = await authenticator.isAuthenticated(request);
   if (!session) {
@@ -82,7 +84,8 @@ export const loader = async (_args: LoaderFunctionArgs) => {
   return serializeDates({
     devices: devices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
     discoveredDevices,
-    users,
+    // Never send password hashes or salts to the browser — only what the Users list shows.
+    users: users.map(({ password: _password, salt: _salt, ...user }) => user),
     hostname: hostname ?? '',
     accessPoint: accessPoint ?? { name: '', password: '' },
     wifi: wifi ?? { name: '', password: '' },
@@ -100,6 +103,13 @@ export const loader = async (_args: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Every Settings action changes something (devices, users, keys, network, power), so all of them need a
+  // logged-in, non-read-only user — the admin layout's middleware covers login, this covers the role.
+  const accessDenied = await requireSystemControlAccess(request);
+  if (accessDenied) {
+    return accessDenied;
+  }
+
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -154,6 +164,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'A user with that email already exists' }, { status: 400 });
     }
     await UserRepository.createUser({ name, email, password, role });
+    return { success: true };
+  }
+
+  if (intent === 'resetUserPassword') {
+    const id = parseInt(formData.get('id') as string);
+    const newPassword = (formData.get('newPassword') as string) ?? '';
+    if (!id) {
+      return data({ error: 'Missing user' }, { status: 400 });
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return data({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }, { status: 400 });
+    }
+    const updated = await UserRepository.setPassword(id, newPassword);
+    if (!updated) {
+      return data({ error: 'User not found' }, { status: 404 });
+    }
     return { success: true };
   }
 

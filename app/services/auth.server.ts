@@ -35,5 +35,27 @@ export async function isAuthenticated(
   return data;
 }
 
+const unauthorized = (status: 401 | 403, error: string) =>
+  new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json' } });
+
+// For UI-facing API routes (which sit outside the admin layout, so its login check doesn't cover them):
+// throws a 401 unless someone is logged in.
+export async function requireUser(request: Request): Promise<SessionData> {
+  const data = await isAuthenticated(request);
+  if (!data) {
+    throw unauthorized(401, 'Not authenticated');
+  }
+  return data;
+}
+
+// Same, and a read-only account can't make changes.
+export async function requireWriter(request: Request): Promise<SessionData> {
+  const data = await requireUser(request);
+  if (data.role === 'ReadOnly') {
+    throw unauthorized(403, 'You do not have permission to do that.');
+  }
+  return data;
+}
+
 const authenticator = { isAuthenticated, sessionKey };
 export default authenticator;

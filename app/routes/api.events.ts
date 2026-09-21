@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import pubsub from '~/services/pubsub.server';
 import { ServerSideResponse } from '~/utils/sse';
+import { requireUser } from '~/services/auth.server';
 
 const wrapPubSubSignal = <T = unknown>(
   response: ServerSideResponse,
@@ -23,7 +24,8 @@ const wrapPubSubSignal = <T = unknown>(
   });
 };
 
-export const loader = ({ request }: LoaderFunctionArgs) => {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await requireUser(request);
   const response = new ServerSideResponse(request);
 
   wrapPubSubSignal(response, { topic: 'device-detected' });
