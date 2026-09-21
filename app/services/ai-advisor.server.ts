@@ -29,7 +29,7 @@ function summarizeNumbers(values: number[]) {
 
 type RecipeStepInfo = { name: string; temperature: number; stepTime: number; drainTime: number };
 
-function buildBrewSummary(logs: Array<{ data: string }>, recipeSteps: RecipeStepInfo[] = []) {
+function buildBrewSummary(logs: Array<{ data: string; time?: Date }>, recipeSteps: RecipeStepInfo[] = []) {
   const wort: number[] = [];
   const therm: number[] = [];
   const stepsSeen: string[] = [];
@@ -60,6 +60,13 @@ function buildBrewSummary(logs: Array<{ data: string }>, recipeSteps: RecipeStep
   const wortStats = summarizeNumbers(wort);
   const thermStats = summarizeNumbers(therm);
   const lines = [`Current step: ${lastStep ?? 'unknown'}.`];
+  if (recipeSteps.length > 0) {
+    lines.push(
+      `Recipe step plan: ${recipeSteps
+        .map((step) => `${step.name} ${step.temperature}°F for ${step.stepTime} min`)
+        .join('; ')}.`,
+    );
+  }
   const target = lastStep ? recipeSteps.find((step) => step.name.toLowerCase() === lastStep.toLowerCase()) : undefined;
   if (target) {
     lines.push(
@@ -77,6 +84,26 @@ function buildBrewSummary(logs: Array<{ data: string }>, recipeSteps: RecipeStep
   const latestWort = wort[wort.length - 1];
   if (latestWort !== undefined) {
     lines.push(`Latest wort temp ${latestWort}°F.`);
+  }
+  // The last few readings, oldest first, so questions about "right now" and the trend can be answered.
+  const recent = logs.slice(-6).flatMap((log) => {
+    try {
+      const row = JSON.parse(log.data) as BrewLogRow;
+      if (typeof row.wort !== 'number' && typeof row.therm !== 'number') {
+        return [];
+      }
+      const ageMin = log.time ? Math.max(0, Math.round((Date.now() - log.time.getTime()) / 60000)) : null;
+      return [
+        `${ageMin !== null ? `${ageMin} min ago` : 'earlier'}: wort ${row.wort ?? '?'}°F, ThermoBlock ${
+          row.therm ?? '?'
+        }°F (${row.step ?? '?'})`,
+      ];
+    } catch {
+      return [];
+    }
+  });
+  if (recent.length > 0) {
+    lines.push(`Most recent readings — ${recent.join('; ')}.`);
   }
   if (wortStats) {
     lines.push(`Wort temp so far — min ${wortStats.min}°F, max ${wortStats.max}°F, avg ${wortStats.avg}°F.`);
@@ -122,7 +149,9 @@ function buildFermentSummary(logs: Array<{ data: string; time: Date }>) {
   return lines.length > 0 ? lines.join(' ') : 'No fermentation readings yet.';
 }
 
-async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRepository.getBatch>>>) {
+// Everything the AI is told about a batch: recipe, the phase, and live telemetry for it (current step, the
+// recipe's target for that step, recent readings, ...). Shared by the scheduled/step advice and the chat.
+async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof BatchRepository.getBatch>>>) {
   const recipe = batch.recipe;
   const recipeLines = recipe
     ? [
@@ -148,7 +177,23 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
     stageSummary = buildFermentSummary(logs);
   }
 
-  const userMessage = [`Phase: ${batch.phase}.`, recipeLines, stageSummary].filter(Boolean).join(' ');
+  return {
+    text: [`Batch: ${batch.name}. Phase: ${batch.phase}.`, recipeLines, stageSummary].filter(Boolean).join(' '),
+    step,
+  };
+}
+
+// For the chat panel on a session page: the same live context, or null if the batch doesn't exist.
+export async function describeBatchForChat(batchId: number): Promise<string | null> {
+  const batch = await BatchRepository.getBatch(batchId);
+  if (!batch) {
+    return null;
+  }
+  return (await buildBatchContext(batch)).text;
+}
+
+async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRepository.getBatch>>>) {
+  const { text: userMessage, step } = await buildBatchContext(batch);
 
   const basePrompt =
     'You are an experienced, encouraging homebrew brewmaster embedded in RePicoBrew, a home brewing tracker app. ' +

@@ -46,7 +46,10 @@ const GENERAL_PERSONA =
   'is rendered (**bold**, short bullet or numbered lists when listing several items) — no headers, no tables. You cannot browse the web, open links, or look anything up, ' +
   "and you have no access to any brand's or brewery's actual recipes: never say or imply that you checked, " +
   'verified, or matched something against a real source unless the text was given to you under "Reference material". ' +
-  'If asked whether something is accurate or made up, be honest about what is general knowledge versus a guess.';
+  'If asked whether something is accurate or made up, be honest about what is general knowledge versus a guess. ' +
+  'When a "Context" block contains live session data (current step, recent temperature readings, the recipe\'s targets), ' +
+  "use it to answer directly — compare readings to the step's target — and only say you can't see something if it is " +
+  'genuinely missing from that context.';
 
 const ACTIONS_INSTRUCTIONS = `You can also trigger two concrete actions when the user clearly asks for them — never
 volunteer them unprompted:
@@ -141,6 +144,8 @@ export async function runGeneralChat(input: {
   message: string;
   allowActions: boolean;
   contextLine?: string;
+  // The last few messages of this conversation (oldest first), so follow-up questions keep their thread.
+  history?: Array<{ role: string; content: string }>;
   // Set only when the current scope is a specific, existing recipe (a read-only recipe view) or a
   // session with a known recipe — the URL to send the user to if they ask to edit/update it. See
   // api.ai-chat.ts for how each scope derives this.
@@ -180,7 +185,14 @@ export async function runGeneralChat(input: {
     recipeLines,
   });
   const gathered = await gatherReferences(provider, message);
-  const user = (input.contextLine ? `Context: ${input.contextLine}\n\n${message}` : message) + referenceBlock(gathered);
+  const historyBlock = input.history?.length
+    ? `Recent conversation:\n${input.history
+        .map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${m.content.slice(0, 600)}`)
+        .join('\n')}\n\n`
+    : '';
+  const user = `${input.contextLine ? `Context: ${input.contextLine}\n\n` : ''}${historyBlock}${
+    input.contextLine || historyBlock ? 'Current message: ' : ''
+  }${message}${referenceBlock(gathered)}`;
 
   let raw: string;
   try {

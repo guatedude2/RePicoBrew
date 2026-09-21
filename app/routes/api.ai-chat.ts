@@ -3,6 +3,7 @@ import { data } from 'react-router';
 import { AiChatRepository, type AiChatScope } from '~/repositories/ai-chat.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
+import { describeBatchForChat } from '~/services/ai-advisor.server';
 import { runGeneralChat } from '~/services/ai-chat-assistant.server';
 
 // -1 is this app's "not set" sentinel for ABV/IBU (see app/utils/brew-stats.ts) — skip rather than
@@ -129,6 +130,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const thread = await AiChatRepository.getOrCreateThread(scope, scopeId);
+    const history = (await AiChatRepository.listMessages(thread.id)).slice(-6);
     await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
 
     // A light conversational touch for session/recipe-scoped chat — what's currently being viewed
@@ -141,10 +143,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (scope === 'session' && scopeId != null) {
       const batch = await BatchRepository.getBatch(scopeId);
       if (batch) {
-        const recipeBit = batch.recipe
-          ? `, recipe "${batch.recipe.name}"${batch.recipe.style ? ` (${batch.recipe.style})` : ''}`
-          : '';
-        contextLine = `Batch "${batch.name}", phase ${batch.phase}${recipeBit}.`;
+        // The live session data (current step, recent readings, targets) — without it the AI can only guess.
+        contextLine = (await describeBatchForChat(scopeId)) ?? `Batch "${batch.name}", phase ${batch.phase}.`;
         if (batch.recipe) {
           editRecipeUrl = `/recipes/${batch.recipe.id}`;
         }
@@ -161,6 +161,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       message: message.trim(),
       allowActions: scope === 'general',
       contextLine,
+      history: history.map((m) => ({ role: m.role, content: m.content })),
       editRecipeUrl,
     });
     if (!result.success) {
