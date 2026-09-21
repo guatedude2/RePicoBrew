@@ -13,11 +13,21 @@
 # The app itself is always built here, on this machine. Re-running only re-syncs and restarts (the
 # database is left alone) unless --fresh is passed (armv6l only: re-extracts the whole app tree).
 #
-# Usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh]
+# Refuses to run while a brew is in progress (the app restarts, so the Pico's readings during the ~20-40s outage
+# would be lost and it can show a server-communication error); pass --force to override.
+#
+# Usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh] [--force]
 set -euo pipefail
 
-TARGET="${1:?usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh]}"
-FRESH="${2:-}"
+TARGET="${1:?usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh] [--force]}"
+FRESH=""
+FORCE=""
+for arg in "${@:2}"; do
+  case "$arg" in
+    --fresh) FRESH="--fresh" ;;
+    --force) FORCE="1" ;;
+  esac
+done
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REMOTE_USER="${TARGET%@*}"
@@ -27,6 +37,30 @@ APP_DIR="$REMOTE_HOME/RePicoBrew"
 ARCH="$(ssh "$TARGET" 'uname -m')"
 
 echo "==> Target: $TARGET ($ARCH), app dir $APP_DIR"
+
+# A session that checked in within the last 5 minutes and is still in progress means a brew is running.
+if [ -z "$FORCE" ] && ssh "$TARGET" "test -f '$APP_DIR/prisma/picobrew.db'"; then
+  active="$(ssh "$TARGET" "cd '$APP_DIR' && node --input-type=commonjs -" <<'NODE' 2>/dev/null || true
+const Database = require('better-sqlite3');
+const db = new Database('prisma/picobrew.db', { readonly: true });
+const since = new Date(Date.now() - 5 * 60 * 1000).toISOString().replace('Z', '+00:00');
+const rows = db
+  .prepare('select statusText, timeRemaining from Session where state = 1 and updatedAt > ?')
+  .all(since);
+for (const row of rows) {
+  const mins = row.timeRemaining ? Math.round(row.timeRemaining / 60) : null;
+  console.log(`${row.statusText ?? 'in progress'}${mins ? ` (about ${mins} min left)` : ''}`);
+}
+NODE
+)"
+  if [ -n "$active" ]; then
+    echo "" >&2
+    echo "A brew is in progress on $REMOTE_HOST — $active" >&2
+    echo "Deploying restarts the app and the Pico would lose readings during the outage." >&2
+    echo "Wait until the brew finishes, or re-run with --force to deploy anyway." >&2
+    exit 1
+  fi
+fi
 
 echo "==> Building the app on this machine..."
 (cd "$REPO_DIR" && HUSKY=0 pnpm build)
