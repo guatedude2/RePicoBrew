@@ -19,8 +19,14 @@ const DETECTED_DEVICE_LABEL: Partial<Record<DeviceType, string>> = {
 
 export const MainLayout = () => {
   const revalidator = useRevalidator();
+  // A registered device checking in or dropping off changes its Online badge and whether it can be
+  // picked on the New Session page — the loaders only run on navigation, so refresh the page's data.
+  useServerSideEvent('device-availability-update', () => {
+    revalidator.revalidate();
+  });
   useServerSideEvent<DeviceDetectedData>('device-detected', (data) => {
     if (data.isRegistered) {
+      revalidator.revalidate();
       return;
     }
 
