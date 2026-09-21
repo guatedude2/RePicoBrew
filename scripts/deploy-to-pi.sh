@@ -185,7 +185,7 @@ EOF
   ssh "$TARGET" "sudo rm -f /etc/nginx/sites-enabled/default && sudo ln -sf '$APP_DIR/scripts/nginx-picobrew.conf' /etc/nginx/sites-enabled/picobrew && sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
   echo "==> Installing network scripts and sudo rules (so Settings/Setup can apply the AP and hostname)..."
-  ssh "$TARGET" "sudo mkdir -p /usr/local/sbin/repicobrew-network && sudo install -m 0755 -o root -g root '$APP_DIR'/scripts/network/{apply-hostname,apply-ap,apply-wifi,setup-nm-ap,check-updates,start-updates,power}.sh /usr/local/sbin/repicobrew-network/"
+  ssh "$TARGET" "sudo mkdir -p /usr/local/sbin/repicobrew-network && sudo install -m 0755 -o root -g root '$APP_DIR'/scripts/network/{apply-hostname,apply-ap,apply-wifi,setup-nm-ap,wifi-radios,check-updates,start-updates,power}.sh /usr/local/sbin/repicobrew-network/"
   ssh "$TARGET" "sudo tee /etc/sudoers.d/repicobrew-control >/dev/null && sudo chmod 0440 /etc/sudoers.d/repicobrew-control && sudo visudo -cf /etc/sudoers.d/repicobrew-control" <<EOF
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh restart
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh reboot

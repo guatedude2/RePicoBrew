@@ -79,6 +79,7 @@ cp "$APP_DIR/scripts/network/check-updates.sh" /usr/local/sbin/repicobrew-networ
 cp "$APP_DIR/scripts/network/start-updates.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/power.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/setup-nm-ap.sh" /usr/local/sbin/repicobrew-network/
+cp "$APP_DIR/scripts/network/wifi-radios.sh" /usr/local/sbin/repicobrew-network/
 chmod 0755 /usr/local/sbin/repicobrew-network/*.sh
 chown -R root:root /usr/local/sbin/repicobrew-network
 

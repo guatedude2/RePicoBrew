@@ -19,11 +19,30 @@ if [[ ${#PASSWORD} -lt 8 || ${#PASSWORD} -gt 63 || "$PASSWORD" =~ [[:cntrl:]] ]]
   exit 1
 fi
 
-# NetworkManager-based OS (e.g. a Pi 4 on Ethernet): wlan0 is dedicated to the access point (see
-# setup-nm-ap.sh) and the internet comes from the wired uplink, so there's no client join to do. The
-# caller's internet check still decides whether setup may continue.
+# NetworkManager-based OS (e.g. a Pi 4): the built-in radio is dedicated to the access point (see
+# setup-nm-ap.sh). If a second radio is present (a USB Wi-Fi dongle), it joins the home network here;
+# with only one radio there is nothing to join with and internet comes from the wired uplink instead.
 if command -v nmcli >/dev/null 2>&1 && systemctl is-active --quiet NetworkManager; then
-  echo "NetworkManager system: Wi-Fi client join skipped (internet comes from the wired uplink)" >&2
+  # shellcheck source=wifi-radios.sh
+  source "$(dirname "$0")/wifi-radios.sh"
+  CLIENT_IF="$(client_radio)"
+  if [ -z "$CLIENT_IF" ]; then
+    echo "NetworkManager system with a single Wi-Fi radio: client join skipped (internet comes from the wired uplink)" >&2
+    exit 0
+  fi
+  CLIENT_MAC="$(radio_mac "$CLIENT_IF")"
+  CON_NAME="repicobrew-home"
+  # Replace any previous profile of ours; if the new one can't connect, drop it again so NetworkManager falls
+  # back to whatever network the dongle was on before (e.g. the one from the first-boot setup).
+  nmcli connection delete "$CON_NAME" >/dev/null 2>&1 || true
+  nmcli connection add type wifi con-name "$CON_NAME" autoconnect yes connection.autoconnect-priority 20 \
+    ssid "$SSID" 802-11-wireless.mac-address "$CLIENT_MAC" 802-11-wireless.band bg \
+    wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASSWORD" ipv6.method ignore >/dev/null
+  if ! nmcli --wait 30 connection up "$CON_NAME" ifname "$CLIENT_IF" >/dev/null 2>&1; then
+    nmcli connection delete "$CON_NAME" >/dev/null 2>&1 || true
+    echo "Could not join \"$SSID\" on $CLIENT_IF (wrong password, or out of range)" >&2
+    exit 1
+  fi
   exit 0
 fi
 

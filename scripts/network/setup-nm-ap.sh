@@ -21,6 +21,15 @@ if [[ ${#PASSWORD} -lt 8 || ${#PASSWORD} -gt 63 || "$PASSWORD" =~ [[:cntrl:]] ]]
   exit 1
 fi
 
+# shellcheck source=wifi-radios.sh
+source "$(dirname "$0")/wifi-radios.sh"
+AP_IF="$(ap_radio)"
+if [ -z "$AP_IF" ]; then
+  echo "No Wi-Fi radio found" >&2
+  exit 1
+fi
+AP_MAC="$(radio_mac "$AP_IF")"
+
 CON_NAME="picobrew-ap"
 AP_IP="192.168.72.1"
 
@@ -44,7 +53,7 @@ pick_channel() {
     echo 1
     return
   fi
-  "$iw_bin" dev wlan0 scan 2>/dev/null | awk '
+  "$iw_bin" dev "$AP_IF" scan 2>/dev/null | awk '
     function flush(   ch, i, t, d) {
       if (f != "" && s != "" && f < 2500) {
         ch = int((f - 2407) / 5)
@@ -74,7 +83,9 @@ echo "Using 2.4GHz channel $CHANNEL"
 nmcli connection delete "$CON_NAME" >/dev/null 2>&1 || true
 # SSID/password go to nmcli as separate arguments (no shell), so any characters are safe. The high
 # autoconnect priority makes this win over any Wi-Fi client profile on wlan0 at boot.
-nmcli connection add type wifi ifname wlan0 con-name "$CON_NAME" autoconnect yes ssid "$SSID" \
+# Bound to the built-in radio by hardware address (not "wlan0", which can swap with a USB dongle at boot).
+nmcli connection add type wifi con-name "$CON_NAME" autoconnect yes ssid "$SSID" \
+  802-11-wireless.mac-address "$AP_MAC" \
   802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel "$CHANNEL" \
   802-11-wireless.powersave 2 \
   wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASSWORD" \

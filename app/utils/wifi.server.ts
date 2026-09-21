@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { isRaspberryPi } from '~/utils/platform.server';
+import fs from 'node:fs';
 
 const execFileAsync = promisify(execFile);
 
@@ -40,6 +41,24 @@ export function withWifiRadioLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// Which radio to scan with. Scanning makes a radio leave its channel for a moment, which drops the weaker
+// PicoBrew devices from the access point — so with a second radio (a USB dongle) it scans with that one and
+// never touches the built-in radio hosting the access point. Same rule as scripts/network/wifi-radios.sh:
+// the AP radio is the first non-USB one; with only one radio there's no choice but to scan on it.
+function scanRadio(): string {
+  try {
+    const radios = fs
+      .readdirSync('/sys/class/net')
+      .filter((name) => fs.existsSync(`/sys/class/net/${name}/wireless`))
+      .sort();
+    const isUsb = (name: string) => fs.realpathSync(`/sys/class/net/${name}/device/subsystem`).endsWith('/usb');
+    const apRadio = radios.find((name) => !isUsb(name)) ?? radios[0];
+    return radios.find((name) => name !== apRadio) ?? apRadio ?? 'wlan0';
+  } catch {
+    return 'wlan0';
+  }
+}
+
 // Real Wi-Fi scanning only makes sense on the actual Pi hardware this server runs on. Uses
 // `wpa_cli` against wlan0's own wpa_supplicant control socket rather than `nmcli` — this image is
 // deliberately built on Bullseye (see pi-image/README.md) *because* Bookworm's default
@@ -53,12 +72,13 @@ export async function listNearbyNetworks(): Promise<NearbyNetwork[]> {
   if (!isRaspberryPi()) {
     return [];
   }
+  const radio = scanRadio();
   return withWifiRadioLock(async () => {
     try {
-      await execFileAsync('wpa_cli', ['-i', 'wlan0', 'scan'], { timeout: 5000 });
+      await execFileAsync('wpa_cli', ['-i', radio, 'scan'], { timeout: 5000 });
       // Give the radio a moment to actually complete the scan before asking for results.
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      const { stdout } = await execFileAsync('wpa_cli', ['-i', 'wlan0', 'scan_results'], { timeout: 5000 });
+      const { stdout } = await execFileAsync('wpa_cli', ['-i', radio, 'scan_results'], { timeout: 5000 });
       // Header line is "bssid / frequency / signal level / flags / ssid", tab-separated.
       const strongestBySsid = new Map<string, NearbyNetwork>();
       for (const line of stdout.split('\n').slice(1)) {
