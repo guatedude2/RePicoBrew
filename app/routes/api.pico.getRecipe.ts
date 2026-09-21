@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
-import { PicoLocationMap, RecipeRepository } from '~/repositories/recipe.server';
+import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { SessionState, SessionType, DeviceLogType, DeviceState } from '~/types';
 import pubSub from '~/services/pubsub.server';
@@ -70,12 +70,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   pubSub.publish('device-state-update', { uid: body.data.uid, state: DeviceState.BREWING });
 
+  // Each step's location goes over the wire as its numeric code (Prime 0, Mash 1, PassThru 2, Adjunct1 3,
+  // Adjunct2 4, Adjunct4 5, Adjunct3 6 — the same numbers stored in the database). This used to look the
+  // number up in the TypeScript enum, which for a numeric enum returns the member NAME ("Mash",
+  // "Adjunct1"), so the machine received words where it expects a number and every step ran with a wrong
+  // location — e.g. the heater never held temperature.
   return new Response(
     `#${recipeHeader},${recipe.steps.map(
       ({ temperature, stepTime, drainTime, location, name }) =>
-        `${temperature},${stepTime},${drainTime},${
-          PicoLocationMap[location as unknown as keyof typeof PicoLocationMap]
-        },${name}`,
+        `${temperature},${stepTime},${drainTime},${Number(location)},${name}`,
     )},${recipeImage}#\r\n`,
   );
 };
