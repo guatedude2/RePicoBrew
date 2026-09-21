@@ -116,7 +116,7 @@ WorkingDirectory=$APP_DIR
 Environment="NODE_ENV=production"
 # Raspberry Pi OS can leave Bluetooth soft-blocked (rfkill) and the controller down; bring it up as
 # root ("+") before the scanner starts. Never fails the start: the scanner retries on its own.
-# ($$ = a literal $ for systemd, which otherwise expands $VARIABLES in unit lines.)
+# (Doubled dollar signs below are literal ones to systemd, which expands variables in unit lines.)
 ExecStartPre=+/bin/sh -c 'for f in /sys/class/rfkill/rfkill*; do [ "\$\$(cat "\$\$f/type")" = bluetooth ] && echo 0 > "\$\$f/soft"; done; /usr/bin/hciconfig hci0 up || true'
 ExecStart=/usr/local/bin/node --import tsx workers/tilt-ble.ts
 Restart=always
