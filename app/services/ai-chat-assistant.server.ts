@@ -192,7 +192,7 @@ export async function runGeneralChat(input: {
     : '';
   const user = `${input.contextLine ? `Context: ${input.contextLine}\n\n` : ''}${historyBlock}${
     input.contextLine || historyBlock ? 'Current message: ' : ''
-  }${message}${referenceBlock(gathered)}`;
+  }${message}${referenceBlock(gathered)}\n\n(Reply with the JSON object described in your instructions.)`;
 
   let raw: string;
   try {
@@ -209,7 +209,13 @@ export async function runGeneralChat(input: {
     return { success: false, error: 'The AI request failed. Try again in a moment.' };
   }
 
-  const parsed = parseJsonResponse(raw);
+  let parsed = parseJsonResponse(raw);
+  // Models sometimes answer in plain prose instead of the JSON envelope (more often with conversation history in
+  // the prompt). A plain-text answer is still a perfectly good reply — only text that looks like broken JSON isn't.
+  const trimmedRaw = raw.trim();
+  if (!parsed && trimmedRaw && !/^[{[`]/.test(trimmedRaw)) {
+    parsed = { reply: trimmedRaw, action: null };
+  }
   const replyText = parsed && typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : null;
   const rawAction = parsed && parsed.action && typeof parsed.action === 'object' ? (parsed.action as RawAction) : null;
 
