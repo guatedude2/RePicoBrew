@@ -6,6 +6,7 @@ import { Card } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { DeviceManualsMenu } from '~/components/settings/DeviceManualsMenu';
 import { DEFAULT_ICON_FOR_TYPE, DeviceTypeIcon, type DeviceIconKind } from '~/components/settings/DeviceTypeIcon';
 import { cn } from '~/lib/utils';
 import { DeviceState, DeviceType } from '~/types';
@@ -285,6 +286,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
                 )}
                 <div className={cn('size-[9px] shrink-0 rounded-full', connectivityStyle.dot)} />
                 <p className={cn('text-[11px] font-bold', connectivityStyle.text)}>{connectivity.label}</p>
+                <DeviceManualsMenu kind={deviceIconKind(device)} deviceName={device.name} />
                 <button
                   type="button"
                   aria-label={`Remove ${device.name}`}

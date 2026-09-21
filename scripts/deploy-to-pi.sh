@@ -134,7 +134,7 @@ EOF
   rsync -az --delete \
     --exclude='/.git' --exclude='/node_modules' --exclude='/build' --exclude='/pi-image' \
     --exclude='/.react-router' --exclude='/prisma/*.db*' --exclude='/prisma/*.sql' \
-    --exclude='/public/recipe-photos/*' --exclude='.DS_Store' \
+    --exclude='/manuals-cache' --exclude='/public/recipe-photos/*' --exclude='.DS_Store' \
     "$REPO_DIR/" "$TARGET:$APP_DIR/"
 
   echo "==> Installing dependencies and applying database migrations on the Pi (a few minutes)..."
