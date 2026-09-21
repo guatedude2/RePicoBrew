@@ -65,6 +65,44 @@ EOF
   ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable repicobrew.service && sudo systemctl restart repicobrew.service'
 }
 
+install_ble_scanner() {
+  echo "==> Installing the Bluetooth (Tilt) scanner service..."
+  ssh "$TARGET" "sudo tee /etc/systemd/system/tilt-ble.service >/dev/null" <<EOF
+[Unit]
+Description=Tilt Bluetooth scanner for RePicoBrew
+After=network.target repicobrew.service
+# The scanner talks to the Bluetooth controller directly (raw HCI), which BlueZ would otherwise hold.
+Conflicts=bluetooth.service
+
+[Service]
+Type=simple
+User=$REMOTE_USER
+Group=$REMOTE_USER
+WorkingDirectory=$APP_DIR
+Environment="NODE_ENV=production"
+# Raspberry Pi OS can leave Bluetooth soft-blocked (rfkill) and the controller down; bring it up as
+# root ("+") before the scanner starts. Never fails the start: the scanner retries on its own.
+# ($$ = a literal $ for systemd, which otherwise expands $VARIABLES in unit lines.)
+ExecStartPre=+/bin/sh -c 'for f in /sys/class/rfkill/rfkill*; do [ "\$\$(cat "\$\$f/type")" = bluetooth ] && echo 0 > "\$\$f/soft"; done; /usr/bin/hciconfig hci0 up || true'
+ExecStart=/usr/local/bin/node --import tsx workers/tilt-ble.ts
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tilt-ble
+# Keep it from starving the brewing app on a 1GB Pi.
+MemoryMax=150M
+
+# Raw Bluetooth access without running as root.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable tilt-ble.service && sudo systemctl restart tilt-ble.service'
+}
+
 deploy_aarch64() {
   local node_version="20.18.1"
   local node_url="https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-arm64.tar.gz"
@@ -135,6 +173,7 @@ EOF
   fi
 
   install_service
+  install_ble_scanner
 }
 
 deploy_armv6l() {

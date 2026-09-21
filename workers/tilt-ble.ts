@@ -16,12 +16,13 @@
  */
 
 import noble from '@stoprocent/noble';
-import { TILT_COLOR_UUIDS, type TiltReading, processTiltReading } from '../app/services/tilt.server';
+import { TILT_COLOR_UUIDS } from '../app/utils/tilt-colors';
 
 // Config
 const SCAN_INTERVAL_MS = 5000; // Report every 5 seconds per Tilt
-const API_URL = process.env.API_URL || 'http://localhost:8080/API/tilt';
-const USE_HTTP_POST = process.env.TILT_USE_HTTP === 'true'; // Set to 'true' to POST to API instead of direct DB
+// The scanner runs as its own service and reports over HTTP, so the app (not this process) owns the
+// database and the live-update stream — that's what makes new/updated Tilts show up in open pages.
+const API_URL = process.env.API_URL || 'http://127.0.0.1:8080/API/tilt-ble';
 
 // iBeacon manufacturer data prefix
 const IBEACON_MANUFACTURER_ID = 0x004c; // Apple iBeacon
@@ -72,8 +73,9 @@ function parseIBeacon(manufacturerData: Buffer, rssi: number, mac: string): Beac
 }
 
 /**
- * Process a Tilt reading from BLE scan
+ * Forward a Tilt reading from the BLE scan to the app
  */
+let lastErrorLogged = 0;
 async function handleTiltReading(beacon: BeaconData) {
   const color = TILT_COLOR_UUIDS[beacon.uuid];
   if (!color) {
@@ -81,45 +83,34 @@ async function handleTiltReading(beacon: BeaconData) {
   } // Not a Tilt UUID
 
   const now = Date.now();
-  const lastTime = lastReadingTime.get(color) || 0;
+  // Per physical Tilt (MAC), not per color — two Tilts of one color are separate devices.
+  const lastTime = lastReadingTime.get(beacon.mac) || 0;
 
   // Throttle: only report every SCAN_INTERVAL_MS
   if (now - lastTime < SCAN_INTERVAL_MS) {
     return;
   }
 
-  lastReadingTime.set(color, now);
-
-  const reading: TiltReading = {
-    color,
-    temp: beacon.major, // Already in °F
-    gravity: beacon.minor, // Raw value (1050 or 10500)
-    rssi: beacon.rssi,
-    uid: `${color}${beacon.mac.replace(/:/g, '')}`,
-    mac: beacon.mac,
-    timestamp: new Date().toISOString(),
-  };
-
+  lastReadingTime.set(beacon.mac, now);
   console.log(`[Tilt BLE] ${color}: SG ${beacon.minor}, Temp ${beacon.major}°F, RSSI ${beacon.rssi}dBm`);
 
   try {
-    if (USE_HTTP_POST) {
-      // POST to API endpoint (for testing or when worker runs externally)
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([reading]),
-      });
-
-      if (!response.ok) {
-        console.error(`[Tilt BLE] HTTP POST failed: ${response.status}`);
-      }
-    } else {
-      // Call processTiltReading directly (worker runs in same process as Remix)
-      await processTiltReading(reading);
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color, mac: beacon.mac, temp: beacon.major, gravity: beacon.minor, rssi: beacon.rssi }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok && now - lastErrorLogged > 60000) {
+      lastErrorLogged = now;
+      console.error(`[Tilt BLE] The app rejected a reading: HTTP ${response.status}`);
     }
   } catch (error) {
-    console.error('[Tilt BLE] Error processing reading:', error);
+    // The app restarts on every deploy; don't spam the journal while it's down.
+    if (now - lastErrorLogged > 60000) {
+      lastErrorLogged = now;
+      console.error('[Tilt BLE] Could not reach the app:', error instanceof Error ? error.message : error);
+    }
   }
 }
 

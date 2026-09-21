@@ -223,7 +223,13 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold">Discovered Device</p>
+                    <p className="text-sm font-bold">
+                      {discovered.deviceType === DeviceType.TILT
+                        ? `Tilt${
+                            parseJSON(discovered.metadata).color ? ` · ${parseJSON(discovered.metadata).color}` : ''
+                          } (Bluetooth)`
+                        : 'Discovered Device'}
+                    </p>
                     <p className="truncate font-mono text-xs text-ink-text-faint">{discovered.uid}</p>
                   </div>
                   <Button
@@ -302,7 +308,7 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
             className="size-3.5 flex-none animate-spin rounded-full border-2 border-brand-500 border-t-transparent"
             aria-hidden
           />
-          Searching for devices…
+          Searching for devices… Wi-Fi and Bluetooth devices appear here as they're detected.
         </div>
       </Card>
 

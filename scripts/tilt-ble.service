@@ -1,25 +1,30 @@
+# Reference copy — scripts/deploy-to-pi.sh installs this unit with the deploy user and app directory filled in.
 [Unit]
-Description=Tilt BLE Scanner for RePicoBrew
-After=network.target bluetooth.target repicobrew.service
-Requires=bluetooth.target
+Description=Tilt Bluetooth scanner for RePicoBrew
+After=network.target repicobrew.service
+# The scanner talks to the Bluetooth controller directly (raw HCI), which BlueZ would otherwise hold.
+Conflicts=bluetooth.service
 
 [Service]
 Type=simple
 User=pi
+Group=pi
 WorkingDirectory=/home/pi/RePicoBrew
 Environment="NODE_ENV=production"
-# Explicit PATH (systemd's own default already covers this, but --loader requires it before the
-# absolute-path exec below) plus /usr/bin/env: NodeSource's manual install (DEPLOY_PI.md) puts
-# node at /usr/bin, pi-image/chroot-provision.sh's tarball install puts it at /usr/local/bin — not
-# a per-user nvm install, which would silently stop working on any Node upgrade either way.
-Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/usr/bin/env node --loader tsx workers/tilt-ble.ts
-Restart=on-failure
+# Raspberry Pi OS can leave Bluetooth soft-blocked (rfkill) and the controller down; bring it up as
+# root ("+") before the scanner starts. Never fails the start: the scanner retries on its own.
+# ($$ = a literal $ for systemd, which otherwise expands $VARIABLES in unit lines.)
+ExecStartPre=+/bin/sh -c 'for f in /sys/class/rfkill/rfkill*; do [ "$$(cat "$$f/type")" = bluetooth ] && echo 0 > "$$f/soft"; done; /usr/bin/hciconfig hci0 up || true'
+ExecStart=/usr/local/bin/node --import tsx workers/tilt-ble.ts
+Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=tilt-ble
+# Keep it from starving the brewing app on a 1GB Pi.
+MemoryMax=150M
 
-# Bluetooth permissions
+# Raw Bluetooth access without running as root.
 AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
 
