@@ -134,7 +134,9 @@ CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
 [Install]
 WantedBy=multi-user.target
 EOF
-  ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable tilt-ble.service && sudo systemctl restart tilt-ble.service'
+  # A scanner that was deliberately turned off (e.g. while chasing power or Wi-Fi problems) stays off: the unit
+  # file is refreshed, but it is only enabled and started on a first install or if it was already enabled.
+  ssh "$TARGET" 'sudo systemctl daemon-reload; if [ "$(systemctl is-enabled tilt-ble.service 2>/dev/null)" = "disabled" ]; then echo "Bluetooth scanner is disabled on the Pi; leaving it off (sudo systemctl enable --now tilt-ble to turn it on)."; else sudo systemctl enable tilt-ble.service && sudo systemctl restart tilt-ble.service; fi'
 }
 
 deploy_aarch64() {
