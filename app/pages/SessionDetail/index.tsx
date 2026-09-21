@@ -25,6 +25,7 @@ import { ACCENT, StatCard } from '~/components/ui/StatCard';
 import { cn } from '~/lib/utils';
 import { BatchPhase } from '~/types';
 import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
+import { phaseForStep } from '~/utils/brew-step-phase';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
@@ -39,29 +40,6 @@ type AiAdviceRow = SessionDetailData['aiAdvice'][number];
 const THERMO_COLOR = '#EAB308';
 const WORT_COLOR = '#22C55E';
 const MAX_W = '820px';
-
-const mapStepToPhase = (stepName: string): Phase => {
-  const step = stepName.toLowerCase();
-  if (step.includes('preparing')) {
-    return Phase.PREPARING;
-  }
-  if (step.includes('heating')) {
-    return Phase.HEATING;
-  }
-  if (step.includes('dough in') || step.includes('mash')) {
-    return Phase.MASHING;
-  }
-  if (step.includes('boil')) {
-    return Phase.BOILING;
-  }
-  if (step.includes('hop') || step.includes('adjunct')) {
-    return Phase.BITTERING;
-  }
-  if (step.includes('chill') || step.includes('complete')) {
-    return Phase.CHILLING;
-  }
-  return Phase.PREPARING;
-};
 
 const fermentationTypeLabel = (t: number | null | undefined) => {
   if (t === 0) {
@@ -99,10 +77,12 @@ const vesselPhaseForBatch = (batchPhase: string, brewPhase: Phase): Phase => {
   if (
     batchPhase === BatchPhase.BOTTLING ||
     batchPhase === BatchPhase.CARBONATING ||
-    batchPhase === BatchPhase.COMPLETED ||
-    batchPhase === BatchPhase.CANCELED
+    batchPhase === BatchPhase.COMPLETED
   ) {
     return Phase.CARBONATING;
+  }
+  if (batchPhase === BatchPhase.CANCELED) {
+    return Phase.PREPARING; // a stopped session shows the idle vessel, not finished beer
   }
   return brewPhase;
 };
@@ -583,12 +563,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const lastLoggedWort = brewChart.wort.length > 0 ? brewChart.wort[brewChart.wort.length - 1].y : null;
   const fallbackStep = brewSession?.statusText ?? lastLoggedStep;
 
-  let phase = Phase.PREPARING;
-  if (liveBrew) {
-    phase = mapStepToPhase(liveBrew.step);
-  } else if (fallbackStep) {
-    phase = mapStepToPhase(fallbackStep);
-  }
+  // Steps already seen this session (a live step that isn't logged yet has just started, so all logged steps
+  // are earlier ones; otherwise the current step is the last logged one).
+  const stepHistory = brewChart.stepMarkers.map((marker) => marker.label);
+  const currentStep = liveBrew?.step ?? fallbackStep;
+  const earlierSteps =
+    currentStep && stepHistory[stepHistory.length - 1] === currentStep ? stepHistory.slice(0, -1) : stepHistory;
+  const phase = currentStep ? phaseForStep(currentStep, earlierSteps) : Phase.PREPARING;
   const temperature = liveBrew?.wort ?? lastLoggedWort ?? 70;
   // The vessel graphic is one continuous animated illustration for the whole session — it just
   // switches scenes (kettle / chiller / fermenter / bottles) rather than swapping to a different image.
