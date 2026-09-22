@@ -6,6 +6,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { DeviceType, SessionState, SessionType } from '~/types';
+import { describePicoErrorCode } from '~/utils/pico-error-codes';
 import { SessionDetail } from '~/pages/SessionDetail';
 
 export const meta = () => [{ title: 'Session Detail | RePicoBrew' }];
@@ -32,12 +33,18 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     ) ?? null;
   const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION) ?? null;
 
-  const [brewLogs, fermLogs, devices, aiAdvice] = await Promise.all([
+  const [brewLogs, fermLogs, devices, aiAdvice, brewDeviceErrors] = await Promise.all([
     brewSession ? SessionRepository.listSessionLogs(brewSession.id) : Promise.resolve([]),
     fermSession ? SessionRepository.listSessionLogs(fermSession.id) : Promise.resolve([]),
     DeviceRepository.listDevices(),
     AiAdviceRepository.listForBatch(batch.id),
+    brewSession ? DeviceRepository.listErrorLogsForSession(brewSession.deviceId, brewSession.uid) : Promise.resolve([]),
   ]);
+  const brewErrors = brewDeviceErrors.map((log) => ({
+    time: log.time,
+    code: log.data.errorCode,
+    ...describePicoErrorCode(log.data.errorCode),
+  }));
   // Flag each Tilt as in-use (already tracking some other batch) or offline so the picker can
   // show why a device can't be selected instead of silently failing when Start Tracking is clicked.
   const tiltDevices = await Promise.all(
@@ -53,7 +60,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       }),
   );
 
-  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices, aiAdvice };
+  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices, aiAdvice, brewErrors };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {

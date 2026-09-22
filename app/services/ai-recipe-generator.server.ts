@@ -6,6 +6,7 @@ import {
   sourceLinesFor,
   type GatheredReferences,
 } from '~/services/ai-references.server';
+import { describePicoStepRangesForPrompt } from '~/utils/pico-step-ranges';
 import { normalizeMachineSteps, type PicoRecipeStep, type RawPicoStep } from '~/utils/pico-recipe-validation';
 
 // AI-powered recipe drafting/editing for the "AI Brewmaster" sidekick in both recipe editors (see
@@ -92,11 +93,11 @@ const LOCATION_LEGEND = '0=Prime, 1=Mash, 2=PassThru, 3=Adjunct1, 4=Adjunct2, 5=
 
 const PICOPACK_STEPS_EXAMPLE = `[
   { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-  { "name": "Heating", "temperature": 156, "stepTime": 15, "drainTime": 0, "location": 1 },
-  { "name": "Dough In", "temperature": 152, "stepTime": 20, "drainTime": 0, "location": 1 },
-  { "name": "Mash 1", "temperature": 152, "stepTime": 30, "drainTime": 0, "location": 1 },
-  { "name": "Mash Out", "temperature": 168, "stepTime": 10, "drainTime": 2, "location": 1 },
-  { "name": "Hops 1", "temperature": 203, "stepTime": 60, "drainTime": 0, "location": 3 },
+  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+  { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
+  { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
+  { "name": "Mash Out", "temperature": 176, "stepTime": 7, "drainTime": 2, "location": 1 },
+  { "name": "Hops 1", "temperature": 203, "stepTime": 15, "drainTime": 0, "location": 3 },
   { "name": "Hops 2", "temperature": 203, "stepTime": 15, "drainTime": 0, "location": 4 },
   { "name": "Hops 3", "temperature": 203, "stepTime": 5, "drainTime": 5, "location": 6 }
 ]`;
@@ -197,10 +198,10 @@ JSON response:
 const EDIT_FEWSHOT = `Current recipe (JSON):
 { "name": "Simple Pale Ale", "style": "American Pale Ale", "abv": 5.2, "ibu": 25, "notes": "Clean, balanced pale ale.", "steps": [
   { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-  { "name": "Heating", "temperature": 156, "stepTime": 15, "drainTime": 0, "location": 1 },
-  { "name": "Dough In", "temperature": 152, "stepTime": 20, "drainTime": 0, "location": 1 },
-  { "name": "Mash 1", "temperature": 152, "stepTime": 40, "drainTime": 0, "location": 1 },
-  { "name": "Hops 1", "temperature": 203, "stepTime": 60, "drainTime": 5, "location": 3 }
+  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+  { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
+  { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
+  { "name": "Hops 1", "temperature": 203, "stepTime": 15, "drainTime": 5, "location": 3 }
 ] }
 Requested change: "add more bitterness"
 JSON response:
@@ -213,11 +214,11 @@ JSON response:
     "notes": "Clean pale ale with a firmer bittering edge from an added early hop charge.",
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-      { "name": "Heating", "temperature": 156, "stepTime": 15, "drainTime": 0, "location": 1 },
-      { "name": "Dough In", "temperature": 152, "stepTime": 20, "drainTime": 0, "location": 1 },
-      { "name": "Mash 1", "temperature": 152, "stepTime": 40, "drainTime": 0, "location": 1 },
-      { "name": "Hops 1", "temperature": 203, "stepTime": 60, "drainTime": 0, "location": 3 },
-      { "name": "Hops 2", "temperature": 203, "stepTime": 45, "drainTime": 5, "location": 4 }
+      { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+      { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
+      { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
+      { "name": "Hops 1", "temperature": 203, "stepTime": 15, "drainTime": 0, "location": 3 },
+      { "name": "Hops 2", "temperature": 203, "stepTime": 10, "drainTime": 5, "location": 4 }
     ]
   },
   "explanation": "I added a second, earlier hop addition (45 minutes left in the boil) to raise the bittering charge, which bumps the estimated IBU from 25 to 32. Everything else is unchanged.",
@@ -237,6 +238,7 @@ first 3 steps, in this order — every PicoBrew machine recipe begins this way:
   2. { "name": "Heating", "location": 1 } — heat the mash water.
   3. { "name": "Dough In", "location": 1 } — grain in.
 After those 3, add whatever mash/boil/hop-addition steps the recipe needs. Location codes: ${LOCATION_LEGEND}.
+${describePicoStepRangesForPrompt()}
 drainTime must be 0 on every step EXCEPT a "Mash Out" step or the very last hop-addition step (those may drain).
 Temperatures are in °F, stepTime/drainTime are in minutes. These rules apply even when editing an existing
 recipe — if your change touches the steps array, the first 3 steps and the drain-time rule still must hold.`;
@@ -247,6 +249,9 @@ current JSON and a short instruction describing what the user wants changed (e.g
 that satisfies the instruction — adjust or add specific fields/ingredients/steps as needed (e.g. "add more
 bitterness" plausibly means adjusting or adding a hop addition's amount/timing, not rewriting the whole
 recipe) — and leave every other field exactly as it was unless the change genuinely requires touching it.
+Do NOT change the machine "steps" unless the instruction is specifically about the mash, hop timing or brew
+schedule — copy them through exactly as given (an official PicoPak's steps are already correct). Even then, change
+only the values asked about and stay inside the safe ranges.
 Always return the FULL recipe object in "recipe" (every field, not just the ones you changed).`;
 
 // The model cannot browse or look anything up, so a "recipe from <brand/kit/book>" request can only be

@@ -4,7 +4,9 @@ import { Button } from '~/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Select } from '~/components/ui/select';
+import { StepRangeWarnings } from '~/components/recipe-editor/StepRangeWarnings';
 import { PicoLocationMap } from '~/types';
+import { getPicoStepWarnings } from '~/utils/pico-step-ranges';
 
 export type MachineStepRow = {
   id: string;
@@ -46,6 +48,8 @@ export const MachineStepsModal: FC<{
     onChange(next);
   };
   const remove = (id: string) => onChange(steps.filter((s) => s.id !== id));
+  const warnings = getPicoStepWarnings(steps);
+  const warnedRows = new Set(warnings.map((w) => w.stepIndex));
   const rowTemplateColumns = readOnly ? columns : `${columns} 64px`;
 
   return (
@@ -57,6 +61,7 @@ export const MachineStepsModal: FC<{
             Raw firmware steps run by the Pico — edit with care.
           </p>
         </DialogHeader>
+        <StepRangeWarnings warnings={warnings} />
         <div className="overflow-y-auto">
           <div
             className="grid gap-2 pb-2 text-[11px] font-bold uppercase text-ink-text-faintest"
@@ -73,7 +78,9 @@ export const MachineStepsModal: FC<{
           {steps.map((row, index) => (
             <div
               key={row.id}
-              className={`grid items-center gap-2 py-1.5 ${index % 2 ? 'bg-ink-bg' : ''}`}
+              className={`grid items-center gap-2 py-1.5 ${index % 2 ? 'bg-ink-bg' : ''} ${
+                warnedRows.has(index) ? 'border-l-2 border-orange-500 pl-1' : ''
+              }`}
               style={{ gridTemplateColumns: rowTemplateColumns }}
             >
               <p className="text-center font-mono text-xs text-ink-text-faint">{index}</p>

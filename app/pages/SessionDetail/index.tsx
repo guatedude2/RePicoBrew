@@ -308,6 +308,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   brewLogs,
   tiltDevices,
   aiAdvice,
+  brewErrors,
 }) => {
   const navigate = useNavigate();
   const fetcher = useFetcher();
@@ -455,6 +456,23 @@ export const SessionDetail: FC<SessionDetailData> = ({
       }
     },
   );
+  // Errors the Pico reported for this session, from the loader plus any that arrive live.
+  const [liveErrors, setLiveErrors] = useState(brewErrors);
+  useEffect(() => setLiveErrors(brewErrors), [brewErrors]);
+  useServerSideEvent<{
+    sessionId: number | null;
+    code: number;
+    summary: string;
+    cause: string;
+    action: string;
+  }>('session-error', (data) => {
+    if (brewSession && data.sessionId === brewSession.id) {
+      setLiveErrors((prev) => [
+        ...prev,
+        { time: new Date(), code: data.code, summary: data.summary, cause: data.cause, action: data.action },
+      ]);
+    }
+  });
   // Once brewLogs is refetched, those points are already in it — drop the live-only buffer.
   useEffect(() => {
     setLiveChartPoints({ wort: [], therm: [] });
@@ -669,6 +687,22 @@ export const SessionDetail: FC<SessionDetailData> = ({
       />
       {brewExpanded && brewSession && (
         <div className="flex flex-col gap-4">
+          {liveErrors.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {liveErrors.map((err) => (
+                <div
+                  key={`${err.code}-${new Date(err.time).getTime()}`}
+                  className="rounded-[10px] border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-[13px] text-red-600 dark:text-red-400"
+                >
+                  <p className="font-bold">
+                    Pico error {err.code}: {err.summary}
+                  </p>
+                  <p className="mt-0.5 text-ink-text-faint">{err.cause}</p>
+                  <p className="mt-0.5">{err.action}</p>
+                </div>
+              ))}
+            </div>
+          )}
           {batch.phase === BatchPhase.BREWING && liveBrew?.timeLeft ? (
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-[0.4px] text-ink-text-faint">Time Remaining</p>

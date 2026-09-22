@@ -16,7 +16,9 @@ import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
 import { RecipeActionsMenu } from '~/components/recipes/RecipeActionsMenu';
 import { dirtyClass } from '~/utils/form-dirty';
+import { StepRangeWarnings } from '~/components/recipe-editor/StepRangeWarnings';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
+import { getPicoStepWarnings } from '~/utils/pico-step-ranges';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 
 const RECIPE_FORM_ID = 'recipe-form';
@@ -492,6 +494,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     };
   }, [mashSteps, boilTime, boilTemp, batchSize]);
 
+  const stepWarnings = useMemo(() => getPicoStepWarnings(machineSteps), [machineSteps]);
   const machineValidation = useMemo(
     () => validatePicoRecipe(machineSteps.map(({ id: _id, ...rest }) => rest)),
     [machineSteps],
@@ -1213,6 +1216,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               />
               <p className="text-[15px] font-bold">Machine Steps</p>
             </button>
+            <StepRangeWarnings warnings={stepWarnings} />
             {machineStepsExpanded && (
               <div className="overflow-hidden rounded-[10px] border border-ink-divider">
                 <div

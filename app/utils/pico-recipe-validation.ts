@@ -1,4 +1,12 @@
 import { PicoLocationMap } from '~/types';
+import {
+  classifyPicoStep,
+  clampToStepRange,
+  MAX_HOP_STEPS,
+  MAX_MASH_STEPS,
+  PICO_STEP_ORDER,
+  PICO_STEP_RANGES,
+} from '~/utils/pico-step-ranges';
 
 export type PicoRecipeStep = {
   name: string;
@@ -68,8 +76,20 @@ export type RawPicoStep = {
 
 const REQUIRED_FIRST_STEPS: PicoRecipeStep[] = [
   { name: 'Preparing To Brew', location: PicoLocationMap.Prime, temperature: 70, stepTime: 3, drainTime: 0 },
-  { name: 'Heating', location: PicoLocationMap.Mash, temperature: 156, stepTime: 15, drainTime: 0 },
-  { name: 'Dough In', location: PicoLocationMap.Mash, temperature: 152, stepTime: 20, drainTime: 0 },
+  {
+    name: 'Heating',
+    location: PicoLocationMap.Mash,
+    temperature: PICO_STEP_RANGES.heating.temperature.typical,
+    stepTime: PICO_STEP_RANGES.heating.stepTime.typical,
+    drainTime: 0,
+  },
+  {
+    name: 'Dough In',
+    location: PicoLocationMap.Mash,
+    temperature: PICO_STEP_RANGES.doughIn.temperature.typical,
+    stepTime: PICO_STEP_RANGES.doughIn.stepTime.typical,
+    drainTime: 0,
+  },
 ];
 
 const VALID_LOCATIONS = new Set<number>(
@@ -91,10 +111,11 @@ function inferLocation(name: string): number {
   return PicoLocationMap.Mash;
 }
 
-// Forces any AI-produced (or otherwise untrusted) machine step sequence into the shape
-// validatePicoRecipe requires: first 3 steps exactly Preparing To Brew@Prime / Heating@Mash /
-// Dough In@Mash, and drainTime 0 on every step except a Mash Out step or the final hop-addition
-// step. The result always passes validatePicoRecipe.
+// Forces any AI-produced (or otherwise untrusted) machine step sequence into the shape official
+// PicoPaks always have (see pico-step-ranges.ts): first 3 steps exactly Preparing To Brew@Prime /
+// Heating@Mash / Dough In@Mash, the rest in the fixed order mash -> mash out -> hops (at most 3 mash
+// and 4 hop steps), every value clamped to the range seen in the official library, and drainTime 0
+// except on a Mash Out step or the final hop-addition step. The result always passes validatePicoRecipe.
 export function normalizeMachineSteps(rawSteps: RawPicoStep[] | null | undefined): PicoRecipeStep[] {
   const cleaned: PicoRecipeStep[] = (Array.isArray(rawSteps) ? rawSteps : [])
     .filter((s): s is RawPicoStep => !!s && typeof s === 'object')
@@ -110,44 +131,55 @@ export function normalizeMachineSteps(rawSteps: RawPicoStep[] | null | undefined
       };
     });
 
-  const isHeating = (n: string) => n.toLowerCase() === 'heating';
-  const isDoughIn = (n: string) => n.toLowerCase() === 'dough in';
-  const isPreparing = (n: string) => n.toLowerCase() === 'preparing to brew';
-
-  // Reuse the AI's own Heating/Dough In temp+time if it supplied them (recipes legitimately vary
-  // mash-in temperature/duration), but always force the name/location/drainTime the validator
-  // requires.
-  const heatingMatch = cleaned.find((s) => isHeating(s.name));
-  const doughInMatch = cleaned.find((s) => isDoughIn(s.name));
+  const doughInMatch = cleaned.find((s) => classifyPicoStep(s.name) === 'doughIn');
 
   const forcedFirst: PicoRecipeStep[] = [
     { ...REQUIRED_FIRST_STEPS[0] },
-    {
-      ...REQUIRED_FIRST_STEPS[1],
-      temperature: heatingMatch ? heatingMatch.temperature : REQUIRED_FIRST_STEPS[1].temperature,
-      stepTime: heatingMatch ? heatingMatch.stepTime : REQUIRED_FIRST_STEPS[1].stepTime,
-    },
+    { ...REQUIRED_FIRST_STEPS[1] },
     {
       ...REQUIRED_FIRST_STEPS[2],
-      temperature: doughInMatch ? doughInMatch.temperature : REQUIRED_FIRST_STEPS[2].temperature,
       stepTime: doughInMatch ? doughInMatch.stepTime : REQUIRED_FIRST_STEPS[2].stepTime,
     },
   ];
 
-  // Everything else the AI produced, minus whatever we just consumed as Heating/Dough In and any
-  // duplicate "Preparing To Brew" it may have invented, in original order.
-  const rest = cleaned.filter((s) => s !== heatingMatch && s !== doughInMatch && !isPreparing(s.name));
+  // Everything the AI produced beyond the three forced steps (its own Preparing To Brew / Heating /
+  // Dough In are replaced above), put back in the official order; the sort is stable so steps of
+  // the same kind keep the order the AI gave them.
+  const rest = cleaned
+    .filter((s) => !['prepare', 'heating', 'doughIn'].includes(classifyPicoStep(s.name)))
+    .map((s, i) => ({ s, i, role: classifyPicoStep(s.name) }))
+    .sort((a, b) => PICO_STEP_ORDER[a.role] - PICO_STEP_ORDER[b.role] || a.i - b.i);
 
-  const combined = [...forcedFirst, ...rest];
+  let mashCount = 0;
+  let hopCount = 0;
+  const kept = rest
+    .filter(({ role }) => {
+      if (role === 'mash') {
+        return ++mashCount <= MAX_MASH_STEPS;
+      }
+      if (role === 'hops') {
+        return ++hopCount <= MAX_HOP_STEPS;
+      }
+      return true;
+    })
+    .map(({ s }) => s);
+
+  const combined = [...forcedFirst, ...kept];
 
   return combined.map((step, index) => {
-    const isMashOut = step.name.toLowerCase().includes('mash out');
-    const isLastHop = step.name.toLowerCase().includes('hop') && index === combined.length - 1;
+    const role = classifyPicoStep(step.name);
+    const isLastHop = role === 'hops' && index === combined.length - 1;
+    const canDrain = role === 'mashOut' || isLastHop;
+    const clamped = clampToStepRange(role, {
+      temperature: Math.round(step.temperature),
+      stepTime: Math.round(step.stepTime),
+      drainTime: canDrain ? Math.round(step.drainTime) : 0,
+    });
     return {
       ...step,
-      temperature: Math.min(215, Math.max(32, Math.round(step.temperature))),
-      stepTime: Math.min(180, Math.max(0, Math.round(step.stepTime))),
-      drainTime: isMashOut || isLastHop ? Math.min(30, Math.max(0, Math.round(step.drainTime))) : 0,
+      temperature: Math.min(215, Math.max(32, clamped.temperature)),
+      stepTime: Math.min(180, Math.max(0, clamped.stepTime)),
+      drainTime: canDrain ? Math.min(30, Math.max(0, clamped.drainTime)) : 0,
     };
   });
 }

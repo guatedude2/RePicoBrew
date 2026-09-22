@@ -32,6 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   wrapPubSubSignal(response, { topic: 'device-state-update' });
   wrapPubSubSignal(response, { topic: 'device-availability-update' });
   wrapPubSubSignal(response, { topic: 'session-update' });
+  wrapPubSubSignal(response, { topic: 'session-error' });
   wrapPubSubSignal(response, { topic: 'tilt-update' });
   wrapPubSubSignal(response, { topic: 'tilt-seen' });
 

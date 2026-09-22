@@ -9,6 +9,9 @@ import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
+import { HopCompartmentInfo } from '~/components/recipe-editor/HopCompartmentInfo';
+import { StepRangeWarnings } from '~/components/recipe-editor/StepRangeWarnings';
+import { getPicoStepWarnings } from '~/utils/pico-step-ranges';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
 import { cn } from '~/lib/utils';
 import type { AiIngredientRow, PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
@@ -284,6 +287,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         },
   );
 
+  const stepWarnings = useMemo(() => getPicoStepWarnings(machineSteps), [machineSteps]);
   const machineValidation = useMemo(
     () => validatePicoRecipe(machineSteps.map(({ id: _id, ...rest }) => rest)),
     [machineSteps],
@@ -526,7 +530,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               )}
               {(!readOnly || hops.length > 0) && (
                 <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Hops</p>
+                  <p className="mb-2 flex items-center gap-1 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">
+                    Hops
+                    <HopCompartmentInfo />
+                  </p>
                   <EditableRowList
                     rows={hops}
                     templateColumns="1.3fr 0.8fr 0.6fr 1fr"
@@ -567,6 +574,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                 PicoPacks are defined entirely by their step sequence — no separate mash/boil/fermentation science.
               </p>
             </div>
+            <StepRangeWarnings warnings={stepWarnings} />
             {stepsExpanded && (
               <div className="overflow-hidden rounded-[10px] border border-ink-divider">
                 <div

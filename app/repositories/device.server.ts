@@ -1,6 +1,6 @@
 import prisma from '~/services/prisma.server';
 import type { DeviceLogData, DeviceState } from '~/types';
-import { DeviceType } from '~/types';
+import { DeviceType, DeviceLogType } from '~/types';
 
 // How long a device can go without a check-in (an inbound poll, or a confirmed LAN sighting from
 // device-monitor.server.ts) before we call it offline.
@@ -130,6 +130,18 @@ export class DeviceRepository {
       orderBy: { time: 'desc' },
       take: limit,
     });
+  }
+
+  // DeviceLog.data is a JSON blob (see DeviceLogData in ~/types), so ERROR entries for a
+  // particular session can only be filtered in JS after fetching, not in the SQL query.
+  public static async listErrorLogsForSession(deviceId: number, sessionUID: string) {
+    const logs = await this.listDeviceLogs(deviceId, 200);
+    return logs
+      .map((log) => ({ time: log.time, data: JSON.parse(log.data) as DeviceLogData }))
+      .filter(
+        (log): log is { time: Date; data: Extract<DeviceLogData, { type: DeviceLogType.ERROR }> } =>
+          log.data.type === DeviceLogType.ERROR && log.data.sessionUID === sessionUID,
+      );
   }
 
   public static isDeviceOnline(device: { lastSeenAt: Date | null }) {

@@ -1,7 +1,10 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
+import { SessionRepository } from '~/repositories/session.server';
+import { describePicoErrorCode } from '~/utils/pico-error-codes';
 import { DeviceLogType } from '~/types';
+import pubSub from '~/services/pubsub.server';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -27,6 +30,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     type: DeviceLogType.ERROR,
     errorCode: body.data.code,
     sessionUID: body.data.rfid,
+  });
+
+  // Surface it live to anyone watching the session (or the dashboard), instead of it only
+  // showing up on the next full page load.
+  const session = body.data.rfid ? await SessionRepository.getSession(body.data.rfid) : null;
+  pubSub.publish('session-error', {
+    deviceId: device.id,
+    sessionId: session?.id ?? null,
+    code: body.data.code,
+    ...describePicoErrorCode(body.data.code),
   });
 
   return new Response(`\r\n`);
