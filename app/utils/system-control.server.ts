@@ -124,3 +124,42 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
   }
   return { state, log, rebootRequired };
 }
+
+// The Bluetooth radio itself (bluetoothd) — Settings -> Devices' Bluetooth toggle. Separate from
+// tilt-ble.service (the Tilt hydrometer scanner, which needs this on to do anything but is its
+// own opt-in on top of this).
+const BLUETOOTH_RADIO_SCRIPT = '/usr/local/sbin/repicobrew-network/bluetooth-radio.sh';
+const BLUETOOTH_UNIT = 'bluetooth.service';
+
+export async function setBluetoothEnabled(enabled: boolean): Promise<SystemControlResult> {
+  return runSudoCommand([BLUETOOTH_RADIO_SCRIPT, enabled ? 'on' : 'off']);
+}
+
+// `systemctl is-active` needs no privilege; it exits non-zero (not an error here) whenever the
+// unit isn't running, including when it doesn't exist at all (a non-Pi dev machine).
+export async function getBluetoothEnabled(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync('systemctl', ['is-active', BLUETOOTH_UNIT], { timeout: 5_000 });
+    return stdout.trim() === 'active';
+  } catch {
+    return false;
+  }
+}
+
+// The Wi-Fi CLIENT radio (the internet uplink) — Settings -> Wi-Fi's radio toggle. Never the
+// access point radio, which stays up regardless so PicoBrew devices can still pair.
+const WIFI_CLIENT_RADIO_SCRIPT = '/usr/local/sbin/repicobrew-network/wifi-client-radio.sh';
+
+export async function setWifiClientEnabled(enabled: boolean): Promise<SystemControlResult> {
+  return runSudoCommand([WIFI_CLIENT_RADIO_SCRIPT, enabled ? 'on' : 'off']);
+}
+
+// The `status` subcommand is a read-only nmcli query, so it needs no sudo/sudoers entry.
+export async function getWifiClientEnabled(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(WIFI_CLIENT_RADIO_SCRIPT, ['status'], { timeout: 5_000 });
+    return stdout.trim() === 'on';
+  } catch {
+    return false;
+  }
+}

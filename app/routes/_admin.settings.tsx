@@ -17,9 +17,13 @@ import { isRaspberryPi } from '~/utils/platform.server';
 import { serializeDates } from '~/utils/serialize.server';
 import {
   checkForUpdates,
+  getBluetoothEnabled,
   getUpdateStatus,
+  getWifiClientEnabled,
   rebootPi,
   restartServer,
+  setBluetoothEnabled,
+  setWifiClientEnabled,
   shutdownPi,
   startUpdates,
 } from '~/utils/system-control.server';
@@ -68,6 +72,8 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     zenSettings,
     customSettings,
     activeProvider,
+    bluetoothEnabled,
+    wifiClientEnabled,
   ] = await Promise.all([
     DeviceRepository.listDevices(),
     DeviceRepository.listDiscoveredDevices(),
@@ -80,6 +86,8 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     AiSettingsRepository.getZenSettings(),
     AiSettingsRepository.getCustomSettings(),
     AiSettingsRepository.getActiveProviderName(),
+    getBluetoothEnabled(),
+    getWifiClientEnabled(),
   ]);
   return serializeDates({
     devices: devices.map((device) => ({ ...device, online: DeviceRepository.isDeviceOnline(device) })),
@@ -99,6 +107,8 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     activeProvider,
     searchUrl: await AiSettingsRepository.getSearchUrl(),
     systemInfo: getSystemInfo(),
+    bluetoothEnabled,
+    wifiClientEnabled,
   });
 };
 
@@ -490,6 +500,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: result.error }, { status: 500 });
     }
     return { success: true };
+  }
+
+  if (intent === 'toggleBluetooth') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await setBluetoothEnabled(formData.get('enabled') === 'true');
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'toggleWifiClient') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const result = await setWifiClientEnabled(formData.get('enabled') === 'true');
+    if (!result.success) {
+      return data({ error: result.error }, { status: 500 });
+    }
+    return { success: true };
+  }
+
+  if (intent === 'checkInternet') {
+    const accessError = await requireSystemControlAccess(request);
+    if (accessError) {
+      return accessError;
+    }
+    const connected = await checkInternetConnectivity({ retries: 1, timeoutMs: 4000 });
+    return { success: true, connected };
   }
 
   if (intent === 'checkUpdates') {

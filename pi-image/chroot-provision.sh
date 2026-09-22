@@ -81,6 +81,8 @@ cp "$APP_DIR/scripts/network/power.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/setup-nm-ap.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/wifi-radios.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/wlan1-watchdog.sh" /usr/local/sbin/repicobrew-network/
+cp "$APP_DIR/scripts/network/bluetooth-radio.sh" /usr/local/sbin/repicobrew-network/
+cp "$APP_DIR/scripts/network/wifi-client-radio.sh" /usr/local/sbin/repicobrew-network/
 chmod 0755 /usr/local/sbin/repicobrew-network/*.sh
 chown -R root:root /usr/local/sbin/repicobrew-network
 
@@ -138,6 +140,10 @@ pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/start-updates.sh
 pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-hostname.sh *
 pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-ap.sh *
 pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-wifi.sh *
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/bluetooth-radio.sh on
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/bluetooth-radio.sh off
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/wifi-client-radio.sh on
+pi ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/wifi-client-radio.sh off
 EOF
 chmod 0440 /etc/sudoers.d/repicobrew-control
 visudo -cf /etc/sudoers.d/repicobrew-control

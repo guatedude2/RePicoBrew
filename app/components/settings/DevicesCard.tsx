@@ -6,6 +6,7 @@ import { Card } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { Switch } from '~/components/ui/switch';
 import { DeviceManualsMenu } from '~/components/settings/DeviceManualsMenu';
 import { DEFAULT_ICON_FOR_TYPE, DeviceTypeIcon, type DeviceIconKind } from '~/components/settings/DeviceTypeIcon';
 import { cn } from '~/lib/utils';
@@ -71,6 +72,10 @@ type DiscoveredDevice = {
 interface DevicesCardProps {
   devices: Device[];
   discoveredDevices: DiscoveredDevice[];
+  // Omitted by the Setup wizard's usage of this card, which doesn't load system-control state —
+  // the toggle just doesn't render there.
+  bluetoothEnabled?: boolean;
+  canToggleBluetooth?: boolean;
 }
 
 const STATE_STYLES = {
@@ -136,7 +141,12 @@ const ModelGrid: FC<{
   </div>
 );
 
-export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }) => {
+export const DevicesCard: FC<DevicesCardProps> = ({
+  devices,
+  discoveredDevices,
+  bluetoothEnabled,
+  canToggleBluetooth = false,
+}) => {
   const [open, setOpen] = useState(false);
   const [pairingTarget, setPairingTarget] = useState<DiscoveredDevice | null>(null);
   const [name, setName] = useState('');
@@ -144,7 +154,15 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
   const pairFetcher = useFetcher();
   const dismissFetcher = useFetcher();
   const deleteFetcher = useFetcher();
+  const bluetoothFetcher = useFetcher();
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
+
+  // Optimistic: flips immediately on click rather than waiting for the loader to refetch.
+  const pendingEnabled = bluetoothFetcher.formData?.get('enabled');
+  const bluetoothOn = pendingEnabled === undefined ? bluetoothEnabled ?? false : pendingEnabled === 'true';
+  const toggleBluetooth = () => {
+    bluetoothFetcher.submit({ intent: 'toggleBluetooth', enabled: String(!bluetoothOn) }, { method: 'post' });
+  };
 
   // The loader's `online` snapshot is only as fresh as the last page load — this fills the gap
   // between loads with live pushes from device-monitor.server.ts, the same pattern Dashboard
@@ -199,11 +217,28 @@ export const DevicesCard: FC<DevicesCardProps> = ({ devices, discoveredDevices }
   return (
     <>
       <Card className="p-6">
-        <p className="text-[17px] font-bold">Devices</p>
-        <p className="mb-3.5 mt-1 text-[13px] text-ink-text-dim">
-          Devices show up here automatically as they connect to your network — pair each one manually to give it a name
-          before it can be used.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[17px] font-bold">Devices</p>
+            <p className="mb-3.5 mt-1 text-[13px] text-ink-text-dim">
+              Devices show up here automatically as they connect to your network — pair each one manually to give it a
+              name before it can be used.
+            </p>
+          </div>
+          {bluetoothEnabled !== undefined && (
+            <div className="flex flex-none items-center gap-2 pt-0.5">
+              <Label htmlFor="bluetooth-toggle" className="text-[13px] font-semibold">
+                Bluetooth
+              </Label>
+              <Switch
+                id="bluetooth-toggle"
+                checked={bluetoothOn}
+                disabled={!canToggleBluetooth}
+                onCheckedChange={toggleBluetooth}
+              />
+            </div>
+          )}
+        </div>
 
         {discoveredDevices.length > 0 && (
           <div className="mb-4.5 border-b border-ink-divider pb-4.5">

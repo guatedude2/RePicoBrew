@@ -7,11 +7,13 @@ import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Select } from '~/components/ui/select';
+import { Switch } from '~/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { DevicesCard } from '~/components/settings/DevicesCard';
 import { SystemCard } from '~/components/settings/SystemCard';
 import { WifiNetworkPicker } from '~/components/WifiNetworkPicker';
 import { UsersCard } from '~/components/settings/UsersCard';
+import { cn } from '~/lib/utils';
 
 import type { SaveState } from './Settings/settings-reducer';
 import { useSettingsReducer } from './Settings/settings-reducer';
@@ -53,6 +55,16 @@ const RpiOnlyNotice: FC = () => (
   </div>
 );
 
+function internetStatusLabel(fetcherState: 'idle' | 'loading' | 'submitting', connected: boolean | undefined) {
+  if (fetcherState !== 'idle') {
+    return 'Checking internet…';
+  }
+  if (connected === undefined) {
+    return 'Internet status unknown';
+  }
+  return connected ? 'Internet connected' : 'No internet access';
+}
+
 const AI_PROVIDER_LABEL: Record<string, string> = {
   openai: 'OpenAI',
   claude: 'Claude',
@@ -92,6 +104,8 @@ export const Settings: FC = () => {
     activeProvider,
     searchUrl,
     systemInfo,
+    bluetoothEnabled,
+    wifiClientEnabled,
   } = useLoaderData<typeof import('~/routes/_admin.settings').loader>();
   const adminData = useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin');
   const canControlSystem = adminData?.session?.role !== 'ReadOnly';
@@ -125,6 +139,21 @@ export const Settings: FC = () => {
   const timeFormat = (timeFormatFetcher.formData?.get('timeFormat') as string | null | undefined) ?? savedTimeFormat;
   const apFetcher = useFetcher();
   const wifiFetcher = useFetcher();
+  const wifiRadioFetcher = useFetcher();
+  // Optimistic: flips immediately on click rather than waiting for the loader to refetch.
+  const pendingWifiRadioEnabled = wifiRadioFetcher.formData?.get('enabled');
+  const wifiRadioOn = pendingWifiRadioEnabled === undefined ? wifiClientEnabled : pendingWifiRadioEnabled === 'true';
+  const toggleWifiRadio = () => {
+    wifiRadioFetcher.submit({ intent: 'toggleWifiClient', enabled: String(!wifiRadioOn) }, { method: 'post' });
+  };
+
+  const internetFetcher = useFetcher<{ connected?: boolean }>();
+  useEffect(() => {
+    if (isRpi) {
+      internetFetcher.submit({ intent: 'checkInternet' }, { method: 'post' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runSave = (fetcher: any, setSaveState: (s: SaveState) => void, body: Record<string, string>) => {
@@ -420,10 +449,38 @@ export const Settings: FC = () => {
 
         <TabsContent value="wifi">
           <Card className="flex flex-col p-6">
-            <SectionHeading
-              title="Wi-Fi"
-              description="Upstream network connecting the Raspberry Pi to your router and the internet."
-            />
+            <div className="flex items-start justify-between gap-3">
+              <SectionHeading
+                title="Wi-Fi"
+                description="Upstream network connecting the Raspberry Pi to your router and the internet."
+              />
+              <div className="flex flex-none items-center gap-2 pt-0.5">
+                <Label htmlFor="wifi-radio-toggle" className="text-[13px] font-semibold">
+                  Wi-Fi Radio
+                </Label>
+                <Switch
+                  id="wifi-radio-toggle"
+                  checked={wifiRadioOn}
+                  disabled={!isRpi || !canControlSystem}
+                  onCheckedChange={toggleWifiRadio}
+                />
+              </div>
+            </div>
+            {isRpi && (
+              <div className="mb-3.5 flex items-center gap-1.5 text-[13px]">
+                <span
+                  className={cn(
+                    'size-2 rounded-full',
+                    internetFetcher.data?.connected
+                      ? 'bg-success-500 shadow-[0_0_8px_var(--color-success-500)]'
+                      : 'bg-ink-text-faintest',
+                  )}
+                />
+                <span className={internetFetcher.data?.connected ? 'text-success-500' : 'text-ink-text-faint'}>
+                  {internetStatusLabel(internetFetcher.state, internetFetcher.data?.connected)}
+                </span>
+              </div>
+            )}
             {!isRpi && <RpiOnlyNotice />}
             <div className="flex w-full flex-col gap-3.5 md:w-3/5">
               <div>
@@ -485,7 +542,12 @@ export const Settings: FC = () => {
         </TabsContent>
 
         <TabsContent value="devices">
-          <DevicesCard devices={devices} discoveredDevices={discoveredDevices} />
+          <DevicesCard
+            devices={devices}
+            discoveredDevices={discoveredDevices}
+            bluetoothEnabled={bluetoothEnabled}
+            canToggleBluetooth={isRpi && canControlSystem}
+          />
         </TabsContent>
 
         <TabsContent value="ai">
