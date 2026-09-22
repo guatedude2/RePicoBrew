@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
@@ -23,12 +24,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response('#2,4#');
+    return picoResponse('#2,4#');
   }
   await DeviceRepository.touchLastSeen(device.id);
 
   const session = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
   const isActive = !!session && session.state === SessionState.IN_PROGRESS && !isPicoFermSessionExpired(session);
 
-  return new Response(isActive ? '#10,0#' : '#2,4#');
+  return picoResponse(isActive ? '#10,0#' : '#2,4#');
 };

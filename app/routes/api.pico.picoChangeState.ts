@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
@@ -19,7 +20,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const device = await DeviceRepository.getDeviceByUID(body.data.picoUID);
   if (!device) {
     // ignore command if not registered
-    return new Response(`#F#\r\n`);
+    return picoResponse(`#F#\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
@@ -32,5 +33,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // publish a state update of the device
   pubsub.publish('device-state-update', { uid: device.uid, state: body.data.state });
 
-  return new Response(`\r\n`);
+  return picoResponse(`\r\n`);
 };

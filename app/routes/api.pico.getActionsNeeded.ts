@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -17,7 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
@@ -28,7 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // check if cleaning is needed
   const needsCleaning = maxSessions ? device.sessionCount >= lastDeepClean + maxSessions : false;
   if (!needsCleaning || !maxSessions) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
 
   // log device deep clean warning
@@ -37,5 +38,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sesOverCount: device.sessionCount - (lastDeepClean + maxSessions),
   });
 
-  return new Response(`#7#\r\n`);
+  return picoResponse(`#7#\r\n`);
 };

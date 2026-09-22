@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
@@ -19,12 +20,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // get device if it exists
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
   if (body.data.sesType === SessionType.BREWING || body.data.sesType > SessionType.MANUAL_BREW) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
 
   // Close out anything this device left dangling (e.g. a deep clean that never got a "complete"
@@ -60,5 +61,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   // Return the actual session UID (not a random hash)
-  return new Response(`#${session.uid}#\r\n`);
+  return picoResponse(`#${session.uid}#\r\n`);
 };

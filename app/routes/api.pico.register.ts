@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { getClientIPAddress } from 'remix-utils/get-client-ip-address';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -38,5 +39,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // publish existing device detected event
   pubsub.publish('device-detected', { uid: body.data.uid, deviceType: null, isRegistered });
 
-  return new Response(`#${isRegistered ? 'T' : 'F'}#\r\n`);
+  return picoResponse(`#${isRegistered ? 'T' : 'F'}#\r\n`);
 };

@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -44,7 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!device) {
     await DeviceRepository.upsertDiscoveredDevice(body.data.uid, DeviceType.PICOFERM);
     pubsub.publish('device-detected', { uid: body.data.uid, deviceType: DeviceType.PICOFERM, isRegistered: false });
-    return new Response('#2,4#');
+    return picoResponse('#2,4#');
   }
   await DeviceRepository.touchLastSeen(device.id);
 
@@ -53,7 +54,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!session || !isActive) {
     // No active tracking session for this device - nothing to log, tell the device to stop.
-    return new Response('#2,4#');
+    return picoResponse('#2,4#');
   }
 
   if (isPicoFermSessionExpired(session)) {
@@ -63,7 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (session.batchId) {
       await BatchRepository.advancePhase(session.batchId, BatchPhase.FERMENTING, BatchPhase.BOTTLING);
     }
-    return new Response('#2,4#');
+    return picoResponse('#2,4#');
   }
 
   const entries = backfillPicoFermTimestamps(points, body.data.rate);
@@ -85,5 +86,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pressure: latest?.pressure,
   });
 
-  return new Response('#10,0#');
+  return picoResponse('#10,0#');
 };

@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
@@ -20,14 +21,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`#F#\r\n`);
+    return picoResponse(`#F#\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
   // get the device firmware for this device's own registered model
   const firmware = await ConfigRepository.getDeviceFirmware(device.deviceType as DeviceType);
   if (!firmware) {
-    return new Response(`#F#\r\n`);
+    return picoResponse(`#F#\r\n`);
   }
 
   // compare version with pico brew c version
@@ -48,5 +49,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pubsub.publish('device-firmware', { uid: body.data.uid, firmwareVersion: body.data.version });
   }
 
-  return new Response(`#${hasUpdate ? 'T' : 'F'}#\r\n`);
+  return picoResponse(`#${hasUpdate ? 'T' : 'F'}#\r\n`);
 };

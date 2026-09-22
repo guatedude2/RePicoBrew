@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import fs from 'fs/promises';
 import path from 'path';
 import SemVer from 'semver';
@@ -20,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`#F#\r\n`);
+    return picoResponse(`#F#\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
@@ -30,7 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const hadUpdate = Boolean(firmware && device.firmwareVersion && SemVer.lt(device.firmwareVersion, firmware.version));
 
   if (!firmware || !hadUpdate) {
-    return new Response(`#F#\r\n`);
+    return picoResponse(`#F#\r\n`);
   }
 
   // log device firmware update event
@@ -42,5 +43,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // send over the raw file contents
   const rawContents = await fs.readFile(path.join(process.cwd(), firmware.file), 'utf8');
-  return new Response(rawContents);
+  return picoResponse(rawContents);
 };

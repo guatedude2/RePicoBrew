@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -29,20 +30,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // get device if it exists
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
   await DeviceRepository.touchLastSeen(device.id);
 
   // decode the pak id
   const { recipeId } = getPakIdData(body.data.rfid);
   if (recipeId === null) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
 
   // get recipe
   const recipe = await RecipeRepository.getRecipe(recipeId);
   if (!recipe) {
-    return new Response(`##\r\n`);
+    return picoResponse(`##\r\n`);
   }
 
   const session = await SessionRepository.getSession(body.data.rfid);
@@ -75,7 +76,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // number up in the TypeScript enum, which for a numeric enum returns the member NAME ("Mash",
   // "Adjunct1"), so the machine received words where it expects a number and every step ran with a wrong
   // location — e.g. the heater never held temperature.
-  return new Response(
+  return picoResponse(
     `#${recipeHeader},${recipe.steps.map(
       ({ temperature, stepTime, drainTime, location, name }) =>
         `${temperature},${stepTime},${drainTime},${Number(location)},${name}`,

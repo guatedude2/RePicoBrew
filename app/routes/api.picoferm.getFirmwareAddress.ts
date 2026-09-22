@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import path from 'path';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
@@ -25,10 +26,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOFERM);
   if (!firmware) {
-    return new Response('##');
+    return picoResponse('##');
   }
 
   const filename = path.basename(firmware.file);
   const origin = new URL(request.url).origin;
-  return new Response(`#${origin}/firmware/picoferm/${filename}#`);
+  return picoResponse(`#${origin}/firmware/picoferm/${filename}#`);
 };

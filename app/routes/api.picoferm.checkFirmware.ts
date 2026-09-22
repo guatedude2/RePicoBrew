@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import SemVer from 'semver';
 import { z } from 'zod';
 import { ConfigRepository } from '~/repositories/config.server';
@@ -24,14 +25,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const device = await DeviceRepository.getDeviceByUID(body.data.uid);
   if (!device) {
-    return new Response('#0#');
+    return picoResponse('#0#');
   }
   await DeviceRepository.touchLastSeen(device.id);
 
   // No firmware config for PICOFERM is fine — just means no update available.
   const firmware = await ConfigRepository.getDeviceFirmware(DeviceType.PICOFERM);
   if (!firmware) {
-    return new Response('#0#');
+    return picoResponse('#0#');
   }
 
   const hasUpdate = Boolean(SemVer.lt(body.data.version, firmware.version));
@@ -48,5 +49,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     pubsub.publish('device-firmware', { uid: body.data.uid, firmwareVersion: body.data.version });
   }
 
-  return new Response(`#${hasUpdate ? '1' : '0'}#`);
+  return picoResponse(`#${hasUpdate ? '1' : '0'}#`);
 };

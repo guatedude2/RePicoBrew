@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 
 const bodyValidator = z.object({
@@ -12,5 +13,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   // not sure what this api does just returns same response
-  return new Response(`##\r\n`);
+  return picoResponse(`##\r\n`);
 };

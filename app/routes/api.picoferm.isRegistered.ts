@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import pubsub from '~/services/pubsub.server';
@@ -34,5 +35,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await DeviceRepository.touchLastSeen(device.id);
   }
 
-  return new Response('#1#');
+  return picoResponse('#1#');
 };

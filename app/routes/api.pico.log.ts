@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
+import { picoResponse } from '~/utils/pico-response.server';
 import { z } from 'zod';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -46,7 +47,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // get the session details
   const session = await SessionRepository.getSession(body.data.sesId);
   if (!session) {
-    return new Response(`\r\n`);
+    return picoResponse(`\r\n`);
   }
 
   // Check if brew is complete (step contains "complete")
@@ -120,5 +121,5 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isComplete,
   });
 
-  return new Response(`\r\n`);
+  return picoResponse(`\r\n`);
 };
