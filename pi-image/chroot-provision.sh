@@ -80,6 +80,7 @@ cp "$APP_DIR/scripts/network/start-updates.sh" /usr/local/sbin/repicobrew-networ
 cp "$APP_DIR/scripts/network/power.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/setup-nm-ap.sh" /usr/local/sbin/repicobrew-network/
 cp "$APP_DIR/scripts/network/wifi-radios.sh" /usr/local/sbin/repicobrew-network/
+cp "$APP_DIR/scripts/network/wlan1-watchdog.sh" /usr/local/sbin/repicobrew-network/
 chmod 0755 /usr/local/sbin/repicobrew-network/*.sh
 chown -R root:root /usr/local/sbin/repicobrew-network
 
@@ -93,6 +94,12 @@ echo "==> Installing repicobrew-ap-channel.service (keeps the AP on the client W
 # channel other than hostapd.conf's — see scripts/network/sync-ap-channel.sh.
 cp "$APP_DIR/scripts/repicobrew-ap-channel.service" /etc/systemd/system/
 ln -sf /etc/systemd/system/repicobrew-ap-channel.service /etc/systemd/system/multi-user.target.wants/repicobrew-ap-channel.service
+
+echo "==> Installing wlan1-watchdog.service (recovers the client Wi-Fi radio if it drops off)..."
+# The USB Wi-Fi dongle providing internet has been observed dropping and never recovering on its
+# own — see scripts/network/wlan1-watchdog.sh for what's been confirmed on real hardware.
+cp "$APP_DIR/scripts/wlan1-watchdog.service" /etc/systemd/system/
+ln -sf /etc/systemd/system/wlan1-watchdog.service /etc/systemd/system/multi-user.target.wants/wlan1-watchdog.service
 
 echo "==> Configuring WiFi AP + DNS spoofing (offline mode)..."
 # SKIP_SERVICE_START=1: writes config + enables services (symlinks only) without trying to

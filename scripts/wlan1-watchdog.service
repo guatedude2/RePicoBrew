@@ -1,0 +1,12 @@
+[Unit]
+Description=Recover the client Wi-Fi radio (internet uplink) if it drops off
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/repicobrew-network/wlan1-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
