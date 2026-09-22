@@ -859,7 +859,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           Once it&apos;s cool to the touch, apply the Fermentation Temperature Decal to the outside of the keg and pitch
           your yeast.{' '}
           <a
-            href="https://picobrewcontent.blob.core.windows.net/content/picoc/PicoC_Manual.pdf"
+            href="/manuals/pico-c-manual"
             target="_blank"
             rel="noopener noreferrer"
             className="font-semibold text-brand-500"

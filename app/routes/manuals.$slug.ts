@@ -1,13 +1,12 @@
 import type { LoaderFunctionArgs } from 'react-router';
-import { redirect } from 'react-router';
 import { readManual } from '~/services/manuals.server';
-import { findManual, manualSourceUrl } from '~/utils/device-manuals';
+import { findManual } from '~/utils/device-manuals';
 
 /**
  * GET /manuals/:slug
  *
- * An official PicoBrew manual (see app/utils/device-manuals.ts), served from the device's local copy;
- * if it isn't cached yet and the download fails, sends the browser to PicoBrew's own copy instead.
+ * An official PicoBrew manual (see app/utils/device-manuals.ts), bundled into the repo and served
+ * straight from disk — never fetched from PicoBrew's own site.
  */
 export const loader = async ({ params }: LoaderFunctionArgs) => {
   const manual = findManual(params.slug ?? '');
@@ -17,7 +16,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
 
   const bytes = await readManual(manual);
   if (!bytes) {
-    return redirect(manualSourceUrl(manual));
+    throw new Response('Manual not bundled', { status: 404 });
   }
   return new Response(new Uint8Array(bytes), {
     headers: {
