@@ -13,6 +13,8 @@ const HARD_DELETE_MODELS: Prisma.ModelName[] = [
   'Batch',
   'DiscoveredDevice',
   'AiAdvice',
+  // Append-only device error/state log — no `deletedAt` column exists on this model either.
+  'DeviceLog',
   // Child rows recreated wholesale on every recipe save (see updateRecipe) — no `deletedAt`
   // column exists on either model.
   'RecipeStep',
@@ -25,7 +27,7 @@ const HARD_DELETE_MODELS: Prisma.ModelName[] = [
 // Bumped for the Prisma 6 + driver-adapter migration (no more native query-engine binary — see
 // pi-image/README.md, which is why this changed): forces the dev singleton below to rebuild.
 // Bump again whenever HARD_DELETE_MODELS changes, since the extension closes over it.
-const PRISMA_CLIENT_GEN = 7;
+const PRISMA_CLIENT_GEN = 8;
 const sqliteUrl = `file:${join(process.cwd(), 'prisma', 'picobrew.db')}`;
 
 function isStaleSqliteError(error: unknown) {
