@@ -25,10 +25,13 @@ export function validatePicoRecipe(steps: PicoRecipeStep[]): { valid: boolean; e
     errors.push('Recipe must have at least 3 steps (Preparing, Heating, Dough In)');
   }
 
-  // First 3 steps must be: Preparing To Brew, Heating, Dough In
+  // First 3 steps must be: Preparing To Brew, Heating, Dough In. Heating and Dough In use
+  // different locations — confirmed on real hardware: a recipe with Heating@PassThru actually
+  // heated and completed a full brew, while Heating@Mash (the same location as Dough In) left the
+  // ThermoBlock overheating with the wort never warming.
   const requiredSteps = [
     { name: 'Preparing To Brew', location: PicoLocationMap.Prime },
-    { name: 'Heating', location: PicoLocationMap.Mash },
+    { name: 'Heating', location: PicoLocationMap.PassThru },
     { name: 'Dough In', location: PicoLocationMap.Mash },
   ];
 
@@ -78,7 +81,7 @@ const REQUIRED_FIRST_STEPS: PicoRecipeStep[] = [
   { name: 'Preparing To Brew', location: PicoLocationMap.Prime, temperature: 70, stepTime: 3, drainTime: 0 },
   {
     name: 'Heating',
-    location: PicoLocationMap.Mash,
+    location: PicoLocationMap.PassThru,
     temperature: PICO_STEP_RANGES.heating.temperature.typical,
     stepTime: PICO_STEP_RANGES.heating.stepTime.typical,
     drainTime: 0,
@@ -113,7 +116,7 @@ function inferLocation(name: string): number {
 
 // Forces any AI-produced (or otherwise untrusted) machine step sequence into the shape official
 // PicoPaks always have (see pico-step-ranges.ts): first 3 steps exactly Preparing To Brew@Prime /
-// Heating@Mash / Dough In@Mash, the rest in the fixed order mash -> mash out -> hops (at most 3 mash
+// Heating@PassThru / Dough In@Mash, the rest in the fixed order mash -> mash out -> hops (at most 3 mash
 // and 4 hop steps), every value clamped to the range seen in the official library, and drainTime 0
 // except on a Mash Out step or the final hop-addition step. The result always passes validatePicoRecipe.
 export function normalizeMachineSteps(rawSteps: RawPicoStep[] | null | undefined): PicoRecipeStep[] {

@@ -288,11 +288,13 @@ type PicoPakRecipe = {
 };
 
 // The vendor API's raw Steps arrays never include a "Preparing To Brew" step (that priming step
-// is implicit on real hardware), and its "Dough In" location doesn't match this app's own
+// is implicit on real hardware), and its location numbers don't match this app's own
 // PicoLocationMap convention — every hand-authored PicoPack recipe here starts with
-// Preparing To Brew@Prime / Heating@Mash / Dough In@Mash (see PicoPackEditor.tsx's
-// DEFAULT_MACHINE_STEPS), which is also what validatePicoRecipe requires. So the mapper conforms
-// imported steps to that same convention rather than passing the source Location through as-is.
+// Preparing To Brew@Prime / Heating@PassThru / Dough In@Mash (see PicoPackEditor.tsx's
+// DEFAULT_MACHINE_STEPS), which is also what validatePicoRecipe requires. Heating and Dough In
+// use different locations — confirmed on real hardware, see pico-recipe-validation.ts. So the
+// mapper conforms imported steps to that same convention rather than passing the source Location
+// through as-is.
 function mapPicoPakToRecipeInput(r: PicoPakRecipe): CreateRecipeInput {
   const sourceSteps = (r.Steps ?? []).map((s) => ({
     name: s.Name,
@@ -303,7 +305,7 @@ function mapPicoPakToRecipeInput(r: PicoPakRecipe): CreateRecipeInput {
   }));
 
   if (sourceSteps[0]?.name === 'Heating') {
-    sourceSteps[0].location = PicoLocationMap.Mash;
+    sourceSteps[0].location = PicoLocationMap.PassThru;
   }
   if (sourceSteps[1]?.name === 'Dough In') {
     sourceSteps[1].location = PicoLocationMap.Mash;

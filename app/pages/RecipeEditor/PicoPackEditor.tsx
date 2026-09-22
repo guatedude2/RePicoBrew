@@ -121,8 +121,8 @@ const DEFAULT_MACHINE_STEPS: MachineStepRow[] = [
     stepTime: 3,
     drainTime: 0,
   },
-  { id: newId(), name: 'Heating', location: PicoLocationMap.Mash, temperature: 156, stepTime: 15, drainTime: 0 },
-  { id: newId(), name: 'Dough In', location: PicoLocationMap.Mash, temperature: 152, stepTime: 20, drainTime: 0 },
+  { id: newId(), name: 'Heating', location: PicoLocationMap.PassThru, temperature: 110, stepTime: 0, drainTime: 0 },
+  { id: newId(), name: 'Dough In', location: PicoLocationMap.Mash, temperature: 110, stepTime: 7, drainTime: 0 },
 ];
 
 export type PicoPackEditorData = {

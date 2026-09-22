@@ -93,7 +93,7 @@ const LOCATION_LEGEND = '0=Prime, 1=Mash, 2=PassThru, 3=Adjunct1, 4=Adjunct2, 5=
 
 const PICOPACK_STEPS_EXAMPLE = `[
   { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 2 },
   { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
   { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
   { "name": "Mash Out", "temperature": 176, "stepTime": 7, "drainTime": 2, "location": 1 },
@@ -127,7 +127,7 @@ JSON response:
     ],
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-      { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+      { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 2 },
       { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
       { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
       { "name": "Mash 2", "temperature": 156, "stepTime": 20, "drainTime": 0, "location": 1 },
@@ -198,7 +198,7 @@ JSON response:
 const EDIT_FEWSHOT = `Current recipe (JSON):
 { "name": "Simple Pale Ale", "style": "American Pale Ale", "abv": 5.2, "ibu": 25, "notes": "Clean, balanced pale ale.", "steps": [
   { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+  { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 2 },
   { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
   { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
   { "name": "Hops 1", "temperature": 203, "stepTime": 15, "drainTime": 5, "location": 3 }
@@ -214,7 +214,7 @@ JSON response:
     "notes": "Clean pale ale with a firmer bittering edge from an added early hop charge.",
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
-      { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 1 },
+      { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 2 },
       { "name": "Dough In", "temperature": 110, "stepTime": 7, "drainTime": 0, "location": 1 },
       { "name": "Mash 1", "temperature": 148, "stepTime": 25, "drainTime": 0, "location": 1 },
       { "name": "Hops 1", "temperature": 203, "stepTime": 15, "drainTime": 0, "location": 3 },
@@ -235,7 +235,9 @@ const PERSONA =
 const MACHINE_STEP_RULES = `The recipe's machine "steps" program (what the Pico actually runs) MUST start with exactly these
 first 3 steps, in this order — every PicoBrew machine recipe begins this way:
   1. { "name": "Preparing To Brew", "location": 0 } — priming step, always temperature 70, stepTime 3, drainTime 0.
-  2. { "name": "Heating", "location": 1 } — heat the mash water.
+  2. { "name": "Heating", "location": 2 } — heat the mash water. Uses a DIFFERENT location than Dough In/Mash —
+     confirmed on real hardware: sharing Dough In's location leaves the ThermoBlock overheating with the wort
+     never warming.
   3. { "name": "Dough In", "location": 1 } — grain in.
 After those 3, add whatever mash/boil/hop-addition steps the recipe needs. Location codes: ${LOCATION_LEGEND}.
 ${describePicoStepRangesForPrompt()}
