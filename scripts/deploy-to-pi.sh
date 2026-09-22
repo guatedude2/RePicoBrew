@@ -139,6 +139,25 @@ EOF
   ssh "$TARGET" 'sudo systemctl daemon-reload; if [ "$(systemctl is-enabled tilt-ble.service 2>/dev/null)" = "disabled" ]; then echo "Bluetooth scanner is disabled on the Pi; leaving it off (sudo systemctl enable --now tilt-ble to turn it on)."; else sudo systemctl enable tilt-ble.service && sudo systemctl restart tilt-ble.service; fi'
 }
 
+install_wlan1_watchdog() {
+  echo "==> Installing wlan1-watchdog.service (recovers the client Wi-Fi radio if it drops off)..."
+  ssh "$TARGET" "sudo tee /etc/systemd/system/wlan1-watchdog.service >/dev/null" <<EOF
+[Unit]
+Description=Recover the client Wi-Fi radio (internet uplink) if it drops off
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/repicobrew-network/wlan1-watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable --now wlan1-watchdog.service'
+}
+
 deploy_aarch64() {
   local node_version="20.18.1"
   local node_url="https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-arm64.tar.gz"
@@ -187,7 +206,7 @@ EOF
   ssh "$TARGET" "sudo rm -f /etc/nginx/sites-enabled/default && sudo ln -sf '$APP_DIR/scripts/nginx-picobrew.conf' /etc/nginx/sites-enabled/picobrew && sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
   echo "==> Installing network scripts and sudo rules (so Settings/Setup can apply the AP and hostname)..."
-  ssh "$TARGET" "sudo mkdir -p /usr/local/sbin/repicobrew-network && sudo install -m 0755 -o root -g root '$APP_DIR'/scripts/network/{apply-hostname,apply-ap,apply-wifi,setup-nm-ap,wifi-radios,check-updates,start-updates,power}.sh /usr/local/sbin/repicobrew-network/"
+  ssh "$TARGET" "sudo mkdir -p /usr/local/sbin/repicobrew-network && sudo install -m 0755 -o root -g root '$APP_DIR'/scripts/network/{apply-hostname,apply-ap,apply-wifi,setup-nm-ap,wifi-radios,check-updates,start-updates,power,wlan1-watchdog,bluetooth-radio,wifi-client-radio}.sh /usr/local/sbin/repicobrew-network/"
   ssh "$TARGET" "sudo tee /etc/sudoers.d/repicobrew-control >/dev/null && sudo chmod 0440 /etc/sudoers.d/repicobrew-control && sudo visudo -cf /etc/sudoers.d/repicobrew-control" <<EOF
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh restart
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/power.sh reboot
@@ -197,6 +216,10 @@ $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/start-updat
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-hostname.sh *
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-ap.sh *
 $REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/apply-wifi.sh *
+$REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/bluetooth-radio.sh on
+$REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/bluetooth-radio.sh off
+$REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/wifi-client-radio.sh on
+$REMOTE_USER ALL=(root) NOPASSWD: /usr/local/sbin/repicobrew-network/wifi-client-radio.sh off
 EOF
 
   # Private web search for the AI Brewmaster: a local-only SearXNG instance. Installed once (10-20 min);
@@ -210,6 +233,7 @@ EOF
 
   install_service
   install_ble_scanner
+  install_wlan1_watchdog
 }
 
 deploy_armv6l() {
