@@ -42,9 +42,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // `global.__aiSchedulerStarted` guard in ai-scheduler.server.ts still only starts the interval once.
   void import('~/services/ai-scheduler.server');
   void import('~/services/device-monitor.server');
-  if (process.env.NODE_ENV === 'production') {
-    void import('~/services/manuals.server').then((m) => m.schedulePrefetch());
-  }
 
   const [deviceStatus, attentionBatches, hasAiKey, timeFormat] = await Promise.all([
     DeviceRepository.getStatus(),

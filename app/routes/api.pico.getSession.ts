@@ -37,7 +37,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Every call needs its own fresh session id — unlike getRecipe's brewing sessions (keyed by the
   // PicoPak's own RFID, so re-polling finds the same row), this endpoint's device+type request has
   // no per-session identifier to key on, so the device's uid must never be reused as the session's.
-  const session = await SessionRepository.createSession(randomUUID().replace(/-/g, ''), body.data.sesType, device.id);
+  // The reference server (chiefwigms/picobrew_pico) sends exactly 20 hex characters here — the
+  // firmware's session-id buffer is sized for that, so a longer id can corrupt its parsing.
+  const session = await SessionRepository.createSession(
+    randomUUID().replace(/-/g, '').slice(0, 20),
+    body.data.sesType,
+    device.id,
+  );
 
   // log device session creation event
   await DeviceRepository.createDeviceLog(device.id, {
