@@ -26,6 +26,11 @@ check_once() {
   if ! is_usb_radio "$radio"; then
     return 0 # the unbind/rebind recovery only applies to a USB radio
   fi
+  # Deliberately turned off via Settings -> Wi-Fi's radio toggle (wifi-client-radio.sh sets this) —
+  # respect it; don't fight the user's own choice by "recovering" a radio they turned off on purpose.
+  if nmcli -t -f GENERAL.STATE device show "$radio" 2>/dev/null | grep -q 'unmanaged'; then
+    return 0
+  fi
 
   # Up and holding a default route: healthy, nothing to do.
   if ip link show "$radio" | grep -q ' UP ' && ip route show dev "$radio" | grep -q '^default'; then
