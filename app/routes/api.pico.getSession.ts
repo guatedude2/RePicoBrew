@@ -2,7 +2,8 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { DeviceRepository } from '~/repositories/device.server';
 import { SessionRepository } from '~/repositories/session.server';
-import { SessionType, DeviceLogType } from '~/types';
+import { SessionType, SessionState, DeviceLogType } from '~/types';
+import { randomUUID } from '~/utils/encryption';
 
 const bodyValidator = z.object({
   uid: z.string(),
@@ -26,8 +27,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return new Response(`##\r\n`);
   }
 
-  // create a session
-  const session = await SessionRepository.createSession(body.data.uid, body.data.sesType, device.id);
+  // Close out anything this device left dangling (e.g. a deep clean that never got a "complete"
+  // log line) so it doesn't stay stuck IN_PROGRESS/READY forever once this new one starts.
+  const priorSession = await SessionRepository.getLastActiveSessionByDeviceId(device.id);
+  if (priorSession && priorSession.state !== SessionState.COMPLETED && priorSession.state !== SessionState.CANCELED) {
+    await SessionRepository.cancelSession(priorSession.id);
+  }
+
+  // Every call needs its own fresh session id — unlike getRecipe's brewing sessions (keyed by the
+  // PicoPak's own RFID, so re-polling finds the same row), this endpoint's device+type request has
+  // no per-session identifier to key on, so the device's uid must never be reused as the session's.
+  const session = await SessionRepository.createSession(randomUUID().replace(/-/g, ''), body.data.sesType, device.id);
 
   // log device session creation event
   await DeviceRepository.createDeviceLog(device.id, {
