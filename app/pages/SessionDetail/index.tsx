@@ -314,6 +314,10 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const fetcher = useFetcher();
   const endFetcher = useFetcher();
   const startTrackingFetcher = useFetcher();
+  // Batch.name is a one-time snapshot of the recipe's name taken when the batch was created
+  // (see BatchRepository.createBatch) — it goes stale the moment the recipe is renamed. Show the
+  // recipe's current name everywhere, falling back to the snapshot only if the recipe was deleted.
+  const displayName = batch.recipe?.name ?? batch.name;
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [skipFermentModalOpen, setSkipFermentModalOpen] = useState(false);
   const [selectedTiltId, setSelectedTiltId] = useState(batch.fermentDeviceId ? String(batch.fermentDeviceId) : '');
@@ -831,7 +835,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           {hasAiKey && (
             <AiAdviceBlock
               batchId={batch.id}
-              batchName={batch.name}
+              batchName={displayName}
               phase={BatchPhase.BREWING}
               latest={latestBrewAdvice}
               canAsk={batch.phase === BatchPhase.BREWING}
@@ -965,7 +969,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
         {hasAiKey && (
           <AiAdviceBlock
             batchId={batch.id}
-            batchName={batch.name}
+            batchName={displayName}
             phase={BatchPhase.FERMENTING}
             latest={latestFermAdvice}
             canAsk={batch.phase === BatchPhase.FERMENTING}
@@ -1044,7 +1048,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
         {hasAiKey && (
           <AiAdviceBlock
             batchId={batch.id}
-            batchName={batch.name}
+            batchName={displayName}
             phase={BatchPhase.FERMENTING}
             latest={latestFermAdvice}
             canAsk={batch.phase === BatchPhase.FERMENTING}
@@ -1167,7 +1171,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </button>
           )}
           <div>
-            <p className="text-lg font-bold">{batch.name}</p>
+            <p className="text-lg font-bold">{displayName}</p>
             <p className="text-xs text-ink-text-faint">
               {brewSession?.device?.name ?? fermSession?.device?.name ?? 'Unknown device'}
             </p>
@@ -1221,7 +1225,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
               }}
             />
             <div className="min-w-[160px] flex-1">
-              <p className="text-xl font-bold">{batch.name}</p>
+              <p className="text-xl font-bold">{displayName}</p>
               <p className="mt-0.5 text-[13px] text-ink-text-dim">{batch.recipe?.style ?? ' '}</p>
               <div className="mt-2.5 flex items-center gap-[18px]">
                 <div>
@@ -1293,7 +1297,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             <DialogTitle>End this session?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-ink-text-secondary">
-            This marks {batch.name} as canceled in RePicoBrew. This can&apos;t be undone.
+            This marks {displayName} as canceled in RePicoBrew. This can&apos;t be undone.
           </p>
           {batch.phase === BatchPhase.BREWING && (
             <p className="rounded-lg border border-brand-500 bg-brand-100 px-3 py-2 text-sm text-ink-text">
