@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { Chart } from '~/components/charts/Chart.client';
+import { useChartZoom } from '~/utils/chart-zoom';
 import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
 
 interface FermentationChartProps {
@@ -40,6 +41,7 @@ const GRID_COLOR = 'oklch(0.24 0.008 260)';
 
 export default function FermentationChart({ sessionId }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
+  const zoom = useChartZoom();
   const [data, setData] = useState<DataPoint[]>([]);
 
   // Fetch historical data
@@ -97,12 +99,14 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
       zoom: { enabled: true },
       background: 'transparent',
       toolbar: { show: true },
+      events: zoom.events,
     },
     colors: [TEMP_COLOR, GRAVITY_COLOR],
     dataLabels: { enabled: false },
     stroke: { width: [3, 3], curve: 'smooth' },
     xaxis: {
       type: 'datetime',
+      ...zoom.xaxisRange,
       labels: {
         style: { colors: TEXT_COLOR, fontSize: '12px' },
         datetimeUTC: false,

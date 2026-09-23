@@ -33,6 +33,7 @@ import { BatchPhase } from '~/types';
 import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
 import { phaseForStep } from '~/utils/brew-step-phase';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
+import { useChartZoom } from '~/utils/chart-zoom';
 import { postEventStream } from '~/utils/event-stream';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
@@ -603,6 +604,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const latestBrewAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.BREWING);
   const latestFermAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.FERMENTING);
 
+  const zoom = useChartZoom();
   const brewChart = useMemo(() => {
     const wort: Array<{ x: number; y: number }> = [];
     const therm: Array<{ x: number; y: number }> = [];
@@ -862,8 +864,15 @@ export const SessionDetail: FC<SessionDetailData> = ({
                         events: {
                           mounted: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
                           updated: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
-                          zoomed: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
-                          scrolled: (chartContext: ApexChartContext) => onChartScaleChange(chartContext),
+                          zoomed: (chartContext: ApexChartContext, args: never) => {
+                            zoom.events.zoomed(chartContext, args);
+                            onChartScaleChange(chartContext);
+                          },
+                          scrolled: (chartContext: ApexChartContext, args: never) => {
+                            zoom.events.scrolled(chartContext, args);
+                            onChartScaleChange(chartContext);
+                          },
+                          beforeResetZoom: zoom.events.beforeResetZoom,
                         },
                       },
                       colors: [THERMO_COLOR, WORT_COLOR],
@@ -872,6 +881,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
                       legend: { show: false },
                       xaxis: {
                         type: 'datetime',
+                        ...zoom.xaxisRange,
                         labels: {
                           style: { colors: 'oklch(0.6 0.008 260)' },
                           datetimeUTC: false,
