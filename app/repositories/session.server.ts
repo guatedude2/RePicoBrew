@@ -5,6 +5,17 @@ import { QUEUE_EXPIRY_MS, QUEUED_STATUS_TEXT } from '~/utils/queued-brew';
 
 export type SessionLogData = Record<string, unknown>;
 
+type SampleOptions = { from?: number; to?: number; max?: number };
+type SampledRows = Array<{ id: number; sessionId: number; type: number; time: Date; data: string }>;
+
+// Thinning a long session means reading and parsing every row, so the result is kept in memory (this app runs as one
+// Node process, so a Redis-style external cache would add a service for no gain). Entries expire after a minute — a
+// running session's chart also gets live points over SSE — and the least recently used are evicted.
+const SAMPLED_TTL_MS = 60_000;
+const SAMPLED_CACHE_MAX = 200;
+const MAX_LTTB_INPUT = 20_000;
+const sampledCache = new Map<string, { rows: SampledRows; expires: number }>();
+
 export class SessionRepository {
   public static async createSession(
     uid: string,
@@ -159,15 +170,35 @@ export class SessionRepository {
   // row); then Largest-Triangle-Three-Buckets keeps the points that best preserve each series' shape, so short
   // spikes survive. `from`/`to` (ms epoch) restrict it to a window, which is how a zoomed-in chart gets detail
   // for just the part it is showing.
-  public static async listSessionLogsSampled(
-    sessionId: number,
-    { from, to, max = 600 }: { from?: number; to?: number; max?: number } = {},
-  ) {
-    const fromMs = from ?? 0;
-    const toMs = to ?? Number.MAX_SAFE_INTEGER;
+  public static async listSessionLogsSampled(sessionId: number, options: SampleOptions = {}) {
+    const key = `${sessionId}:${options.from ?? ''}:${options.to ?? ''}:${options.max ?? 600}`;
+    const hit = sampledCache.get(key);
+    if (hit && hit.expires > Date.now()) {
+      sampledCache.delete(key);
+      sampledCache.set(key, hit); // refresh LRU position
+      return hit.rows;
+    }
+    const rows = await this.computeSessionLogsSampled(sessionId, options);
+    sampledCache.set(key, { rows, expires: Date.now() + SAMPLED_TTL_MS });
+    while (sampledCache.size > SAMPLED_CACHE_MAX) {
+      sampledCache.delete(sampledCache.keys().next().value as string);
+    }
+    return rows;
+  }
+
+  private static async computeSessionLogsSampled(sessionId: number, { from, to, max = 600 }: SampleOptions) {
+    // `time` is an integer (ms) in some databases and ISO text in others, depending on how the row was written, and
+    // SQLite never matches a number against text — so bind bounds of whichever kind this session's rows use.
+    const [sample] = await prisma.$queryRaw<Array<{ kind: string }>>`
+      SELECT typeof(time) AS kind FROM SessionLog WHERE sessionId = ${sessionId} LIMIT 1`;
+    const isText = sample?.kind === 'text';
+    const iso = (ms: number) => new Date(ms).toISOString().replace('Z', '+00:00');
+    const fromMs = isText ? (from === undefined ? '0000-01-01' : iso(from)) : from ?? 0;
+    const toMs = isText ? (to === undefined ? '9999-12-31' : iso(to)) : to ?? Number.MAX_SAFE_INTEGER;
     const [{ total }] = await prisma.$queryRaw<Array<{ total: bigint }>>`
       SELECT COUNT(*) AS total FROM SessionLog WHERE sessionId = ${sessionId} AND time >= ${fromMs} AND time <= ${toMs}`;
-    const stride = Math.max(1, Math.floor(Number(total) / (max * 4)));
+    // LTTB runs over (nearly) every row; only pathological sizes get a cheap even pre-thin first.
+    const stride = Math.max(1, Math.floor(Number(total) / MAX_LTTB_INPUT));
     const rows = await prisma.$queryRaw<
       Array<{ id: number; sessionId: number; type: number; time: Date; data: string }>
     >`
