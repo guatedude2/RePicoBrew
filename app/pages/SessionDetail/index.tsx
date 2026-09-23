@@ -160,6 +160,27 @@ const formatCountdown = (totalSeconds: number) => {
   return `${seconds}s`;
 };
 
+// Same idea as formatCountdown, but with a days tier on top for a fermentation countdown that can
+// span a week or more: 100000 -> "1d 3h", 5475 -> "1h 31m", 915 -> "15m 15s", 45 -> "45s" — one
+// step coarser than the leading unit at each tier rather than always drilling down to seconds, so
+// a multi-day countdown doesn't show a jittery seconds digit the whole time.
+const formatFermCountdown = (totalSeconds: number) => {
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+};
+
 const formatDuration = (start: Date | string) => {
   const hours = Math.floor((Date.now() - new Date(start).getTime()) / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
@@ -507,12 +528,14 @@ export const SessionDetail: FC<SessionDetailData> = ({
     }
   });
   const FERM_STALE_MS = 3 * 60 * 1000;
+  // Also drives the "Total Fermentation Time Left" countdown, hence the 1s tick rather than
+  // something coarser that would only suit the staleness check on its own.
   const [fermNowMs, setFermNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (!fermSession) {
       return;
     }
-    const timer = setInterval(() => setFermNowMs(Date.now()), 15000);
+    const timer = setInterval(() => setFermNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [fermSession]);
   const fermHasEverReported = lastFermReceivedAt !== null;
@@ -673,7 +696,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
     totalMs > 0 ? Math.max(0, Math.min(99, Math.round(((Date.now() - start) / totalMs) * 100))) : 0;
 
   const fermPercent = clampPct(fermStart, fermMs);
-  const fermRemainingMs = Math.max(0, fermStart + fermMs - Date.now());
+  const fermRemainingMs = Math.max(0, fermStart + fermMs - fermNowMs);
   const fermDays = Math.floor(fermRemainingMs / 86400000);
   const fermHours = Math.floor((fermRemainingMs % 86400000) / 3600000);
 
@@ -1067,7 +1090,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
               Total Fermentation Time Left
             </p>
             <p className="mt-1 font-mono text-[38px] font-light">
-              {fermDays}d {fermHours}h
+              {formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
             </p>
           </div>
           <Ring percent={fermPercent} label="Complete" color={FERM_RING_COLOR} />
