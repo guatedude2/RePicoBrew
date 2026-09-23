@@ -1036,7 +1036,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
           <StatCard
             label="Duration"
             value={formatDuration(fermSession.createdAt)}
-            sub={fermSession.device?.name ?? 'Tilt'}
+            sub={
+              fermentationTimeUp
+                ? 'Fermentation time up'
+                : `${formatFermCountdown(Math.floor(fermRemainingMs / 1000))} remaining`
+            }
             icon={MdTimer}
             accent={ACCENT.brand}
           />
