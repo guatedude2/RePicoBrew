@@ -30,6 +30,7 @@ import {
 import { getSystemInfo } from '~/utils/system-info.server';
 import { checkInternetConnectivity } from '~/utils/wifi.server';
 import { TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
+import { WEIGHT_UNIT_CONFIG_KEY } from '~/utils/weight-unit';
 import { normalizeSearchUrl, verifySearchUrl } from '~/services/web-search.server';
 
 // Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
@@ -244,6 +245,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'Invalid time format' }, { status: 400 });
     }
     await ConfigRepository.setConfig(TIME_FORMAT_CONFIG_KEY, timeFormat);
+    return { success: true };
+  }
+
+  if (intent === 'saveWeightUnit') {
+    const weightUnit = formData.get('weightUnit');
+    if (weightUnit !== 'oz' && weightUnit !== 'g') {
+      return data({ error: 'Invalid weight unit' }, { status: 400 });
+    }
+    await ConfigRepository.setConfig(WEIGHT_UNIT_CONFIG_KEY, weightUnit);
     return { success: true };
   }
 

@@ -18,6 +18,7 @@ import type { AiIngredientRow, PicoPackAiRecipe } from '~/services/ai-recipe-gen
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
+import { displayToOz, ozToDisplay, useWeightUnit, type WeightUnit } from '~/utils/weight-unit';
 import type { RecipeEditorIngredient } from './index';
 
 const RECIPE_FORM_ID = 'recipe-form';
@@ -54,34 +55,44 @@ const withCompartments = (rows: PakRow[]): PakRow[] => {
   });
 };
 
-const pakRowsFor = (ingredients: RecipeEditorIngredient[] | undefined, section: IngredientSection): PakRow[] => {
+// Every PicoPack ingredient amount (grain and hop alike) is stored in ounces regardless of the
+// display setting — these two only convert at the UI boundary (see ~/utils/weight-unit).
+const pakRowsFor = (
+  ingredients: RecipeEditorIngredient[] | undefined,
+  section: IngredientSection,
+  weightUnit: WeightUnit,
+): PakRow[] => {
   const rows = (ingredients ?? [])
     .filter((i) => i.section === section)
     .map((i) => ({
       id: newId(),
       name: i.name,
-      amount: i.amount ?? undefined,
+      amount: i.amount != null ? ozToDisplay(i.amount, weightUnit) : undefined,
       aa: i.aa ?? undefined,
       compartment: section === IngredientSection.BOIL_HOP ? i.unit ?? undefined : undefined,
     }));
   return section === IngredientSection.BOIL_HOP ? withCompartments(rows) : rows;
 };
 
-const aiRowToPakRow = (r: AiIngredientRow): PakRow => ({
+const aiRowToPakRow = (r: AiIngredientRow, weightUnit: WeightUnit): PakRow => ({
   id: newId(),
   name: r.name,
-  amount: r.amount,
+  amount: r.amount !== undefined ? ozToDisplay(r.amount, weightUnit) : undefined,
   aa: r.aa,
   compartment: r.compartment,
 });
 
-const pakRowsToIngredients = (rows: PakRow[], section: IngredientSection): RecipeEditorIngredient[] =>
+const pakRowsToIngredients = (
+  rows: PakRow[],
+  section: IngredientSection,
+  weightUnit: WeightUnit,
+): RecipeEditorIngredient[] =>
   rows
     .filter((r) => r.name.trim() !== '')
     .map((r) => ({
       section,
       name: r.name,
-      amount: r.amount ?? null,
+      amount: r.amount != null ? displayToOz(r.amount, weightUnit) : null,
       unit: section === IngredientSection.BOIL_HOP ? r.compartment ?? null : null,
       color: null,
       aa: section === IngredientSection.BOIL_HOP ? r.aa ?? null : null,
@@ -149,6 +160,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   // Dirty-field highlighting only makes sense against a real "originally loaded" recipe — a
   // brand-new recipe has no original to diff against, so nothing is ever flagged there.
   const isEditingExisting = Boolean(recipe) && !readOnly;
+  const weightUnit = useWeightUnit();
 
   const [name, setName] = useState(recipe?.name ?? '');
   const [style, setStyle] = useState(recipe?.style ?? '');
@@ -161,8 +173,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const [machineSteps, setMachineSteps] = useState<MachineStepRow[]>(
     recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS,
   );
-  const [grains, setGrains] = useState<PakRow[]>(() => pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE));
-  const [hops, setHops] = useState<PakRow[]>(() => pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP));
+  const [grains, setGrains] = useState<PakRow[]>(() =>
+    pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE, weightUnit),
+  );
+  const [hops, setHops] = useState<PakRow[]>(() =>
+    pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP, weightUnit),
+  );
   const pakRowActions = (setter: (fn: (rows: PakRow[]) => PakRow[]) => void) => ({
     onChange: (id: string, key: keyof PakRow, value: string | number) =>
       setter((rows) => rows.map((r) => (r.id === id ? { ...r, [key]: value } : r))),
@@ -188,8 +204,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
-      grains: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE)),
-      hops: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP)),
+      grains: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.FERMENTABLE, weightUnit)),
+      hops: stripPakRowIds(pakRowsFor(recipe?.ingredients, IngredientSection.BOIL_HOP, weightUnit)),
     }),
   ).current;
   const isDirty = useMemo(
@@ -221,10 +237,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
     setIbu(aiRecipe.ibu);
     setMachineSteps(aiRecipe.steps.map(machineStepToRow));
     if (aiRecipe.grains) {
-      setGrains(aiRecipe.grains.map(aiRowToPakRow));
+      setGrains(aiRecipe.grains.map((r) => aiRowToPakRow(r, weightUnit)));
     }
     if (aiRecipe.hops) {
-      setHops(withCompartments(aiRecipe.hops.map(aiRowToPakRow)));
+      setHops(withCompartments(aiRecipe.hops.map((r) => aiRowToPakRow(r, weightUnit))));
     }
     setStepsExpanded(true);
   };
@@ -239,10 +255,16 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       ibu,
       notes,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
-      grains: grains.map(({ id: _id, ...rest }) => rest),
-      hops: hops.map(({ id: _id, ...rest }) => rest),
+      grains: grains.map(({ id: _id, amount, ...rest }) => ({
+        ...rest,
+        amount: amount != null ? displayToOz(amount, weightUnit) : amount,
+      })),
+      hops: hops.map(({ id: _id, amount, ...rest }) => ({
+        ...rest,
+        amount: amount != null ? displayToOz(amount, weightUnit) : amount,
+      })),
     }),
-    [name, style, abv, ibu, notes, machineSteps, grains, hops],
+    [name, style, abv, ibu, notes, machineSteps, grains, hops, weightUnit],
   );
 
   // A brand-new recipe (no `recipe` prop) may have an AI-drafted recipe waiting from the global
@@ -319,11 +341,11 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
       ingredients: [
-        ...pakRowsToIngredients(grains, IngredientSection.FERMENTABLE),
-        ...pakRowsToIngredients(hops, IngredientSection.BOIL_HOP),
+        ...pakRowsToIngredients(grains, IngredientSection.FERMENTABLE, weightUnit),
+        ...pakRowsToIngredients(hops, IngredientSection.BOIL_HOP, weightUnit),
       ],
     }),
-    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps, grains, hops],
+    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps, grains, hops, weightUnit],
   );
 
   const FormWrapper = readOnly ? 'div' : Form;
@@ -518,10 +540,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                     templateColumns="1.6fr 0.9fr"
                     columns={[
                       { key: 'name', label: 'Grain', type: 'text' },
-                      { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                      { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
                     ]}
                     onChange={grainActions.onChange}
-                    onAdd={() => grainActions.onAdd({ amount: 16 })}
+                    onAdd={() => grainActions.onAdd({ amount: ozToDisplay(16, weightUnit) })}
                     onRemove={grainActions.onRemove}
                     addLabel="Add Grain"
                     readOnly={readOnly}
@@ -539,13 +561,19 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                     templateColumns="1.3fr 0.8fr 0.6fr 1fr"
                     columns={[
                       { key: 'name', label: 'Hop Type', type: 'text' },
-                      { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                      { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
                       { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
                       { key: 'compartment', label: 'Compartment', type: 'select', options: HOP_COMPARTMENTS },
                     ]}
                     maxRows={HOP_COMPARTMENTS.length}
                     onChange={hopActions.onChange}
-                    onAdd={() => hopActions.onAdd({ amount: 0.5, aa: 5, compartment: nextFreeCompartment(hops) })}
+                    onAdd={() =>
+                      hopActions.onAdd({
+                        amount: ozToDisplay(0.5, weightUnit),
+                        aa: 5,
+                        compartment: nextFreeCompartment(hops),
+                      })
+                    }
                     onRemove={hopActions.onRemove}
                     addLabel="Add Hop"
                     readOnly={readOnly}

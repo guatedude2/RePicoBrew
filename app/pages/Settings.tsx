@@ -18,6 +18,7 @@ import { cn } from '~/lib/utils';
 import type { SaveState } from './Settings/settings-reducer';
 import { useSettingsReducer } from './Settings/settings-reducer';
 import { useTimeFormat } from '~/utils/time-format';
+import { useWeightUnit } from '~/utils/weight-unit';
 
 const SectionHeading: FC<{ title: string; description: string }> = ({ title, description }) => (
   <>
@@ -137,6 +138,9 @@ export const Settings: FC = () => {
   const timeFormatFetcher = useFetcher<{ error?: string }>();
   const savedTimeFormat = useTimeFormat();
   const timeFormat = (timeFormatFetcher.formData?.get('timeFormat') as string | null | undefined) ?? savedTimeFormat;
+  const weightUnitFetcher = useFetcher<{ error?: string }>();
+  const savedWeightUnit = useWeightUnit();
+  const weightUnit = (weightUnitFetcher.formData?.get('weightUnit') as string | null | undefined) ?? savedWeightUnit;
   const apFetcher = useFetcher();
   const wifiFetcher = useFetcher();
   const wifiRadioFetcher = useFetcher();
@@ -387,6 +391,32 @@ export const Settings: FC = () => {
               </Select>
               {timeFormatFetcher.data?.error ? (
                 <p className="mt-1.5 text-xs text-danger-500">{timeFormatFetcher.data.error}</p>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="mt-4 flex flex-col p-6">
+            <SectionHeading
+              title="Units"
+              description="How ingredient amounts are shown and entered in the recipe editor."
+            />
+            <div className="w-full md:w-3/5">
+              <FieldLabel htmlFor="weight-unit">Weight</FieldLabel>
+              <Select
+                id="weight-unit"
+                value={weightUnit}
+                onChange={(event) =>
+                  weightUnitFetcher.submit(
+                    { intent: 'saveWeightUnit', weightUnit: event.target.value },
+                    { method: 'post' },
+                  )
+                }
+              >
+                <option value="oz">Ounces (oz)</option>
+                <option value="g">Grams (g)</option>
+              </Select>
+              {weightUnitFetcher.data?.error ? (
+                <p className="mt-1.5 text-xs text-danger-500">{weightUnitFetcher.data.error}</p>
               ) : null}
             </div>
           </Card>

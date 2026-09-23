@@ -20,6 +20,7 @@ import { StepRangeWarnings } from '~/components/recipe-editor/StepRangeWarnings'
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { getPicoStepWarnings } from '~/utils/pico-step-ranges';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
+import { displayToOz, ozToDisplay, useWeightUnit, type WeightUnit } from '~/utils/weight-unit';
 
 const RECIPE_FORM_ID = 'recipe-form';
 
@@ -41,13 +42,16 @@ const emptyRow = (fields: Partial<Row> = {}): Row => ({ id: newId(), name: '', .
 
 // Converts an AI Brewmaster ingredient row into the editor's own Row shape, dropping any rows the
 // model left nameless.
-const aiRowsToRows = (items: AiIngredientRow[] | undefined): Row[] =>
+// The AI always reasons in ounces regardless of the display setting, so hop amounts (the only
+// weight-bearing field these two functions handle — mash/fermentation steps have none, and
+// fermentables are in lbs, sent through a separate path) are converted at this boundary.
+const aiRowsToRows = (items: AiIngredientRow[] | undefined, weightUnit: WeightUnit, isWeightOz = false): Row[] =>
   (items ?? [])
     .filter((r) => r.name?.trim())
     .map((r) => ({
       id: newId(),
       name: r.name,
-      amount: r.amount,
+      amount: isWeightOz && r.amount !== undefined ? ozToDisplay(r.amount, weightUnit) : r.amount,
       unit: r.unit,
       color: r.color,
       aa: r.aa,
@@ -59,12 +63,12 @@ const aiRowsToRows = (items: AiIngredientRow[] | undefined): Row[] =>
 
 // The inverse of aiRowsToRows — used to tell the AI Brewmaster what the editor's current
 // ingredient rows are, for a "tweak this recipe" edit request.
-const rowsToAiRows = (items: Row[]): AiIngredientRow[] =>
+const rowsToAiRows = (items: Row[], weightUnit: WeightUnit, isWeightOz = false): AiIngredientRow[] =>
   items
     .filter((r) => r.name.trim())
     .map((r) => ({
       name: r.name,
-      amount: r.amount,
+      amount: isWeightOz && r.amount !== undefined ? displayToOz(r.amount, weightUnit) : r.amount,
       unit: r.unit,
       color: r.color,
       aa: r.aa,
@@ -214,17 +218,25 @@ const OverviewStat: FC<{
   </div>
 );
 
+// Fermentables are always in lbs; only these two sections' "amount" is oz-denominated and needs
+// converting between the stored canonical ounces and whatever unit Settings has selected.
+const WEIGHT_OZ_SECTIONS = new Set<IngredientSection>([IngredientSection.BOIL_HOP, IngredientSection.DRY_HOP]);
+
 const rowsToIngredients = (
   rows: Row[],
   section: IngredientSection,
   fields: Array<keyof Row>,
+  weightUnit: WeightUnit,
 ): RecipeEditorIngredient[] =>
   rows
     .filter((r) => r.name.trim() !== '')
     .map((r) => ({
       section,
       name: r.name,
-      amount: fields.includes('amount') ? r.amount ?? null : null,
+      amount: fields.includes('amount')
+        ? (r.amount !== undefined && WEIGHT_OZ_SECTIONS.has(section) ? displayToOz(r.amount, weightUnit) : r.amount) ??
+          null
+        : null,
       unit: fields.includes('unit') ? r.unit ?? null : null,
       color: fields.includes('color') ? r.color ?? null : null,
       aa: fields.includes('aa') ? r.aa ?? null : null,
@@ -246,6 +258,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
   // Dirty-field highlighting only makes sense against a real "originally loaded" recipe — a
   // brand-new recipe has no original to diff against, so nothing is ever flagged there.
   const isEditingExisting = Boolean(recipe) && !readOnly;
+  const weightUnit = useWeightUnit();
 
   const bySection = (section: IngredientSection): Row[] =>
     (recipe?.ingredients ?? [])
@@ -253,7 +266,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       .map((i) => ({
         id: newId(),
         name: i.name,
-        amount: i.amount ?? undefined,
+        amount:
+          i.amount != null && WEIGHT_OZ_SECTIONS.has(section)
+            ? ozToDisplay(i.amount, weightUnit)
+            : i.amount ?? undefined,
         unit: i.unit ?? undefined,
         color: i.color ?? undefined,
         aa: i.aa ?? undefined,
@@ -330,14 +346,14 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
     setYeastAttenuation(aiRecipe.yeastAttenuation);
     setYeastRangeTemp(aiRecipe.yeastRangeTemp);
     setYeastPitchTemp(aiRecipe.yeastPitchTemp);
-    setFermentables(aiRowsToRows(aiRecipe.fermentables));
-    const aiMashSteps = aiRowsToRows(aiRecipe.mashSteps);
+    setFermentables(aiRowsToRows(aiRecipe.fermentables, weightUnit));
+    const aiMashSteps = aiRowsToRows(aiRecipe.mashSteps, weightUnit);
     setMashSteps(
       aiMashSteps.length ? aiMashSteps : [emptyRow({ name: 'Single Step Infusion Mash', temp: 152, time: 60 })],
     );
-    setHops(aiRowsToRows(aiRecipe.hops));
-    setDryHops(aiRowsToRows(aiRecipe.dryHops));
-    setFermentationSteps(aiRowsToRows(aiRecipe.fermentationSteps));
+    setHops(aiRowsToRows(aiRecipe.hops, weightUnit, true));
+    setDryHops(aiRowsToRows(aiRecipe.dryHops, weightUnit, true));
+    setFermentationSteps(aiRowsToRows(aiRecipe.fermentationSteps, weightUnit));
     setMachineSteps(aiRecipe.steps.map(machineStepToRow));
     setMachineStepsExpanded(true);
   };
@@ -364,11 +380,11 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       yeastAttenuation,
       yeastRangeTemp,
       yeastPitchTemp,
-      fermentables: rowsToAiRows(fermentables),
-      mashSteps: rowsToAiRows(mashSteps),
-      hops: rowsToAiRows(hops),
-      dryHops: rowsToAiRows(dryHops),
-      fermentationSteps: rowsToAiRows(fermentationSteps),
+      fermentables: rowsToAiRows(fermentables, weightUnit),
+      mashSteps: rowsToAiRows(mashSteps, weightUnit),
+      hops: rowsToAiRows(hops, weightUnit, true),
+      dryHops: rowsToAiRows(dryHops, weightUnit, true),
+      fermentationSteps: rowsToAiRows(fermentationSteps, weightUnit),
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
     }),
     [
@@ -396,6 +412,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       dryHops,
       fermentationSteps,
       machineSteps,
+      weightUnit,
     ],
   );
 
@@ -554,13 +571,18 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       yeastPitchTemp,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
       ingredients: [
-        ...rowsToIngredients(amendments, IngredientSection.WATER, ['amount', 'unit']),
-        ...rowsToIngredients(mashSteps, IngredientSection.MASH_STEP, ['temp', 'time']),
-        ...rowsToIngredients(fermentables, IngredientSection.FERMENTABLE, ['amount', 'color']),
-        ...rowsToIngredients(hops, IngredientSection.BOIL_HOP, ['amount', 'aa', 'time']),
-        ...rowsToIngredients(otherBoil, IngredientSection.OTHER_BOIL, ['amount', 'unit', 'time']),
-        ...rowsToIngredients(fermentationSteps, IngredientSection.FERMENTATION_STEP, ['temp', 'days', 'hours']),
-        ...rowsToIngredients(dryHops, IngredientSection.DRY_HOP, ['amount', 'aa', 'time']),
+        ...rowsToIngredients(amendments, IngredientSection.WATER, ['amount', 'unit'], weightUnit),
+        ...rowsToIngredients(mashSteps, IngredientSection.MASH_STEP, ['temp', 'time'], weightUnit),
+        ...rowsToIngredients(fermentables, IngredientSection.FERMENTABLE, ['amount', 'color'], weightUnit),
+        ...rowsToIngredients(hops, IngredientSection.BOIL_HOP, ['amount', 'aa', 'time'], weightUnit),
+        ...rowsToIngredients(otherBoil, IngredientSection.OTHER_BOIL, ['amount', 'unit', 'time'], weightUnit),
+        ...rowsToIngredients(
+          fermentationSteps,
+          IngredientSection.FERMENTATION_STEP,
+          ['temp', 'days', 'hours'],
+          weightUnit,
+        ),
+        ...rowsToIngredients(dryHops, IngredientSection.DRY_HOP, ['amount', 'aa', 'time'], weightUnit),
       ],
     }),
     [
@@ -592,6 +614,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       otherBoil,
       fermentationSteps,
       dryHops,
+      weightUnit,
     ],
   );
 
@@ -1045,7 +1068,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
                   columns={[
                     { key: 'name', label: 'Type', type: 'text' },
-                    { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                    { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
                     { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
                     { key: 'time', label: 'Time (min)', type: 'number' },
                   ]}
@@ -1187,7 +1210,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
                   columns={[
                     { key: 'name', label: 'Type', type: 'text' },
-                    { key: 'amount', label: 'Amount (oz)', type: 'number', step: 0.1 },
+                    { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
                     { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
                     { key: 'time', label: 'Time (days)', type: 'number' },
                   ]}

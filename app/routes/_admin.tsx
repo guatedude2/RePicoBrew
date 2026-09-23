@@ -10,6 +10,7 @@ import authenticator from '~/services/auth.server';
 import type { SessionData } from '~/services/session.server';
 import { ServerSideEventsProvider } from '~/utils/sse';
 import { parseTimeFormat, TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
+import { parseWeightUnit, WEIGHT_UNIT_CONFIG_KEY } from '~/utils/weight-unit';
 
 // Runs before every loader and action under the admin layout, including direct `.data` and form-action
 // requests (which do not go through this layout's loader). Anyone not logged in is sent to sign in.
@@ -43,11 +44,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   void import('~/services/ai-scheduler.server');
   void import('~/services/device-monitor.server');
 
-  const [deviceStatus, attentionBatches, hasAiKey, timeFormat] = await Promise.all([
+  const [deviceStatus, attentionBatches, hasAiKey, timeFormat, weightUnit] = await Promise.all([
     DeviceRepository.getStatus(),
     BatchRepository.listNeedingAttention(),
     AiSettingsRepository.hasActiveKey(),
     ConfigRepository.getConfig(TIME_FORMAT_CONFIG_KEY),
+    ConfigRepository.getConfig(WEIGHT_UNIT_CONFIG_KEY),
   ]);
 
   return {
@@ -55,6 +57,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     deviceStatus,
     hasAiKey,
     timeFormat: parseTimeFormat(timeFormat),
+    weightUnit: parseWeightUnit(weightUnit),
     attentionBatches: attentionBatches.map((batch) => ({
       id: batch.id,
       name: batch.name,
