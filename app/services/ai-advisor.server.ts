@@ -2,7 +2,7 @@ import { AiAdviceRepository, type AiAdviceTrigger } from '~/repositories/ai-advi
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { SessionRepository } from '~/repositories/session.server';
-import { callAiProvider } from '~/services/ai-provider.server';
+import { callAiProvider, streamAiProvider } from '~/services/ai-provider.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
 import { BatchPhase, SessionType } from '~/types';
@@ -226,7 +226,11 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
   };
 }
 
-export async function analyzeBatch(batchId: number, trigger: AiAdviceTrigger): Promise<AnalyzeResult> {
+export async function analyzeBatch(
+  batchId: number,
+  trigger: AiAdviceTrigger,
+  onDelta?: (text: string) => void,
+): Promise<AnalyzeResult> {
   const provider = await AiSettingsRepository.getActiveProvider();
   if (!provider) {
     return { success: false, error: 'No AI provider is configured.' };
@@ -252,7 +256,10 @@ export async function analyzeBatch(batchId: number, trigger: AiAdviceTrigger): P
     const { system, user, step } = await buildPrompt(batch);
     // OpenCode's gateway (Zen/Go) routes and prompt-caches by a stable per-conversation session id;
     // without it Go's /chat/completions rejects the request outright (MissingSessionID).
-    const content = await callAiProvider(provider, { system, user, sessionId: `repicobrew-batch-${batchId}` });
+    const request = { system, user, sessionId: `repicobrew-batch-${batchId}` };
+    const content = onDelta
+      ? await streamAiProvider(provider, request, onDelta)
+      : await callAiProvider(provider, request);
     const advice = await AiAdviceRepository.create({
       batchId,
       phase: batch.phase,

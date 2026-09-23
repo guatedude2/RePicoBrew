@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate, useRouteLoaderData } from 'react-router';
+import { useFetcher, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   MdArrowBack,
@@ -22,6 +22,7 @@ import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Select } from '~/components/ui/select';
+import { Spinner } from '~/components/ui/spinner';
 import { BrewingAnimation, Phase } from '~/components/BrewingAnimation/BrewingAnimation';
 import { Chart } from '~/components/charts/Chart.client';
 import { ClientOnly } from 'remix-utils/client-only';
@@ -32,6 +33,7 @@ import { BatchPhase } from '~/types';
 import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
 import { phaseForStep } from '~/utils/brew-step-phase';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
+import { postEventStream } from '~/utils/event-stream';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 import { useServerSideEvent } from '~/utils/sse';
@@ -301,8 +303,32 @@ const AiAdviceBlock: FC<{
   latest: AiAdviceRow | undefined;
   canAsk: boolean;
 }> = ({ batchId, batchName, phase, latest, canAsk }) => {
-  const fetcher = useFetcher<{ error?: string }>();
-  const isPending = fetcher.state !== 'idle';
+  const revalidator = useRevalidator();
+  const [isPending, setIsPending] = useState(false);
+  const [streamed, setStreamed] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const askAi = async () => {
+    setIsPending(true);
+    setStreamed('');
+    setError(null);
+    try {
+      await postEventStream(`/api/batches/${batchId}/ask-ai`, {}, (event, payload) => {
+        const data = payload as { text?: string; error?: string };
+        if (event === 'delta' && data.text) {
+          setStreamed((prev) => prev + data.text);
+        } else if (event === 'error') {
+          setError(data.error ?? 'The AI request failed.');
+        }
+      });
+      await revalidator.revalidate();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The AI request failed.');
+    } finally {
+      setIsPending(false);
+      setStreamed('');
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-ink-divider bg-ink-bg p-3.5">
@@ -312,18 +338,8 @@ const AiAdviceBlock: FC<{
           AI Advice
         </div>
         {canAsk && (
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={isPending}
-            onClick={() =>
-              fetcher.submit(JSON.stringify({ intent: 'requestAiAdvice' }), {
-                method: 'post',
-                action: `/api/batches/${batchId}`,
-                encType: 'application/json',
-              })
-            }
-          >
+          <Button variant="outline" size="xs" disabled={isPending} onClick={askAi}>
+            {isPending && <Spinner />}
             {isPending ? 'Asking…' : 'Ask AI'}
           </Button>
         )}
@@ -331,8 +347,15 @@ const AiAdviceBlock: FC<{
       <span className="w-fit rounded-full border border-ink-divider bg-ink-card px-2 py-[3px] text-[11px] font-semibold text-ink-text-secondary">
         Session: {batchName}
       </span>
-      {fetcher.data?.error ? <p className="text-xs text-danger-500">{fetcher.data.error}</p> : null}
-      {latest ? (
+      {error ? <p className="text-xs text-danger-500">{error}</p> : null}
+      {isPending && streamed ? <p className="text-[13px] text-ink-text-secondary">{streamed}</p> : null}
+      {isPending && !streamed ? (
+        <p className="flex items-center gap-2 text-[13px] text-ink-text-faint">
+          <Spinner />
+          Reading the latest readings…
+        </p>
+      ) : null}
+      {!isPending && latest ? (
         <>
           <p className="text-[13px] text-ink-text-secondary">{latest.content}</p>
           <p className="text-[11px] text-ink-text-faintest">
@@ -340,11 +363,12 @@ const AiAdviceBlock: FC<{
             {formatRelativeTime(latest.createdAt)}
           </p>
         </>
-      ) : (
+      ) : null}
+      {!isPending && !latest ? (
         <p className="text-[13px] text-ink-text-faint">
           {canAsk ? 'No advice yet — click Ask AI or check back soon.' : `No advice was generated during ${phase}.`}
         </p>
-      )}
+      ) : null}
     </div>
   );
 };

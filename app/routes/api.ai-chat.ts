@@ -6,6 +6,8 @@ import { RecipeRepository } from '~/repositories/recipe.server';
 import { describeBatchForChat } from '~/services/ai-advisor.server';
 import { runGeneralChat } from '~/services/ai-chat-assistant.server';
 import { requireUser } from '~/services/auth.server';
+import type { AiChatAction } from '~/services/ai-chat-assistant.server';
+import { eventStreamResponse } from '~/utils/event-stream.server';
 
 // -1 is this app's "not set" sentinel for ABV/IBU (see app/utils/brew-stats.ts) — skip rather than
 // show a misleading "-1% ABV" to the AI.
@@ -57,6 +59,67 @@ function parseScopeId(scope: AiChatScope, raw: string | null): { ok: true; scope
     return { ok: false };
   }
   return { ok: true, scopeId };
+}
+
+type TurnHooks = { onStatus?: (status: string) => void; onReplyDelta?: (text: string) => void };
+type TurnResult =
+  | { ok: true; reply: string; action: AiChatAction | null }
+  | { ok: false; status: number; error: string };
+
+async function runChatTurn(
+  scope: AiChatScope,
+  scopeId: number | null,
+  message: string,
+  hooks: TurnHooks,
+): Promise<TurnResult> {
+  const thread = await AiChatRepository.getOrCreateThread(scope, scopeId);
+  const history = (await AiChatRepository.listMessages(thread.id)).slice(-6);
+  await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
+
+  // A light conversational touch for session/recipe-scoped chat — what's currently being viewed
+  // — not a re-implementation of ai-advisor.server.ts's own scheduled/on-demand telemetry advice
+  // feature (AiAdviceBlock on the Session Detail page), which stays untouched. `editRecipeUrl`
+  // lets the user ask to edit/update that recipe from chat instead of clicking into the editor
+  // themselves (see EDIT_RECIPE_INSTRUCTIONS in ai-chat-assistant.server.ts).
+  let contextLine: string | undefined;
+  let editRecipeUrl: string | undefined;
+  if (scope === 'session' && scopeId != null) {
+    const batch = await BatchRepository.getBatch(scopeId);
+    if (batch) {
+      // The live session data (current step, recent readings, targets) — without it the AI can only guess.
+      contextLine = (await describeBatchForChat(scopeId)) ?? `Batch "${batch.name}", phase ${batch.phase}.`;
+      if (batch.recipe) {
+        editRecipeUrl = `/recipes/${batch.recipe.id}`;
+      }
+    }
+  } else if (scope === 'recipe' && scopeId != null) {
+    const recipe = await RecipeRepository.getRecipe(scopeId);
+    if (recipe) {
+      contextLine = describeRecipe(recipe);
+      editRecipeUrl = `/recipes/${recipe.id}`;
+    }
+  }
+
+  const result = await runGeneralChat({
+    ...hooks,
+    message: message.trim(),
+    allowActions: scope === 'general',
+    contextLine,
+    history: history.map((m) => ({ role: m.role, content: m.content })),
+    editRecipeUrl,
+  });
+  if (!result.success) {
+    return { ok: false as const, status: 422, error: result.error };
+  }
+
+  await AiChatRepository.appendMessage(
+    thread.id,
+    'assistant',
+    result.reply,
+    result.action ? { action: result.action } : null,
+  );
+
+  return { ok: true as const, reply: result.reply, action: result.action };
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -131,54 +194,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  const wantsStream = (body as { stream?: unknown } | null)?.stream === true;
   try {
-    const thread = await AiChatRepository.getOrCreateThread(scope, scopeId);
-    const history = (await AiChatRepository.listMessages(thread.id)).slice(-6);
-    await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
-
-    // A light conversational touch for session/recipe-scoped chat — what's currently being viewed
-    // — not a re-implementation of ai-advisor.server.ts's own scheduled/on-demand telemetry advice
-    // feature (AiAdviceBlock on the Session Detail page), which stays untouched. `editRecipeUrl`
-    // lets the user ask to edit/update that recipe from chat instead of clicking into the editor
-    // themselves (see EDIT_RECIPE_INSTRUCTIONS in ai-chat-assistant.server.ts).
-    let contextLine: string | undefined;
-    let editRecipeUrl: string | undefined;
-    if (scope === 'session' && scopeId != null) {
-      const batch = await BatchRepository.getBatch(scopeId);
-      if (batch) {
-        // The live session data (current step, recent readings, targets) — without it the AI can only guess.
-        contextLine = (await describeBatchForChat(scopeId)) ?? `Batch "${batch.name}", phase ${batch.phase}.`;
-        if (batch.recipe) {
-          editRecipeUrl = `/recipes/${batch.recipe.id}`;
+    if (wantsStream) {
+      return eventStreamResponse(request, async (send) => {
+        const turn = await runChatTurn(scope, scopeId, message.trim(), {
+          onStatus: (status) => send('status', { status }),
+          onReplyDelta: (text) => send('delta', { text }),
+        });
+        if (turn.ok) {
+          send('done', { success: true, reply: turn.reply, action: turn.action });
+        } else {
+          send('error', { error: turn.error });
         }
-      }
-    } else if (scope === 'recipe' && scopeId != null) {
-      const recipe = await RecipeRepository.getRecipe(scopeId);
-      if (recipe) {
-        contextLine = describeRecipe(recipe);
-        editRecipeUrl = `/recipes/${recipe.id}`;
-      }
+      });
     }
-
-    const result = await runGeneralChat({
-      message: message.trim(),
-      allowActions: scope === 'general',
-      contextLine,
-      history: history.map((m) => ({ role: m.role, content: m.content })),
-      editRecipeUrl,
-    });
-    if (!result.success) {
-      return data({ error: result.error }, { status: 422 });
+    const turn = await runChatTurn(scope, scopeId, message.trim(), {});
+    if (!turn.ok) {
+      return data({ error: turn.error }, { status: turn.status });
     }
-
-    await AiChatRepository.appendMessage(
-      thread.id,
-      'assistant',
-      result.reply,
-      result.action ? { action: result.action } : null,
-    );
-
-    return { success: true, reply: result.reply, action: result.action };
+    return { success: true, reply: turn.reply, action: turn.action };
   } catch (error) {
     console.error('[api.ai-chat] chat failed', error);
     return data({ error: 'Chat failed. Try again in a moment.' }, { status: 500 });

@@ -4,6 +4,8 @@ import { GiHops } from 'react-icons/gi';
 import { MdClose, MdDeleteSweep, MdMenuBook, MdSend } from 'react-icons/md';
 import { useAiSidekickBridge } from './AiSidekickContext';
 import { ChatMarkdown } from './ChatMarkdown';
+import { Spinner } from '~/components/ui/spinner';
+import { postEventStream } from '~/utils/event-stream';
 import type { AiChatAction } from '~/services/ai-chat-assistant.server';
 import type { PicoPackAiRecipe, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 
@@ -184,7 +186,12 @@ export function AiBrewmasterSidekick() {
 
   const historyFetcher = useFetcher<HistoryResponse>();
   const actionFetcher = useFetcher<RecipeGenResponse | GeneralChatResponse>();
-  const isSending = actionFetcher.state !== 'idle';
+  // The plain chat path streams its reply over SSE (see api.ai-chat.ts); recipe generate/edit still uses the fetcher.
+  const [streamSending, setStreamSending] = useState(false);
+  const [streamStatus, setStreamStatus] = useState('Thinking…');
+  const [streamText, setStreamText] = useState('');
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const isSending = actionFetcher.state !== 'idle' || streamSending;
 
   // Reload this scope's persisted history on mount and whenever the route-detected scope changes
   // (navigating between a recipe, a session, and every other page) — the panel can stay open
@@ -199,6 +206,21 @@ export function AiBrewmasterSidekick() {
     setConfirmingClear(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
+
+  const runChatAction = (action: AiChatAction) => {
+    try {
+      if ('draftRecipe' in action) {
+        sessionStorage.setItem('ai-draft-recipe', JSON.stringify(action.draftRecipe));
+      } else if ('draftSession' in action) {
+        sessionStorage.setItem('ai-draft-session', JSON.stringify(action.draftSession));
+      }
+    } catch {
+      // sessionStorage can throw in a locked-down/private context — the chat reply still stands,
+      // the user just won't see the pre-filled form on the other end.
+    }
+    setQueue([]);
+    navigate(action.to);
+  };
 
   useEffect(() => {
     if (actionFetcher.state !== 'idle' || !actionFetcher.data) {
@@ -215,23 +237,45 @@ export function AiBrewmasterSidekick() {
       bridge?.onGenerated(result.recipe);
       setDynamicSuggestions(result.suggestions?.length ? result.suggestions : null);
     } else if (result.action) {
-      const action = result.action;
-      try {
-        if ('draftRecipe' in action) {
-          sessionStorage.setItem('ai-draft-recipe', JSON.stringify(action.draftRecipe));
-        } else if ('draftSession' in action) {
-          sessionStorage.setItem('ai-draft-session', JSON.stringify(action.draftSession));
-        }
-      } catch {
-        // sessionStorage can throw in a locked-down/private context — the chat reply still stands,
-        // the user just won't see the pre-filled form on the other end.
-      }
-      setQueue([]);
-      navigate(action.to);
+      runChatAction(result.action);
     }
     historyFetcher.load(historyUrl(scope, scopeId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionFetcher.state, actionFetcher.data]);
+
+  const sendStreamed = async (text: string) => {
+    setStreamSending(true);
+    setStreamStatus('Thinking…');
+    setStreamText('');
+    setStreamError(null);
+    let failed = false;
+    try {
+      await postEventStream('/api/ai-chat', { scope, scopeId, message: text, stream: true }, (event, payload) => {
+        const data = payload as { status?: string; text?: string; error?: string; action?: AiChatAction | null };
+        if (event === 'status' && data.status) {
+          setStreamStatus(data.status);
+        } else if (event === 'delta' && data.text) {
+          setStreamText((prev) => prev + data.text);
+        } else if (event === 'error') {
+          failed = true;
+          setStreamError(data.error ?? 'Chat failed. Try again in a moment.');
+        } else if (event === 'done' && data.action) {
+          runChatAction(data.action);
+        }
+      });
+    } catch (e) {
+      failed = true;
+      setStreamError(e instanceof Error ? e.message : 'Chat failed. Try again in a moment.');
+    }
+    if (failed) {
+      setQueue([]);
+    }
+    // Keep the streamed bubble up until the saved history has loaded, so the reply doesn't blink out.
+    await historyFetcher.load(historyUrl(scope, scopeId));
+    setPendingText(null);
+    setStreamText('');
+    setStreamSending(false);
+  };
 
   const send = (trimmed: string) => {
     setPendingText(trimmed);
@@ -259,11 +303,7 @@ export function AiBrewmasterSidekick() {
         encType: 'application/json',
       });
     } else {
-      actionFetcher.submit(JSON.stringify({ scope, scopeId, message: trimmed }), {
-        method: 'post',
-        action: '/api/ai-chat',
-        encType: 'application/json',
-      });
+      void sendStreamed(trimmed);
     }
   };
   const submit = (text: string) => {
@@ -326,7 +366,8 @@ export function AiBrewmasterSidekick() {
   }, [prompt, open]);
   const handleChipClick = (example: string) => submit(example);
 
-  const error = actionFetcher.data && 'error' in actionFetcher.data ? actionFetcher.data.error : null;
+  const fetcherError = actionFetcher.data && 'error' in actionFetcher.data ? actionFetcher.data.error : null;
+  const error = bridge ? fetcherError : streamError ?? fetcherError;
   const examples = useMemo(() => {
     if (bridge) {
       return dynamicSuggestions ?? (mode === 'edit' ? EDIT_EXAMPLES : GENERATE_EXAMPLES);
@@ -486,10 +527,17 @@ export function AiBrewmasterSidekick() {
               </div>
             )}
 
-            {isSending && (
-              <p className="flex items-center gap-1.5 text-[12px] text-ink-text-faint">
-                <GiHops className="size-3.5 animate-pulse" style={{ color: ACCENT }} />
-                {sendingTextFor(mode)}
+            {isSending && streamText && (
+              <div className="mr-6 flex min-w-0 items-start gap-2 [overflow-wrap:anywhere] rounded-lg rounded-tl-sm border border-ink-card-border bg-ink-bg px-3 py-2.5 text-[12.5px] text-ink-text-secondary">
+                <GiHops className="mt-0.5 size-3.5 shrink-0" style={{ color: ACCENT }} />
+                <ChatMarkdown>{streamText}</ChatMarkdown>
+              </div>
+            )}
+
+            {isSending && !streamText && (
+              <p className="flex items-center gap-2 text-[12px] text-ink-text-faint">
+                <Spinner />
+                {bridge ? sendingTextFor(mode) : streamStatus}
               </p>
             )}
 

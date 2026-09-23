@@ -1,3 +1,4 @@
+import { PageLoader } from './PageLoader';
 import { Link as RemixLink, useFetcher, useLocation, useRouteLoaderData } from 'react-router';
 import type { FC } from 'react';
 import { MdCheckCircle, MdLogout, MdNotificationsNone, MdOutlinePerson, MdWarning } from 'react-icons/md';
@@ -41,6 +42,7 @@ export const Topbar: FC<{ routes: NavItem[] }> = ({ routes }) => {
       className="sticky top-0 z-[2] flex flex-wrap items-center justify-between gap-4 border-b border-ink-border px-4 py-[18px] backdrop-blur-[6px] md:px-8"
       style={{ backgroundColor: 'oklch(0.15 0.004 260 / 0.92)' }}
     >
+      <PageLoader />
       <div className="flex items-center gap-3.5">
         <SidebarDrawer routes={routes} />
         <p className="text-xl font-bold">{current?.name ?? 'RePicoBrew'}</p>

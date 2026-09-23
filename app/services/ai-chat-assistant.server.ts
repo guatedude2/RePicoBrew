@@ -1,7 +1,7 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
-import { callAiProvider } from '~/services/ai-provider.server';
+import { streamAiProvider } from '~/services/ai-provider.server';
 import {
   generatePicoPackRecipe,
   generateZPackRecipe,
@@ -136,6 +136,62 @@ function parseJsonResponse(raw: string): Record<string, unknown> | null {
   }
 }
 
+// The model answers with a JSON envelope ({ "reply": "...", "action": ... }); this pulls the text of the
+// "reply" field out of the partial JSON as it streams in, so the user reads it as it is written. A plain-prose
+// answer (no envelope) is passed straight through.
+const SIMPLE_ESCAPES: Record<string, string> = { n: '\n', t: '\t' };
+
+function createReplyStreamer(onDelta: (text: string) => void) {
+  let raw = '';
+  let emitted = 0;
+  return (chunk: string) => {
+    raw += chunk;
+    const head = raw.trimStart();
+    if (!head) {
+      return;
+    }
+    let text: string;
+    if (head[0] === '{' || head[0] === '`') {
+      const match = /"reply"\s*:\s*"/.exec(raw);
+      if (!match) {
+        return;
+      }
+      text = '';
+      for (let i = match.index + match[0].length; i < raw.length; i++) {
+        const ch = raw[i];
+        if (ch === '"') {
+          break;
+        }
+        if (ch !== '\\') {
+          text += ch;
+          continue;
+        }
+        const next = raw[i + 1];
+        if (next === undefined) {
+          break;
+        }
+        if (next === 'u') {
+          const hex = raw.slice(i + 2, i + 6);
+          if (hex.length < 4) {
+            break;
+          }
+          text += String.fromCharCode(parseInt(hex, 16));
+          i += 5;
+          continue;
+        }
+        text += SIMPLE_ESCAPES[next] ?? next;
+        i += 1;
+      }
+    } else {
+      text = raw;
+    }
+    if (text.length > emitted) {
+      onDelta(text.slice(emitted));
+      emitted = text.length;
+    }
+  };
+}
+
 const FALLBACK_REPLY = "Sorry, I didn't quite catch that — could you rephrase?";
 
 type RawAction = { type?: unknown; packType?: unknown; brief?: unknown; deviceId?: unknown; recipeId?: unknown };
@@ -150,6 +206,9 @@ export async function runGeneralChat(input: {
   // session with a known recipe — the URL to send the user to if they ask to edit/update it. See
   // api.ai-chat.ts for how each scope derives this.
   editRecipeUrl?: string;
+  // Streaming hooks: coarse progress ("Looking up references…") and the reply text as it is written.
+  onStatus?: (status: string) => void;
+  onReplyDelta?: (text: string) => void;
 }): Promise<AiChatResult> {
   const message = input.message.trim();
   if (!message) {
@@ -184,6 +243,7 @@ export async function runGeneralChat(input: {
     deviceLines,
     recipeLines,
   });
+  input.onStatus?.('Looking up references…');
   const gathered = await gatherReferences(provider, message);
   const historyBlock = input.history?.length
     ? `Recent conversation:\n${input.history
@@ -196,14 +256,20 @@ export async function runGeneralChat(input: {
 
   let raw: string;
   try {
-    raw = await callAiProvider(provider, {
-      system,
-      user,
-      maxTokens: 600,
-      // Reasoning models think before answering, and a linked page adds thousands of tokens of input.
-      timeoutMs: 120000,
-      sessionId: 'repicobrew-general-chat',
-    });
+    input.onStatus?.('Thinking…');
+    const streamReply = input.onReplyDelta ? createReplyStreamer(input.onReplyDelta) : () => {};
+    raw = await streamAiProvider(
+      provider,
+      {
+        system,
+        user,
+        maxTokens: 600,
+        // Reasoning models think before answering, and a linked page adds thousands of tokens of input.
+        timeoutMs: 120000,
+        sessionId: 'repicobrew-general-chat',
+      },
+      streamReply,
+    );
   } catch (error) {
     console.error('[ai-chat-assistant] request failed', error);
     return { success: false, error: 'The AI request failed. Try again in a moment.' };
@@ -242,6 +308,7 @@ export async function runGeneralChat(input: {
   if (rawAction.type === 'draft_recipe') {
     const packType: PackKind = rawAction.packType === 'picopack' ? 'picopack' : 'zpack';
     const brief = typeof rawAction.brief === 'string' && rawAction.brief.trim() ? rawAction.brief.trim() : message;
+    input.onStatus?.('Drafting the recipe…');
     const genResult = packType === 'zpack' ? await generateZPackRecipe(brief) : await generatePicoPackRecipe(brief);
     if (!genResult.success) {
       return { success: true, reply: `${replyText ?? ''} ${genResult.error}`.trim(), action: null };
