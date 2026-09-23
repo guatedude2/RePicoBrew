@@ -323,6 +323,9 @@ function mapPicoPakToRecipeInput(r: PicoPakRecipe): CreateRecipeInput {
     abv: r.Abv ?? 0,
     ibu: r.Ibu ?? 0,
     image: RecipeRepository.getDefaultImage(),
+    // The vendor format has no per-pak yeast info at all — almost every official PicoPak ships a
+    // single 2g dry yeast packet, so that's the safe default rather than leaving it blank.
+    yeastAmount: 2,
     steps,
     ingredients: [],
   };

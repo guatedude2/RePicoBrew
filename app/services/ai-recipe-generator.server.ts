@@ -55,6 +55,10 @@ export type PicoPackAiRecipe = {
   // response that leaves them out doesn't wipe the ones already in the editor.
   grains?: AiIngredientRow[];
   hops?: AiIngredientRow[];
+  // The yeast packet — almost every official PicoPak ships a single 2g dry yeast packet, so leave
+  // yeastAmount at 2 unless the recipe specifically calls for more.
+  yeastName?: string;
+  yeastAmount?: number;
 };
 
 export type ZPackAiRecipe = PicoPackAiRecipe & {
@@ -125,6 +129,8 @@ JSON response:
       { "name": "Fuggle", "amount": 0.3, "aa": 4.5, "compartment": "Adjunct4" },
       { "name": "Fuggle", "amount": 0.3, "aa": 4.5, "compartment": "Adjunct3" }
     ],
+    "yeastName": "Included dry yeast packet",
+    "yeastAmount": 2,
     "steps": [
       { "name": "Preparing To Brew", "temperature": 70, "stepTime": 3, "drainTime": 0, "location": 0 },
       { "name": "Heating", "temperature": 110, "stepTime": 0, "drainTime": 0, "location": 2 },
@@ -309,7 +315,10 @@ step sequence. The "grains" and "hops" lists say what to load into the physical 
 compartment (amounts in OUNCES, roughly 20-60 oz total), and each hop goes in its own hop compartment (amounts in
 OUNCES, AA% is the alpha acid percentage) — one entry per hop-addition step in "steps", at most 4. Every hop has
 a "compartment": "Adjunct1", "Adjunct2", "Adjunct3" or "Adjunct4", each used at most once, and it MUST match the
-location of that hop's step (step location 3 = Adjunct1, 4 = Adjunct2, 6 = Adjunct3, 5 = Adjunct4). Encode the mash/boil timing in "steps"; yeast guidance goes in "notes".
+location of that hop's step (step location 3 = Adjunct1, 4 = Adjunct2, 6 = Adjunct3, 5 = Adjunct4). Encode the
+mash/boil timing in "steps". Every official PicoPak ships a single dry yeast packet — set "yeastName" to the
+strain (or a generic description if the request doesn't call for a specific one) and "yeastAmount" (grams) to 2
+unless the recipe specifically needs a bigger pitch.
 
 ${MACHINE_STEP_RULES}
 
@@ -334,6 +343,8 @@ Required JSON shape:
     "notes": string,
     "grains": [ { "name": string, "amount": number } ],
     "hops": [ { "name": string, "amount": number, "aa": number, "compartment": "Adjunct1" | "Adjunct2" | "Adjunct3" | "Adjunct4" } ],
+    "yeastName": string,
+    "yeastAmount": number,
     "steps": [ { "name": string, "temperature": number, "stepTime": number, "drainTime": number, "location": number } ]
   },
   "explanation": string,
@@ -534,6 +545,10 @@ function normalizePicoPackRecipe(parsed: Record<string, unknown>): PicoPackAiRec
     steps: normalizeMachineSteps(parsed.steps as RawPicoStep[] | undefined),
     grains: Array.isArray(parsed.grains) ? rows(parsed.grains) : undefined,
     hops: Array.isArray(parsed.hops) ? rows(parsed.hops) : undefined,
+    yeastName: str(parsed.yeastName).trim(),
+    // Almost every official PicoPak ships a single 2g dry yeast packet — that's the default
+    // unless the model has a specific reason to call for more.
+    yeastAmount: num(parsed.yeastAmount, 2),
   };
 }
 

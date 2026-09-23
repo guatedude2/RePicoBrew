@@ -144,6 +144,8 @@ export type PicoPackEditorData = {
   photoUrl: string | null;
   abv: number;
   ibu: number;
+  yeastName?: string | null;
+  yeastAmount?: number | null;
   steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
   ingredients?: RecipeEditorIngredient[];
 };
@@ -167,6 +169,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const [notes, setNotes] = useState(recipe?.notes ?? '');
   const [abv, setAbv] = useState(recipe?.abv ?? 5);
   const [ibu, setIbu] = useState(recipe?.ibu ?? 30);
+  // Almost every official PicoPak ships with a single 2g dry yeast packet — that's the default for
+  // a new recipe, not a guess at any particular strain.
+  const [yeastName, setYeastName] = useState(recipe?.yeastName ?? '');
+  const [yeastAmount, setYeastAmount] = useState(recipe?.yeastAmount ?? 2);
   const [photoUrl] = useState(recipe?.photoUrl ?? null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(recipe?.photoUrl ?? null);
 
@@ -201,6 +207,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       notes: recipe?.notes ?? '',
       abv: recipe?.abv ?? 5,
       ibu: recipe?.ibu ?? 30,
+      yeastName: recipe?.yeastName ?? '',
+      yeastAmount: recipe?.yeastAmount ?? 2,
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
@@ -216,11 +224,13 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         notes,
         abv,
         ibu,
+        yeastName,
+        yeastAmount,
         steps: machineSteps.map(({ id: _id, ...rest }) => rest),
         grains: stripPakRowIds(grains),
         hops: stripPakRowIds(hops),
       }) !== initialSnapshot,
-    [name, style, notes, abv, ibu, machineSteps, grains, hops, initialSnapshot],
+    [name, style, notes, abv, ibu, yeastName, yeastAmount, machineSteps, grains, hops, initialSnapshot],
   );
 
   // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors how a manual edit would
@@ -235,6 +245,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
     }
     setAbv(aiRecipe.abv);
     setIbu(aiRecipe.ibu);
+    if (aiRecipe.yeastName) {
+      setYeastName(aiRecipe.yeastName);
+    }
+    if (aiRecipe.yeastAmount !== undefined) {
+      setYeastAmount(aiRecipe.yeastAmount);
+    }
     setMachineSteps(aiRecipe.steps.map(machineStepToRow));
     if (aiRecipe.grains) {
       setGrains(aiRecipe.grains.map((r) => aiRowToPakRow(r, weightUnit)));
@@ -254,6 +270,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       abv,
       ibu,
       notes,
+      yeastName,
+      yeastAmount,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
       grains: grains.map(({ id: _id, amount, ...rest }) => ({
         ...rest,
@@ -264,7 +282,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         amount: amount != null ? displayToOz(amount, weightUnit) : amount,
       })),
     }),
-    [name, style, abv, ibu, notes, machineSteps, grains, hops, weightUnit],
+    [name, style, abv, ibu, notes, yeastName, yeastAmount, machineSteps, grains, hops, weightUnit],
   );
 
   // A brand-new recipe (no `recipe` prop) may have an AI-drafted recipe waiting from the global
@@ -337,6 +355,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       ibu,
       style,
       notes,
+      yeastName: yeastName.trim() || undefined,
+      yeastAmount,
       photoUrl: photoUrl ?? undefined,
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
@@ -345,7 +365,21 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         ...pakRowsToIngredients(hops, IngredientSection.BOIL_HOP, weightUnit),
       ],
     }),
-    [name, deviceType, abv, ibu, style, notes, photoUrl, machineSteps, grains, hops, weightUnit],
+    [
+      name,
+      deviceType,
+      abv,
+      ibu,
+      style,
+      notes,
+      yeastName,
+      yeastAmount,
+      photoUrl,
+      machineSteps,
+      grains,
+      hops,
+      weightUnit,
+    ],
   );
 
   const FormWrapper = readOnly ? 'div' : Form;
@@ -529,7 +563,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                 <p className="text-[15px] font-bold">Pak Contents</p>
                 <p className="mt-1 text-[12px] text-ink-text-faint">
                   What to load into the PicoPak — grain in the main compartment, one hop in each of the four hop
-                  compartments (Adjunct 1-4).
+                  compartments (Adjunct 1-4), and the yeast packet.
                 </p>
               </div>
               {(!readOnly || grains.length > 0) && (
@@ -580,6 +614,43 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   />
                 </div>
               )}
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Yeast</p>
+                <div className="grid gap-2" style={{ gridTemplateColumns: '1.6fr 0.9fr' }}>
+                  <div>
+                    <p className="mb-1 text-[10px] text-ink-text-faintest">Type</p>
+                    {readOnly ? (
+                      <p className="px-2.5 py-2 text-sm text-ink-text-muted">{yeastName || '—'}</p>
+                    ) : (
+                      <Input
+                        value={yeastName}
+                        onChange={(e) => setYeastName(e.target.value)}
+                        placeholder="Included dry yeast packet"
+                        className={cn('text-[13px]', dirtyClass(yeastName, recipe?.yeastName ?? '', isEditingExisting))}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    {/* Grams, not the oz/g Settings toggle — a yeast packet's weight is a fixed, tiny
+                        number (almost always 2g/1 packet) that nobody needs in ounces. */}
+                    <p className="mb-1 text-[10px] text-ink-text-faintest">Amount (g)</p>
+                    {readOnly ? (
+                      <p className="px-2.5 py-2 font-mono text-sm text-ink-text-muted">{yeastAmount}</p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={0.5}
+                        value={yeastAmount}
+                        onChange={(e) => setYeastAmount(Number(e.target.value))}
+                        className={cn(
+                          'font-mono text-[13px]',
+                          dirtyClass(yeastAmount, recipe?.yeastAmount ?? 2, isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
             </Card>
           )}
 

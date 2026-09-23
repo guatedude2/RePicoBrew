@@ -108,6 +108,7 @@ model Recipe {
   firstWortHopping Boolean @default(false)
   fermentationType Int? // enum: 0=Ale, 1=Lager, 2=Advanced/Custom
   yeastName        String?
+  yeastAmount      Float? // grams — e.g. a single 2g dry yeast packet, the PicoPak convention
   yeastAttenuation Float?
   yeastRangeTemp   String?
   yeastPitchTemp   Int?

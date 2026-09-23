@@ -60,6 +60,7 @@ export type CreateRecipeInput = {
   firstWortHopping?: boolean;
   fermentationType?: number;
   yeastName?: string;
+  yeastAmount?: number;
   yeastAttenuation?: number;
   yeastRangeTemp?: string;
   yeastPitchTemp?: number;
