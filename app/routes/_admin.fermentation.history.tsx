@@ -5,6 +5,7 @@ import { Card } from '~/components/ui/card';
 import { SessionRepository } from '~/repositories/session.server';
 import { SessionState } from '~/types';
 import { serializeDates } from '~/utils/serialize.server';
+import { formatDateTime, useTimeFormat } from '~/utils/time-format';
 
 export async function loader(_args: LoaderFunctionArgs) {
   const sessions = await SessionRepository.listSessions({ limit: 100 });
@@ -29,6 +30,7 @@ const formatDuration = (startTime: string, endTime: string): string => {
 
 export default function FermentationHistoryRoute() {
   const { sessions } = useLoaderData<typeof loader>();
+  const timeFormat = useTimeFormat();
 
   return (
     <>
@@ -69,8 +71,8 @@ export default function FermentationHistoryRoute() {
                     {session.device.color && <p className="text-xs text-ink-text-faint">{session.device.color}</p>}
                   </div>
                 </Link>
-                <p className="text-[13px] text-ink-text-secondary">{new Date(session.createdAt).toLocaleString()}</p>
-                <p className="text-[13px] text-ink-text-secondary">{new Date(session.updatedAt).toLocaleString()}</p>
+                <p className="text-[13px] text-ink-text-secondary">{formatDateTime(session.createdAt, timeFormat)}</p>
+                <p className="text-[13px] text-ink-text-secondary">{formatDateTime(session.updatedAt, timeFormat)}</p>
                 <p className="text-[13px] text-ink-text-secondary">
                   {formatDuration(session.createdAt, session.updatedAt)}
                 </p>

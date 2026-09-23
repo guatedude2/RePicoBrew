@@ -18,3 +18,9 @@ export const chartTimeToken = (format: TimeFormat, withSeconds = false) => {
 
 export const formatClockTime = (date: Date | string, format: TimeFormat) =>
   new Date(date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: format === '12h' });
+
+// Full date + time in one string, honoring the app's 12h/24h setting for the time part — use this
+// instead of a bare `.toLocaleString()` anywhere a timestamp is shown as running prose (e.g.
+// "Started Sep 22, 2026, 8:52 PM"), which otherwise always shows 12-hour time regardless of setting.
+export const formatDateTime = (date: Date | string | number, format: TimeFormat) =>
+  `${new Date(date).toLocaleDateString()}, ${formatClockTime(new Date(date), format)}`;

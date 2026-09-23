@@ -30,7 +30,7 @@ import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 import { useServerSideEvent } from '~/utils/sse';
-import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
+import { chartTimeToken, formatDateTime, useTimeFormat } from '~/utils/time-format';
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
@@ -650,7 +650,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
     ? [
         { label: 'Process', value: fermentationTypeLabel(batch.recipe.fermentationType) },
         ...(batch.recipe.yeastName ? [{ label: 'Yeast', value: batch.recipe.yeastName }] : []),
-        { label: 'Fermenting Since', value: new Date(fermStart).toLocaleString() },
+        { label: 'Fermenting Since', value: formatDateTime(fermStart, timeFormat) },
         ...(batch.recipe.yeastRangeTemp
           ? [{ label: 'Safe Temp Range', value: `${batch.recipe.yeastRangeTemp} °F` }]
           : []),
@@ -818,12 +818,12 @@ export const SessionDetail: FC<SessionDetailData> = ({
               Machine <span className="font-semibold text-ink-text">{brewSession.device?.name ?? 'Unknown'}</span>
             </p>
             <p>
-              Started <span className="font-semibold text-ink-text">{new Date(batch.createdAt).toLocaleString()}</span>
+              Started <span className="font-semibold text-ink-text">{formatDateTime(batch.createdAt, timeFormat)}</span>
             </p>
             {batch.phase !== BatchPhase.BREWING && batch.completedAt && (
               <p>
                 Completed{' '}
-                <span className="font-semibold text-ink-text">{new Date(batch.completedAt).toLocaleString()}</span>
+                <span className="font-semibold text-ink-text">{formatDateTime(batch.completedAt, timeFormat)}</span>
               </p>
             )}
           </div>
@@ -883,7 +883,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   } else if (coolingAvailable) {
     coolingBody = (
       <p className="py-5 text-center text-[13px] text-ink-text-faint">
-        Wort cooled — fermentation started {new Date(fermStart).toLocaleString()}.
+        Wort cooled — fermentation started {formatDateTime(fermStart, timeFormat)}.
       </p>
     );
   }

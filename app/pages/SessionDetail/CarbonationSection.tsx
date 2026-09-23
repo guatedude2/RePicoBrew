@@ -4,6 +4,7 @@ import { MdCheck } from 'react-icons/md';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
+import { formatDateTime, useTimeFormat } from '~/utils/time-format';
 
 const METHODS = [
   { label: 'Bottle', unit: 'weeks' },
@@ -106,6 +107,7 @@ export const CarbonationSetupForm: FC<{
 };
 
 export const CarbonationSection: FC<{ data: CarbonationData }> = ({ data }) => {
+  const timeFormat = useTimeFormat();
   const fetcher = useFetcher();
   const [extendAmount, setExtendAmount] = useState(1);
   const [stage, setStage] = useState<'counting' | 'extend'>('counting');
@@ -207,7 +209,7 @@ export const CarbonationSection: FC<{ data: CarbonationData }> = ({ data }) => {
             {days}d {hours}h
           </p>
           <p className="mt-1 text-xs text-ink-text-faint">
-            Started {data.carbStartedAt ? new Date(data.carbStartedAt).toLocaleString() : '—'}
+            Started {data.carbStartedAt ? formatDateTime(data.carbStartedAt, timeFormat) : '—'}
           </p>
         </div>
         <Ring percent={percent} label="Complete" />
