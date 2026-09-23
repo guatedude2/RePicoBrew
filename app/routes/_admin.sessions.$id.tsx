@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { data, redirect } from 'react-router';
-import { useLoaderData } from 'react-router';
+import { Suspense } from 'react';
+import { Await, data, redirect, useLoaderData } from 'react-router';
 import { AiAdviceRepository } from '~/repositories/ai-advice.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -8,6 +8,8 @@ import { SessionRepository } from '~/repositories/session.server';
 import { DeviceType, SessionState, SessionType } from '~/types';
 import { describePicoErrorCode } from '~/utils/pico-error-codes';
 import { SessionDetail } from '~/pages/SessionDetail';
+
+const NO_LOGS: never[] = [];
 
 export const meta = () => [{ title: 'Session Detail | RePicoBrew' }];
 
@@ -33,9 +35,16 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     ) ?? null;
   const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION) ?? null;
 
-  const [brewLogs, fermLogs, devices, aiAdvice, brewDeviceErrors] = await Promise.all([
-    brewSession ? SessionRepository.listSessionLogs(brewSession.id) : Promise.resolve([]),
-    fermSession ? SessionRepository.listSessionLogs(fermSession.id) : Promise.resolve([]),
+  // The log tables are the heavy part (thousands of rows on a long brew) — start them now but don't wait:
+  // the page renders right away and the charts fill in when these resolve (streamed by React Router).
+  const brewLogs = (brewSession ? SessionRepository.listSessionLogs(brewSession.id) : Promise.resolve([])).catch(
+    () => [] as Awaited<ReturnType<typeof SessionRepository.listSessionLogs>>,
+  );
+  const fermLogs = (fermSession ? SessionRepository.listSessionLogs(fermSession.id) : Promise.resolve([])).catch(
+    () => [] as Awaited<ReturnType<typeof SessionRepository.listSessionLogs>>,
+  );
+
+  const [devices, aiAdvice, brewDeviceErrors] = await Promise.all([
     DeviceRepository.listDevices(),
     AiAdviceRepository.listForBatch(batch.id),
     brewSession ? DeviceRepository.listErrorLogsForSession(brewSession.deviceId, brewSession.uid) : Promise.resolve([]),
@@ -92,6 +101,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function SessionDetailRoute() {
-  const loaderData = useLoaderData<typeof loader>();
-  return <SessionDetail {...loaderData} />;
+  const { brewLogs, fermLogs, ...rest } = useLoaderData<typeof loader>();
+  return (
+    <Suspense fallback={<SessionDetail {...rest} brewLogs={NO_LOGS} fermLogs={NO_LOGS} logsLoading />}>
+      <Await resolve={Promise.all([brewLogs, fermLogs])}>
+        {([brew, ferm]) => <SessionDetail {...rest} brewLogs={brew} fermLogs={ferm} />}
+      </Await>
+    </Suspense>
+  );
 }

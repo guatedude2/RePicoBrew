@@ -42,7 +42,13 @@ import { chartTimeToken, formatDateTime, useTimeFormat } from '~/utils/time-form
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
-type SessionDetailData = Awaited<ReturnType<typeof sessionDetailLoader>>;
+type LoaderData = Awaited<ReturnType<typeof sessionDetailLoader>>;
+type SessionDetailData = Omit<LoaderData, 'brewLogs' | 'fermLogs'> & {
+  brewLogs: Awaited<LoaderData['brewLogs']>;
+  fermLogs: Awaited<LoaderData['fermLogs']>;
+  // True while the (large) log history is still streaming in — charts show a loading state instead of "no data".
+  logsLoading?: boolean;
+};
 type AiAdviceRow = SessionDetailData['aiAdvice'][number];
 
 const THERMO_COLOR = '#EAB308';
@@ -380,6 +386,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   fermSession,
   brewLogs,
   fermLogs,
+  logsLoading = false,
   tiltDevices,
   aiAdvice,
   brewErrors,
@@ -604,7 +611,6 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const latestBrewAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.BREWING);
   const latestFermAdvice = aiAdviceList.find((a) => a.phase === BatchPhase.FERMENTING);
 
-  const zoom = useChartZoom();
   const brewChart = useMemo(() => {
     const wort: Array<{ x: number; y: number }> = [];
     const therm: Array<{ x: number; y: number }> = [];
@@ -645,6 +651,10 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const combinedTherm = useMemo(
     () => [...brewChart.therm, ...liveChartPoints.therm],
     [brewChart.therm, liveChartPoints.therm],
+  );
+
+  const zoom = useChartZoom(
+    combinedWort.length > 0 ? [combinedWort[0].x, combinedWort[combinedWort.length - 1].x] : null,
   );
 
   // Step labels lay out in a single row when zoomed in enough to fit side by side, and only stack
@@ -830,7 +840,10 @@ export const SessionDetail: FC<SessionDetailData> = ({
 
           {combinedWort.length === 0 && (
             <div className="flex h-[280px] items-center justify-center rounded-[10px] border border-dashed border-ink-divider">
-              <p className="text-[13px] text-ink-text-faint">Waiting for first reading...</p>
+              <p className="flex items-center gap-2 text-[13px] text-ink-text-faint">
+                {logsLoading && <Spinner />}
+                {logsLoading ? 'Loading readings…' : 'Waiting for first reading...'}
+              </p>
             </div>
           )}
           {combinedWort.length > 0 && (

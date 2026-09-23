@@ -41,8 +41,8 @@ const GRID_COLOR = 'oklch(0.24 0.008 260)';
 
 export default function FermentationChart({ sessionId }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
-  const zoom = useChartZoom();
   const [data, setData] = useState<DataPoint[]>([]);
+  const zoom = useChartZoom(data.length > 0 ? [data[0].time, data[data.length - 1].time] : null);
 
   // Fetch historical data
   useEffect(() => {
