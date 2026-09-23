@@ -8,6 +8,11 @@ import {
   MdFullscreen,
   MdFullscreenExit,
   MdScience,
+  MdSignalWifi0Bar,
+  MdSignalWifi1Bar,
+  MdSignalWifi2Bar,
+  MdSignalWifi3Bar,
+  MdSignalWifiOff,
   MdThermostat,
   MdWifi,
   MdTimer,
@@ -186,6 +191,28 @@ const formatDuration = (start: Date | string) => {
   const days = Math.floor(hours / 24);
   return days > 0 ? `${days}d ${hours % 24}h` : `${hours}h`;
 };
+
+// BLE RSSI (dBm, more negative = weaker) mapped onto a Wi-Fi-style bar icon. Thresholds are rough
+// (BLE signal is noisy — a Tilt in the same room routinely swings 10-15 dBm reading to reading),
+// not a precise distance measurement.
+function fermSignalIndicator(rssi: number | undefined, hasEverReported: boolean, isStale: boolean) {
+  if (!hasEverReported || isStale) {
+    return { Icon: MdSignalWifiOff, label: 'No signal' };
+  }
+  if (rssi === undefined) {
+    return { Icon: MdSignalWifi0Bar, label: 'No bars (low signal)' };
+  }
+  if (rssi >= -60) {
+    return { Icon: MdSignalWifi3Bar, label: 'Full signal' };
+  }
+  if (rssi >= -75) {
+    return { Icon: MdSignalWifi2Bar, label: '2 bars' };
+  }
+  if (rssi >= -90) {
+    return { Icon: MdSignalWifi1Bar, label: '1 bar' };
+  }
+  return { Icon: MdSignalWifi0Bar, label: 'No bars (low signal)' };
+}
 
 const PHASES: BatchPhase[] = [
   BatchPhase.BREWING,
@@ -964,9 +991,17 @@ export const SessionDetail: FC<SessionDetailData> = ({
       Fermentation tracking starts once cooling is done and a Tilt is dropped in the fermenter.
     </p>
   );
+  const fermSignal = fermSignalIndicator(liveFerm?.rssi, fermHasEverReported, fermIsStale);
   if (fermentationAvailable && fermSession) {
     fermentationBody = (
       <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-text-secondary">
+          {fermSession.device?.name ?? 'Tilt'}
+          <fermSignal.Icon
+            className={cn('size-4', fermIsStale || !fermHasEverReported ? 'text-danger-500' : 'text-ink-text-faint')}
+            title={fermSignal.label}
+          />
+        </div>
         {(!fermHasEverReported || fermIsStale) && (
           <div
             className={cn(
@@ -982,7 +1017,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </p>
           </div>
         )}
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1200px]:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1200px]:grid-cols-3">
           <StatCard
             label="Specific Gravity"
             value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
@@ -997,14 +1032,6 @@ export const SessionDetail: FC<SessionDetailData> = ({
             sub="Fermentation temp"
             icon={MdThermostat}
             accent={ACCENT.danger}
-          />
-          <StatCard
-            label="Signal Strength"
-            value={liveFerm?.rssi !== undefined ? String(liveFerm.rssi) : '--'}
-            unit=" dBm"
-            sub="RSSI"
-            icon={MdWifi}
-            accent={ACCENT.info}
           />
           <StatCard
             label="Duration"
