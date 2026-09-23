@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
+import { Link, useFetcher, useNavigate, useRevalidator, useRouteLoaderData } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   MdArrowBack,
@@ -392,6 +392,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
   // (see BatchRepository.createBatch) — it goes stale the moment the recipe is renamed. Show the
   // recipe's current name everywhere, falling back to the snapshot only if the recipe was deleted.
   const displayName = batch.recipe?.name ?? batch.name;
+  const recipeNameNode = batch.recipe ? (
+    <Link to={`/recipes/${batch.recipe.id}`} className="hover:text-brand-500 hover:underline underline-offset-4">
+      {displayName}
+    </Link>
+  ) : (
+    displayName
+  );
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [skipFermentModalOpen, setSkipFermentModalOpen] = useState(false);
   const [selectedTiltId, setSelectedTiltId] = useState(batch.fermentDeviceId ? String(batch.fermentDeviceId) : '');
@@ -1306,7 +1313,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </button>
           )}
           <div>
-            <p className="text-lg font-bold">{displayName}</p>
+            <p className="text-lg font-bold">{recipeNameNode}</p>
             <p className="text-xs text-ink-text-faint">
               {brewSession?.device?.name ?? fermSession?.device?.name ?? 'Unknown device'}
             </p>
@@ -1360,7 +1367,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
               }}
             />
             <div className="min-w-[160px] flex-1">
-              <p className="text-xl font-bold">{displayName}</p>
+              <p className="text-xl font-bold">{recipeNameNode}</p>
               <p className="mt-0.5 text-[13px] text-ink-text-dim">{batch.recipe?.style ?? ' '}</p>
               <div className="mt-2.5 flex items-center gap-[18px]">
                 <div>
