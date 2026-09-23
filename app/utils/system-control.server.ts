@@ -125,11 +125,12 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
   return { state, log, rebootRequired };
 }
 
-// The Bluetooth radio itself (bluetoothd) — Settings -> Devices' Bluetooth toggle. Separate from
-// tilt-ble.service (the Tilt hydrometer scanner, which needs this on to do anything but is its
-// own opt-in on top of this).
+// The Bluetooth radio — Settings -> Devices' Bluetooth toggle. Tilt scanning (tilt-ble.service) is
+// the only thing this app does over Bluetooth, and it takes the controller directly over raw HCI
+// (Conflicts=bluetooth.service in its unit file, precisely to keep BlueZ from holding the device),
+// so this toggle controls tilt-ble.service itself rather than a separate bluetoothd on/off.
 const BLUETOOTH_RADIO_SCRIPT = '/usr/local/sbin/repicobrew-network/bluetooth-radio.sh';
-const BLUETOOTH_UNIT = 'bluetooth.service';
+const BLUETOOTH_UNIT = 'tilt-ble.service';
 
 export async function setBluetoothEnabled(enabled: boolean): Promise<SystemControlResult> {
   return runSudoCommand([BLUETOOTH_RADIO_SCRIPT, enabled ? 'on' : 'off']);
