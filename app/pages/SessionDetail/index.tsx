@@ -306,6 +306,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   brewSession,
   fermSession,
   brewLogs,
+  fermLogs,
   tiltDevices,
   aiAdvice,
   brewErrors,
@@ -483,13 +484,39 @@ export const SessionDetail: FC<SessionDetailData> = ({
     setLiveStepMarkers([]);
   }, [brewLogs]);
 
-  // Live fermentation telemetry (Tilt)
-  const [liveFerm, setLiveFerm] = useState<{ gravity: number; temp: number; rssi?: number } | null>(null);
+  // Live fermentation telemetry (Tilt) — seeded from the last logged reading (if any) so a fresh
+  // page load shows real numbers immediately instead of flashing "no signal" before the next live
+  // update arrives. FERM_STALE_MS is what turns "hasn't reported since the page loaded" into a
+  // real signal-loss warning.
+  const lastFermLog = fermLogs.length > 0 ? fermLogs[fermLogs.length - 1] : null;
+  const initialFermData = lastFermLog
+    ? (JSON.parse(lastFermLog.data) as { temp?: number; gravity?: number; rssi?: number })
+    : null;
+  const [liveFerm, setLiveFerm] = useState<{ gravity: number; temp: number; rssi?: number } | null>(
+    initialFermData?.temp !== undefined && initialFermData?.gravity !== undefined
+      ? { gravity: initialFermData.gravity, temp: initialFermData.temp, rssi: initialFermData.rssi }
+      : null,
+  );
+  const [lastFermReceivedAt, setLastFermReceivedAt] = useState<number | null>(
+    lastFermLog ? new Date(lastFermLog.time).getTime() : null,
+  );
   useServerSideEvent<{ sessionId: number; gravity: number; temp: number; rssi?: number }>('tilt-update', (data) => {
     if (fermSession && data.sessionId === fermSession.id) {
       setLiveFerm(data);
+      setLastFermReceivedAt(Date.now());
     }
   });
+  const FERM_STALE_MS = 3 * 60 * 1000;
+  const [fermNowMs, setFermNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!fermSession) {
+      return;
+    }
+    const timer = setInterval(() => setFermNowMs(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, [fermSession]);
+  const fermHasEverReported = lastFermReceivedAt !== null;
+  const fermIsStale = fermHasEverReported && fermNowMs - lastFermReceivedAt > FERM_STALE_MS;
 
   const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
   const timeFormat = useTimeFormat();
@@ -913,11 +940,18 @@ export const SessionDetail: FC<SessionDetailData> = ({
   if (fermentationAvailable && fermSession) {
     fermentationBody = (
       <div className="flex flex-col gap-4">
-        {!liveFerm && (
-          <div className="flex items-center gap-2 rounded-lg border border-danger-500 bg-danger-100 px-3.5 py-2.5">
-            <MdWifi className="size-4 text-danger-500" />
-            <p className="text-[13px] font-semibold text-danger-500">
-              No signal from {fermSession.device?.name ?? 'Tilt'}
+        {(!fermHasEverReported || fermIsStale) && (
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-lg border px-3.5 py-2.5',
+              fermIsStale ? 'border-danger-500 bg-danger-100' : 'border-ink-divider bg-ink-bg',
+            )}
+          >
+            <MdWifi className={cn('size-4', fermIsStale ? 'text-danger-500' : 'text-ink-text-faint')} />
+            <p className={cn('text-[13px] font-semibold', fermIsStale ? 'text-danger-500' : 'text-ink-text-faint')}>
+              {fermIsStale
+                ? `No signal from ${fermSession.device?.name ?? 'Tilt'}`
+                : `Waiting for ${fermSession.device?.name ?? 'Tilt'} measurement...`}
             </p>
           </div>
         )}
