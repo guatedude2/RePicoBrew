@@ -794,7 +794,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
       />
       {brewExpanded && brewSession && (
         <div className="flex flex-col gap-4">
-          {liveErrors.length > 0 && (
+          {batch.phase === BatchPhase.BREWING && liveErrors.length > 0 && (
             <div className="flex flex-col gap-2">
               {liveErrors.map((err) => (
                 <div
