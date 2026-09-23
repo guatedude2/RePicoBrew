@@ -801,7 +801,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
                         labels: {
                           style: { colors: 'oklch(0.6 0.008 260)' },
                           datetimeUTC: false,
-                          datetimeFormatter: { hour: chartTimeToken(timeFormat), minute: chartTimeToken(timeFormat) },
+                          datetimeFormatter: {
+                            hour: chartTimeToken(timeFormat),
+                            minute: chartTimeToken(timeFormat),
+                            second: chartTimeToken(timeFormat, true),
+                          },
                         },
                       },
                       yaxis: {

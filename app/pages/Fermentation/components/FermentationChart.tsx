@@ -106,7 +106,11 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
       labels: {
         style: { colors: TEXT_COLOR, fontSize: '12px' },
         datetimeUTC: false,
-        datetimeFormatter: { hour: chartTimeToken(timeFormat), minute: chartTimeToken(timeFormat) },
+        datetimeFormatter: {
+          hour: chartTimeToken(timeFormat),
+          minute: chartTimeToken(timeFormat),
+          second: chartTimeToken(timeFormat, true),
+        },
       },
       axisBorder: { color: GRID_COLOR },
       axisTicks: { color: GRID_COLOR },
