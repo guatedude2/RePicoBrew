@@ -1017,7 +1017,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </p>
           </div>
         )}
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1200px]:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <StatCard
             label="Specific Gravity"
             value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
@@ -1064,7 +1064,12 @@ export const SessionDetail: FC<SessionDetailData> = ({
           />
         )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+          <Button
+            variant={fermentationTimeUp ? 'brand' : 'link'}
+            size={fermentationTimeUp ? 'default' : 'sm'}
+            disabled={fetcher.state !== 'idle'}
+            onClick={handleBottleClick}
+          >
             {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
           </Button>
         )}
@@ -1143,7 +1148,12 @@ export const SessionDetail: FC<SessionDetailData> = ({
           />
         )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={handleBottleClick}>
+          <Button
+            variant={fermentationTimeUp ? 'brand' : 'link'}
+            size={fermentationTimeUp ? 'default' : 'sm'}
+            disabled={fetcher.state !== 'idle'}
+            onClick={handleBottleClick}
+          >
             {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
           </Button>
         )}
