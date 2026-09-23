@@ -34,6 +34,7 @@ import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-pha
 import { phaseForStep } from '~/utils/brew-step-phase';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { useChartZoom } from '~/utils/chart-zoom';
+import { useSessionLogs } from '~/utils/session-logs';
 import { postEventStream } from '~/utils/event-stream';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
@@ -42,13 +43,7 @@ import { chartTimeToken, formatDateTime, useTimeFormat } from '~/utils/time-form
 import { CarbonationSection, CarbonationSetupForm, Ring, FERM_RING_COLOR } from './CarbonationSection';
 import FermentationChart from '~/pages/Fermentation/components/FermentationChart';
 
-type LoaderData = Awaited<ReturnType<typeof sessionDetailLoader>>;
-type SessionDetailData = Omit<LoaderData, 'brewLogs' | 'fermLogs'> & {
-  brewLogs: Awaited<LoaderData['brewLogs']>;
-  fermLogs: Awaited<LoaderData['fermLogs']>;
-  // True while the (large) log history is still streaming in — charts show a loading state instead of "no data".
-  logsLoading?: boolean;
-};
+type SessionDetailData = Awaited<ReturnType<typeof sessionDetailLoader>>;
 type AiAdviceRow = SessionDetailData['aiAdvice'][number];
 
 const THERMO_COLOR = '#EAB308';
@@ -384,9 +379,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   batch,
   brewSession,
   fermSession,
-  brewLogs,
-  fermLogs,
-  logsLoading = false,
+  lastFermLog,
   tiltDevices,
   aiAdvice,
   brewErrors,
@@ -558,17 +551,12 @@ export const SessionDetail: FC<SessionDetailData> = ({
       ]);
     }
   });
-  // Once brewLogs is refetched, those points are already in it — drop the live-only buffer.
-  useEffect(() => {
-    setLiveChartPoints({ wort: [], therm: [] });
-    setLiveStepMarkers([]);
-  }, [brewLogs]);
+  const { logs: brewLogs, loading: logsLoading, onZoomChange: onBrewZoomChange } = useSessionLogs(brewSession?.id);
 
   // Live fermentation telemetry (Tilt) — seeded from the last logged reading (if any) so a fresh
   // page load shows real numbers immediately instead of flashing "no signal" before the next live
   // update arrives. FERM_STALE_MS is what turns "hasn't reported since the page loaded" into a
   // real signal-loss warning.
-  const lastFermLog = fermLogs.length > 0 ? fermLogs[fermLogs.length - 1] : null;
   const initialFermData = lastFermLog
     ? (JSON.parse(lastFermLog.data) as { temp?: number; gravity?: number; rssi?: number })
     : null;
@@ -644,17 +632,19 @@ export const SessionDetail: FC<SessionDetailData> = ({
     [brewChart.stepMarkers, liveStepMarkers],
   );
 
-  const combinedWort = useMemo(
-    () => [...brewChart.wort, ...liveChartPoints.wort],
-    [brewChart.wort, liveChartPoints.wort],
-  );
-  const combinedTherm = useMemo(
-    () => [...brewChart.therm, ...liveChartPoints.therm],
-    [brewChart.therm, liveChartPoints.therm],
-  );
+  // Live points only count once they're newer than the fetched history (which may already include them).
+  const combinedWort = useMemo(() => {
+    const lastX = brewChart.wort.length > 0 ? brewChart.wort[brewChart.wort.length - 1].x : -Infinity;
+    return [...brewChart.wort, ...liveChartPoints.wort.filter((p) => p.x > lastX)];
+  }, [brewChart.wort, liveChartPoints.wort]);
+  const combinedTherm = useMemo(() => {
+    const lastX = brewChart.therm.length > 0 ? brewChart.therm[brewChart.therm.length - 1].x : -Infinity;
+    return [...brewChart.therm, ...liveChartPoints.therm.filter((p) => p.x > lastX)];
+  }, [brewChart.therm, liveChartPoints.therm]);
 
   const zoom = useChartZoom(
     combinedWort.length > 0 ? [combinedWort[0].x, combinedWort[combinedWort.length - 1].x] : null,
+    onBrewZoomChange,
   );
 
   // Step labels lay out in a single row when zoomed in enough to fit side by side, and only stack

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { Chart } from '~/components/charts/Chart.client';
 import { useChartZoom } from '~/utils/chart-zoom';
+import { useSessionLogs } from '~/utils/session-logs';
 import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
 
 interface FermentationChartProps {
@@ -15,24 +16,11 @@ interface DataPoint {
   gravity: number;
 }
 
-type SessionLogRow = {
-  type: number;
-  data: string;
-};
-
 type FermLogPayload = {
   time?: number;
   temp?: number;
   gravity?: number;
 };
-
-function isSessionLogRow(value: unknown): value is SessionLogRow {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const row = value as Record<string, unknown>;
-  return typeof row.type === 'number' && typeof row.data === 'string';
-}
 
 const TEMP_COLOR = 'oklch(0.78 0.135 65)';
 const GRAVITY_COLOR = 'oklch(0.72 0.1 235)';
@@ -41,33 +29,27 @@ const GRID_COLOR = 'oklch(0.24 0.008 260)';
 
 export default function FermentationChart({ sessionId }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
-  const [data, setData] = useState<DataPoint[]>([]);
-  const zoom = useChartZoom(data.length > 0 ? [data[0].time, data[data.length - 1].time] : null);
 
-  // Fetch historical data
-  useEffect(() => {
-    fetch(`/api/sessions/${sessionId}/logs`)
-      .then((res) => res.json())
-      .then((logs: unknown) => {
-        if (!Array.isArray(logs)) {
-          return;
-        }
-        const points = logs
-          .filter(isSessionLogRow)
-          .filter((log) => log.type === 1)
-          .map((log) => {
-            const logData = JSON.parse(log.data) as FermLogPayload;
-            return {
-              time: logData.time ?? 0,
-              temp: logData.temp ?? 0,
-              gravity: logData.gravity ?? 0,
-            };
-          })
-          .sort((a, b) => a.time - b.time);
-        setData(points);
-      })
-      .catch(console.error);
-  }, [sessionId]);
+  const { logs, onZoomChange } = useSessionLogs(sessionId);
+  const history = useMemo(
+    () =>
+      logs
+        .filter((log) => log.type === 1)
+        .map((log) => {
+          const logData = JSON.parse(log.data) as FermLogPayload;
+          return { time: logData.time ?? 0, temp: logData.temp ?? 0, gravity: logData.gravity ?? 0 };
+        })
+        .sort((a, b) => a.time - b.time),
+    [logs],
+  );
+  const [live, setLive] = useState<DataPoint[]>([]);
+  // Live points only count once they're newer than the fetched history (which may already include them).
+  const lastHistoryTime = history.length > 0 ? history[history.length - 1].time : -Infinity;
+  const data = useMemo(
+    () => [...history, ...live.filter((p) => p.time > lastHistoryTime)],
+    [history, live, lastHistoryTime],
+  );
+  const zoom = useChartZoom(data.length > 0 ? [data[0].time, data[data.length - 1].time] : null, onZoomChange);
 
   // Subscribe to live updates
   useEffect(() => {
@@ -76,7 +58,7 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
     eventSource.addEventListener('tilt-update', ((event: MessageEvent) => {
       const update = JSON.parse(event.data);
       if (update.sessionId === sessionId) {
-        setData((prev) => [
+        setLive((prev) => [
           ...prev,
           {
             time: Date.now(),

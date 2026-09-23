@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { Suspense } from 'react';
-import { Await, data, redirect, useLoaderData } from 'react-router';
+import { data, redirect, useLoaderData } from 'react-router';
 import { AiAdviceRepository } from '~/repositories/ai-advice.server';
 import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
@@ -8,8 +7,6 @@ import { SessionRepository } from '~/repositories/session.server';
 import { DeviceType, SessionState, SessionType } from '~/types';
 import { describePicoErrorCode } from '~/utils/pico-error-codes';
 import { SessionDetail } from '~/pages/SessionDetail';
-
-const NO_LOGS: never[] = [];
 
 export const meta = () => [{ title: 'Session Detail | RePicoBrew' }];
 
@@ -35,14 +32,9 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     ) ?? null;
   const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION) ?? null;
 
-  // The log tables are the heavy part (thousands of rows on a long brew) — start them now but don't wait:
-  // the page renders right away and the charts fill in when these resolve (streamed by React Router).
-  const brewLogs = (brewSession ? SessionRepository.listSessionLogs(brewSession.id) : Promise.resolve([])).catch(
-    () => [] as Awaited<ReturnType<typeof SessionRepository.listSessionLogs>>,
-  );
-  const fermLogs = (fermSession ? SessionRepository.listSessionLogs(fermSession.id) : Promise.resolve([])).catch(
-    () => [] as Awaited<ReturnType<typeof SessionRepository.listSessionLogs>>,
-  );
+  // The full log history is fetched client-side, thinned (see useSessionLogs); only the newest ferment reading is
+  // needed up front, to seed the live signal display.
+  const lastFermLog = fermSession ? await SessionRepository.getLatestSessionLog(fermSession.id) : null;
 
   const [devices, aiAdvice, brewDeviceErrors] = await Promise.all([
     DeviceRepository.listDevices(),
@@ -69,7 +61,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       }),
   );
 
-  return { batch, brewSession, fermSession, brewLogs, fermLogs, tiltDevices, aiAdvice, brewErrors };
+  return { batch, brewSession, fermSession, lastFermLog, tiltDevices, aiAdvice, brewErrors };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -101,12 +93,5 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function SessionDetailRoute() {
-  const { brewLogs, fermLogs, ...rest } = useLoaderData<typeof loader>();
-  return (
-    <Suspense fallback={<SessionDetail {...rest} brewLogs={NO_LOGS} fermLogs={NO_LOGS} logsLoading />}>
-      <Await resolve={Promise.all([brewLogs, fermLogs])}>
-        {([brew, ferm]) => <SessionDetail {...rest} brewLogs={brew} fermLogs={ferm} />}
-      </Await>
-    </Suspense>
-  );
+  return <SessionDetail {...useLoaderData<typeof loader>()} />;
 }
