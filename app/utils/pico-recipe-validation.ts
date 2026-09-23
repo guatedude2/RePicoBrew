@@ -35,12 +35,34 @@ export function validatePicoRecipe(steps: PicoRecipeStep[]): { valid: boolean; e
     { name: 'Dough In', location: PicoLocationMap.Mash },
   ];
 
+  const locationName = (location: number) => {
+    const name = Object.entries(PicoLocationMap).find(([, value]) => value === location)?.[0];
+    return name ? `${name} (${location})` : `${location}`;
+  };
+  const LOCATION_REASON: Record<string, string> = {
+    Heating: 'Heating has to run at PassThru — at Mash the ThermoBlock overheats while the wort never warms up.',
+    'Dough In': 'Dough In has to run at Mash.',
+    'Preparing To Brew': 'Preparing To Brew has to run at Prime.',
+  };
+
   requiredSteps.forEach((required, index) => {
-    if (steps[index] && steps[index].name !== required.name) {
-      errors.push(`Step ${index + 1} must be "${required.name}"`);
+    const step = steps[index];
+    if (!step) {
+      return;
     }
-    if (steps[index] && steps[index].location !== required.location) {
-      errors.push(`Step ${index + 1} must use location ${required.location}`);
+    if (step.name !== required.name) {
+      errors.push(
+        `Step ${index + 1} is "${step.name}" but must be "${
+          required.name
+        }" — every Pico recipe starts with Preparing To Brew, Heating, Dough In, in that order.`,
+      );
+    }
+    if (step.location !== required.location) {
+      errors.push(
+        `Step ${index + 1} (${step.name}) is set to ${locationName(step.location)} but must be ${locationName(
+          required.location,
+        )}. ${LOCATION_REASON[required.name]}`,
+      );
     }
   });
 
