@@ -114,6 +114,21 @@ function buildBrewSummary(logs: Array<{ data: string; time?: Date }>, recipeStep
   return { summary: lines.join(' '), step: lastStep };
 }
 
+// How far into the recipe's expected fermentation window this batch actually is right now — the
+// prompt otherwise only knows the *target* length (see recipeLines below), with no way to tell
+// "day 1 of 7, totally normal" from "day 6 of 7, should be close to done".
+function describeFermentationProgress(startedAt: Date, fermentDays: number | null | undefined): string {
+  const elapsedMs = Date.now() - new Date(startedAt).getTime();
+  const elapsedDays = elapsedMs / 86400000;
+  if (!fermentDays) {
+    return `Fermenting for ${elapsedDays.toFixed(1)} days so far.`;
+  }
+  const remainingDays = Math.max(0, fermentDays - elapsedDays);
+  return remainingDays <= 0
+    ? `Day ${elapsedDays.toFixed(1)} of an expected ${fermentDays} — past the expected window.`
+    : `Day ${elapsedDays.toFixed(1)} of an expected ${fermentDays} (about ${remainingDays.toFixed(1)} days left).`;
+}
+
 function buildFermentSummary(logs: Array<{ data: string; time: Date }>) {
   const temps: number[] = [];
   const gravities: number[] = [];
@@ -174,7 +189,8 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
   } else if (batch.phase === BatchPhase.FERMENTING) {
     const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION);
     const logs = fermSession ? await SessionRepository.listSessionLogs(fermSession.id) : [];
-    stageSummary = buildFermentSummary(logs);
+    const progress = fermSession ? describeFermentationProgress(fermSession.createdAt, recipe?.fermentDays) : '';
+    stageSummary = [progress, buildFermentSummary(logs)].filter(Boolean).join(' ');
   }
 
   return {
