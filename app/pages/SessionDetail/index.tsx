@@ -1034,13 +1034,9 @@ export const SessionDetail: FC<SessionDetailData> = ({
             accent={ACCENT.danger}
           />
           <StatCard
-            label="Duration"
-            value={formatDuration(fermSession.createdAt)}
-            sub={
-              fermentationTimeUp
-                ? 'Fermentation time up'
-                : `${formatFermCountdown(Math.floor(fermRemainingMs / 1000))} remaining`
-            }
+            label="Time Remaining"
+            value={fermentationTimeUp ? 'Time up' : formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
+            sub={`${formatDuration(fermSession.createdAt)} elapsed of ${batch.recipe?.fermentDays ?? 7}d total`}
             icon={MdTimer}
             accent={ACCENT.brand}
           />
