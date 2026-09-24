@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installs a private SearXNG metasearch instance ON the Pi (no Docker) for the AI Brewmaster's web
-# lookups, and points the app at it. Listens on 127.0.0.1:8888 only — nothing outside the Pi can reach it.
+# lookups, for the app to use by default. Listens on 127.0.0.1:8888 only — nothing outside the Pi can reach it.
 # Idempotent: re-running updates the checkout and restarts the service.
 #
 # Usage (on the Pi, as a user with sudo):  bash setup-searxng.sh
@@ -10,7 +10,6 @@ set -euo pipefail
 INSTALL_DIR=/opt/searxng
 SETTINGS_DIR=/etc/searxng
 PORT=8888
-APP_DIR="${APP_DIR:-/home/pi/RePicoBrew}"
 
 echo "==> Installing system packages..."
 sudo apt-get update -qq
@@ -91,13 +90,4 @@ curl -fs -m 10 "http://127.0.0.1:$PORT/search?q=test&format=json" | grep -q '"re
   exit 1
 }
 
-if [ -f "$APP_DIR/prisma/picobrew.db" ]; then
-  echo "==> Pointing RePicoBrew at it..."
-  (cd "$APP_DIR" && node -e "
-    const D = require('better-sqlite3');
-    const db = new D('prisma/picobrew.db');
-    db.prepare('INSERT INTO Config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-      .run('SEARXNG_URL', JSON.stringify('http://127.0.0.1:$PORT'));
-  ")
-fi
-echo "==> Done. Web search is on for the AI Brewmaster (Settings > AI > Web search)."
+echo "==> Done. Web search is on for the AI Brewmaster (the app uses http://127.0.0.1:$PORT by default; override with SEARXNG_URL)."

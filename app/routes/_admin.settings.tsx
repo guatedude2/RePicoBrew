@@ -31,7 +31,6 @@ import { getSystemInfo } from '~/utils/system-info.server';
 import { checkInternetConnectivity } from '~/utils/wifi.server';
 import { TIME_FORMAT_CONFIG_KEY } from '~/utils/time-format';
 import { WEIGHT_UNIT_CONFIG_KEY } from '~/utils/weight-unit';
-import { normalizeSearchUrl, verifySearchUrl } from '~/services/web-search.server';
 
 // Restart Server / Reboot Pi are a genuine local-privilege-escalation surface (they shell out to
 // `sudo`, see ~/utils/system-control.server) — restrict them to the same role tier that already
@@ -106,7 +105,6 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     zenSettings,
     customSettings,
     activeProvider,
-    searchUrl: await AiSettingsRepository.getSearchUrl(),
     systemInfo: getSystemInfo(),
     bluetoothEnabled,
     wifiClientEnabled,
@@ -207,35 +205,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return data({ error: 'A user with that email already exists' }, { status: 400 });
     }
     await UserRepository.updateUser(id, { name, email, role });
-    return { success: true };
-  }
-
-  if (intent === 'saveSearchUrl') {
-    let baseUrl: string;
-    try {
-      baseUrl = normalizeSearchUrl((formData.get('url') as string) ?? '');
-    } catch (error) {
-      return data(
-        {
-          error: error instanceof Error && error.message.startsWith('Enter') ? error.message : 'Enter a valid address.',
-        },
-        { status: 400 },
-      );
-    }
-    try {
-      await verifySearchUrl(baseUrl);
-    } catch (error) {
-      return data(
-        { error: error instanceof Error ? error.message : 'Could not verify that address.' },
-        { status: 400 },
-      );
-    }
-    await AiSettingsRepository.setSearchUrl(baseUrl);
-    return { success: true };
-  }
-
-  if (intent === 'clearSearchUrl') {
-    await AiSettingsRepository.clearSearchUrl();
     return { success: true };
   }
 

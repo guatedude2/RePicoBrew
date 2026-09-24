@@ -103,7 +103,6 @@ export const Settings: FC = () => {
     zenSettings,
     customSettings,
     activeProvider,
-    searchUrl,
     systemInfo,
     bluetoothEnabled,
     wifiClientEnabled,
@@ -276,9 +275,6 @@ export const Settings: FC = () => {
   const [zenPlan, setZenPlan] = useState<'zen' | 'go'>(zenSettings.plan);
   const [zenModel, setZenModel] = useState(zenSettings.model);
   const [zenModelOptions, setZenModelOptions] = useState<string[]>([]);
-  const searchFetcher = useFetcher<{ error?: string }>();
-  const [searchUrlInput, setSearchUrlInput] = useState('');
-  const isSearchSaving = searchFetcher.state !== 'idle';
   const zenFetcher = useFetcher<{ error?: string }>();
   const isZenSaving = zenFetcher.state !== 'idle';
   const zenModelsFetcher = useFetcher<{ models?: string[]; error?: string }>();
@@ -970,56 +966,6 @@ export const Settings: FC = () => {
                     {isCustomSaving ? 'Saving…' : 'Save Changes'}
                   </Button>
                 )}
-              </div>
-            )}
-          </Card>
-
-          <Card className="mt-4 flex flex-col p-6">
-            <SectionHeading
-              title="Web search"
-              description="Lets the AI Brewmaster look up a named beer or kit online, read the top pages and cite them, instead of guessing from memory. Free, no API key: it uses a SearXNG instance, which the Raspberry Pi install sets up on this device automatically. You can also point it at your own instance."
-            />
-            {searchUrl ? (
-              <ConfiguredRow
-                label={
-                  /^https?:\/\/(127\.0\.0\.1|localhost)[:/]?/.test(searchUrl)
-                    ? 'Built-in search (SearXNG on this device)'
-                    : `SearXNG: ${searchUrl}`
-                }
-                disabled={isSearchSaving}
-                onRemove={() => searchFetcher.submit({ intent: 'clearSearchUrl' }, { method: 'post' })}
-              />
-            ) : (
-              <div className="flex w-full flex-col gap-3 md:w-3/5">
-                <div>
-                  <FieldLabel htmlFor="search-url">SearXNG address</FieldLabel>
-                  <Input
-                    id="search-url"
-                    inputMode="url"
-                    autoComplete="off"
-                    placeholder="http://192.168.1.50:8888"
-                    value={searchUrlInput}
-                    onChange={(event) => setSearchUrlInput(event.target.value)}
-                  />
-                  <p className="mt-1.5 text-xs text-ink-text-faint">
-                    The instance must allow JSON results (add <code>json</code> under <code>search.formats</code> in its
-                    settings.yml) — public instances almost always block that, so run your own, e.g.{' '}
-                    <code>docker run -d -p 8888:8080 searxng/searxng</code>.
-                  </p>
-                </div>
-                {searchFetcher.data?.error ? (
-                  <p className="text-xs text-danger-500">{searchFetcher.data.error}</p>
-                ) : null}
-                <Button
-                  variant="brand"
-                  className="self-start"
-                  disabled={!searchUrlInput.trim() || isSearchSaving}
-                  onClick={() => {
-                    searchFetcher.submit({ intent: 'saveSearchUrl', url: searchUrlInput }, { method: 'post' });
-                  }}
-                >
-                  {isSearchSaving ? 'Checking…' : 'Save'}
-                </Button>
               </div>
             )}
           </Card>
