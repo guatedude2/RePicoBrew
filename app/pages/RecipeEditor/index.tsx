@@ -2,6 +2,7 @@ import { Form, Link, useNavigate, useNavigation } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -643,7 +644,10 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           <MdArrowBack className="size-[15px]" />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-bold">{name || 'New Recipe'}</p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <p className="truncate text-lg font-bold">{name || 'New Recipe'}</p>
+            <Badge>ZPack</Badge>
+          </div>
           <p className="text-xs text-ink-text-faint">{style || ' '}</p>
         </div>
         {readOnly && recipe && (
