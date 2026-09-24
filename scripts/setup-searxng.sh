@@ -11,30 +11,39 @@ INSTALL_DIR=/opt/searxng
 SETTINGS_DIR=/etc/searxng
 PORT=8888
 
+# SKIP_SERVICE_START=1: write everything and enable the service (a symlink) but don't start it or wait for it —
+# used when building the Raspberry Pi image, where this runs in a chroot with no running systemd.
+SKIP_SERVICE_START="${SKIP_SERVICE_START:-0}"
+SUDO=""
+[ "$(id -u)" -ne 0 ] && SUDO="sudo"
+as_searxng() {
+  if [ "$(id -u)" -eq 0 ]; then runuser -u searxng -- "$@"; else sudo -u searxng "$@"; fi
+}
+
 echo "==> Installing system packages..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq git python3-venv python3-dev build-essential libxslt1-dev zlib1g-dev libffi-dev libssl-dev
+$SUDO apt-get update -qq
+$SUDO apt-get install -y -qq git python3-venv python3-dev build-essential libxslt1-dev zlib1g-dev libffi-dev libssl-dev
 
 echo "==> Creating the searxng user and fetching the source..."
-id searxng >/dev/null 2>&1 || sudo useradd --system --home-dir "$INSTALL_DIR" --shell /usr/sbin/nologin searxng
-sudo mkdir -p "$INSTALL_DIR"
+id searxng >/dev/null 2>&1 || $SUDO useradd --system --home-dir "$INSTALL_DIR" --shell /usr/sbin/nologin searxng
+$SUDO mkdir -p "$INSTALL_DIR"
 if [ -d "$INSTALL_DIR/src/.git" ]; then
-  sudo git -C "$INSTALL_DIR/src" pull --ff-only -q
+  $SUDO git -C "$INSTALL_DIR/src" pull --ff-only -q
 else
-  sudo git clone --depth 1 -q https://github.com/searxng/searxng "$INSTALL_DIR/src"
+  $SUDO git clone --depth 1 -q https://github.com/searxng/searxng "$INSTALL_DIR/src"
 fi
-sudo chown -R searxng:searxng "$INSTALL_DIR"
+$SUDO chown -R searxng:searxng "$INSTALL_DIR"
 
 echo "==> Installing SearXNG into a virtualenv (slow on a Pi)..."
-sudo -u searxng python3 -m venv "$INSTALL_DIR/venv"
-sudo -u searxng "$INSTALL_DIR/venv/bin/pip" install -q -U pip setuptools wheel pyyaml msgspec typing_extensions pybind11
-sudo -u searxng bash -c "cd '$INSTALL_DIR/src' && '$INSTALL_DIR/venv/bin/pip' install -q --use-pep517 --no-build-isolation -e ."
+as_searxng python3 -m venv "$INSTALL_DIR/venv"
+as_searxng "$INSTALL_DIR/venv/bin/pip" install -q -U pip setuptools wheel pyyaml msgspec typing_extensions pybind11
+as_searxng bash -c "cd '$INSTALL_DIR/src' && '$INSTALL_DIR/venv/bin/pip' install -q --use-pep517 --no-build-isolation -e ."
 
 echo "==> Writing the configuration..."
-sudo mkdir -p "$SETTINGS_DIR"
+$SUDO mkdir -p "$SETTINGS_DIR"
 if [ ! -f "$SETTINGS_DIR/settings.yml" ]; then
   SECRET=$(openssl rand -hex 32)
-  sudo tee "$SETTINGS_DIR/settings.yml" >/dev/null <<EOF
+  $SUDO tee "$SETTINGS_DIR/settings.yml" >/dev/null <<EOF
 use_default_settings: true
 server:
   bind_address: "127.0.0.1"
@@ -48,11 +57,11 @@ search:
     - json
 EOF
 fi
-sudo chown -R searxng:searxng "$SETTINGS_DIR"
-sudo chmod 640 "$SETTINGS_DIR/settings.yml"
+$SUDO chown -R searxng:searxng "$SETTINGS_DIR"
+$SUDO chmod 640 "$SETTINGS_DIR/settings.yml"
 
 echo "==> Installing the service..."
-sudo tee /etc/systemd/system/searxng.service >/dev/null <<EOF
+$SUDO tee /etc/systemd/system/searxng.service >/dev/null <<EOF
 [Unit]
 Description=SearXNG (private metasearch for RePicoBrew's AI lookups)
 After=network.target
@@ -73,9 +82,15 @@ Nice=10
 [Install]
 WantedBy=multi-user.target
 EOF
-sudo systemctl daemon-reload
-sudo systemctl enable --now searxng.service
-sudo systemctl restart searxng.service
+if [ "$SKIP_SERVICE_START" = "1" ]; then
+  $SUDO mkdir -p /etc/systemd/system/multi-user.target.wants
+  $SUDO ln -sf /etc/systemd/system/searxng.service /etc/systemd/system/multi-user.target.wants/searxng.service
+  echo "==> SearXNG installed and enabled (it starts on first boot)."
+  exit 0
+fi
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable --now searxng.service
+$SUDO systemctl restart searxng.service
 
 echo "==> Waiting for SearXNG to answer..."
 for _ in $(seq 1 45); do

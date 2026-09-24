@@ -25,12 +25,14 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DIR="$SCRIPT_DIR/cache"
 WORK_DIR="$SCRIPT_DIR/work"
 
-# Last dhcpcd-based Raspberry Pi OS release — scripts/setup-pi-ap.sh writes dhcpcd.conf.d config
-# and expects wpa_supplicant to be dhcpcd-managed. Every release since Bookworm (Oct 2023) defaults
-# to NetworkManager instead, which fights hostapd for wlan0 and ignores those config files
-# entirely — building against "latest" would silently produce an image whose AP never comes up.
-# See pi-image/README.md for what porting to NetworkManager would take.
+# zero-w: the last dhcpcd-based Raspberry Pi OS release (Bullseye) — scripts/setup-pi-ap.sh writes dhcpcd.conf.d
+# config and expects wpa_supplicant to be dhcpcd-managed, which every release since Bookworm (Oct 2023) replaced with
+# NetworkManager. Bullseye is past end of life (its security repository is gone from the main Debian mirror), so this
+# target may no longer build.
 BULLSEYE_DATE="2023-05-03"
+# pi4: current Raspberry Pi OS Lite (Trixie), NetworkManager-based — see chroot-provision-nm.sh.
+TRIXIE_DATE="2026-09-15"
+TRIXIE_SHA256="cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5"
 
 TARGET=""
 HOSTNAME="repicobrew"
@@ -75,6 +77,9 @@ NODE_VERSION="20.9.0"
 case "$TARGET" in
   zero-w)
     ARCH="armhf"
+    OS_NAME="bullseye"
+    OS_DATE="$BULLSEYE_DATE"
+    PROVISION_SCRIPT="chroot-provision.sh"
     BASE_FILENAME="${BULLSEYE_DATE}-raspios-bullseye-armhf-lite.img.xz"
     BASE_SHA256="b5e3a1d984a7eaa402a6e078d707b506b962f6804d331dcc0daa61debae3a19a"
     QEMU_STATIC_BIN="qemu-arm-static"
@@ -94,9 +99,13 @@ case "$TARGET" in
     ;;
   pi4)
     ARCH="arm64"
-    BASE_FILENAME="${BULLSEYE_DATE}-raspios-bullseye-arm64-lite.img.xz"
-    BASE_SHA256="bf982e56b0374712d93e185780d121e3f5c3d5e33052a95f72f9aed468d58fa7"
+    OS_NAME="trixie"
+    OS_DATE="$TRIXIE_DATE"
+    BASE_FILENAME="${TRIXIE_DATE}-raspios-trixie-arm64-lite.img.xz"
+    BASE_SHA256="$TRIXIE_SHA256"
     QEMU_STATIC_BIN="qemu-aarch64-static"
+    PROVISION_SCRIPT="chroot-provision-nm.sh"
+    NODE_VERSION="20.18.1"
     # arm64/aarch64 has no ARMv6-style baseline split — the official build is fine.
     NODE_TARBALL_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz"
     # No equivalent baseline-mismatch risk on arm64 — leave qemu-aarch64-static's default CPU as-is.
@@ -108,7 +117,7 @@ case "$TARGET" in
     echo "Error: unknown --target '$TARGET' (expected zero-w or pi4)" >&2; exit 1 ;;
 esac
 
-BASE_URL="https://downloads.raspberrypi.com/raspios_lite_${ARCH}/images/raspios_lite_${ARCH}-${BULLSEYE_DATE}/${BASE_FILENAME}"
+BASE_URL="https://downloads.raspberrypi.com/raspios_lite_${ARCH}/images/raspios_lite_${ARCH}-${OS_DATE}/${BASE_FILENAME}"
 DATE_STAMP="$(date +%Y%m%d)"
 OUTPUT="${OUTPUT:-$WORK_DIR/repicobrew-${TARGET}-${DATE_STAMP}.img}"
 
@@ -117,7 +126,7 @@ mkdir -p "$CACHE_DIR" "$WORK_DIR"
 command -v virt-customize >/dev/null || { echo "Error: virt-customize not found — run this inside pi-image/Dockerfile's builder image." >&2; exit 1; }
 command -v virt-resize >/dev/null || { echo "Error: virt-resize not found — run this inside pi-image/Dockerfile's builder image." >&2; exit 1; }
 
-echo "==> Target: $TARGET ($ARCH), base image: raspios-bullseye-${ARCH}-lite (${BULLSEYE_DATE})"
+echo "==> Target: $TARGET ($ARCH), base image: raspios-${OS_NAME}-${ARCH}-lite (${OS_DATE})"
 
 # --- 1. Download + verify the base image -----------------------------------------------------
 COMPRESSED="$CACHE_DIR/$BASE_FILENAME"
@@ -237,10 +246,21 @@ mount "$MAPPER_BOOT" "$BOOT_MNT"
 echo "==> Copying repo source and provisioning tools into the image..."
 rm -rf "$ROOT_MNT/home/pi/RePicoBrew"
 cp -a "$STAGE_DIR" "$ROOT_MNT/home/pi/RePicoBrew"
-cp "$SCRIPT_DIR/chroot-provision.sh" "$ROOT_MNT/tmp/chroot-provision.sh"
+cp "$SCRIPT_DIR/$PROVISION_SCRIPT" "$ROOT_MNT/tmp/chroot-provision.sh"
 chmod 0755 "$ROOT_MNT/tmp/chroot-provision.sh"
-cp "$REPO_DIR/scripts/repicobrew.service" "$ROOT_MNT/home/pi/RePicoBrew/scripts/"
-cp "$(command -v "$QEMU_STATIC_BIN")" "$ROOT_MNT/usr/bin/$QEMU_STATIC_BIN"
+# When the build host already runs the target architecture (e.g. an arm64 Mac's Docker for the pi4 target), the
+# chroot executes natively and needs no emulation at all — much faster.
+QEMU_PREFIX="/usr/bin/$QEMU_STATIC_BIN"
+if [ "$(uname -m)" = "aarch64" ] && [ "$ARCH" = "arm64" ]; then
+  QEMU_PREFIX=""
+  echo "==> Build host is arm64: running the image's chroot natively (no emulation)."
+else
+  cp "$(command -v "$QEMU_STATIC_BIN")" "$ROOT_MNT/usr/bin/$QEMU_STATIC_BIN"
+fi
+# On NetworkManager-based releases resolv.conf is a symlink into /run (which doesn't exist in a chroot): remember
+# where it points, swap in the host's real file for the build, and put the symlink back afterwards.
+RESOLV_LINK="$(readlink "$ROOT_MNT/etc/resolv.conf" 2>/dev/null || true)"
+rm -f "$ROOT_MNT/etc/resolv.conf"
 cp /etc/resolv.conf "$ROOT_MNT/etc/resolv.conf"
 echo "$HOSTNAME" > "$ROOT_MNT/etc/hostname"
 sed -i "s/127.0.1.1.*/127.0.1.1\t$HOSTNAME/" "$ROOT_MNT/etc/hosts" 2>/dev/null || true
@@ -248,7 +268,7 @@ touch "$BOOT_MNT/ssh"
 # Without this, the Zero W's GPIO serial console uses the "mini UART", whose clock is tied to the
 # CPU's core frequency and drifts under frequency scaling — producing garbled output. Also pins
 # core_freq to stabilize it. Confirmed necessary the hard way, debugging over a real UART cable.
-if ! grep -q '^enable_uart=1$' "$BOOT_MNT/config.txt" 2>/dev/null; then
+if [ "$TARGET" = "zero-w" ] && ! grep -q '^enable_uart=1$' "$BOOT_MNT/config.txt" 2>/dev/null; then
   printf '\n[all]\nenable_uart=1\n' >> "$BOOT_MNT/config.txt"
 fi
 
@@ -258,7 +278,7 @@ mount -t sysfs sysfs "$ROOT_MNT/sys"
 
 echo "==> Provisioning inside the image (this is the slow step — expect 15-45+ minutes, mostly"
 echo "    native addon compilation for better-sqlite3/@stoprocent/noble under emulation)..."
-chroot "$ROOT_MNT" "/usr/bin/$QEMU_STATIC_BIN" /bin/bash "/tmp/chroot-provision.sh" \
+chroot "$ROOT_MNT" $QEMU_PREFIX /bin/bash "/tmp/chroot-provision.sh" \
   "$NODE_TARBALL_URL" "$PNPM_VERSION"
 
 # Prisma publishes no native engine binary for 32-bit ARM ("linux-arm") at all — confirmed via a
@@ -285,11 +305,12 @@ chown -R 1000:1000 "$APP_DIR_HOST"
 
 cp "$SCRIPT_DIR/chroot-finish.sh" "$ROOT_MNT/tmp/chroot-finish.sh"
 chmod 0755 "$ROOT_MNT/tmp/chroot-finish.sh"
-chroot "$ROOT_MNT" "/usr/bin/$QEMU_STATIC_BIN" /bin/bash "/tmp/chroot-finish.sh"
+chroot "$ROOT_MNT" $QEMU_PREFIX /bin/bash "/tmp/chroot-finish.sh"
 
 echo "==> Cleaning up build-only artifacts from the image..."
 rm -f "$ROOT_MNT/usr/bin/$QEMU_STATIC_BIN" "$ROOT_MNT/etc/resolv.conf" \
   "$ROOT_MNT/tmp/chroot-provision.sh" "$ROOT_MNT/tmp/chroot-finish.sh"
+[ -n "$RESOLV_LINK" ] && ln -s "$RESOLV_LINK" "$ROOT_MNT/etc/resolv.conf"
 
 cleanup
 trap - EXIT
@@ -299,6 +320,6 @@ echo "==> Done: $OUTPUT"
 echo "    Compress before distributing/flashing, e.g.: xz -T0 -k \"$OUTPUT\""
 echo "    Flash with Raspberry Pi Imager or: sudo dd if=\"$OUTPUT\" of=/dev/sdX bs=4M status=progress conv=fsync"
 echo ""
-echo "    First boot needs NO internet and NO provisioning wait — hostapd, nginx, and the app are"
-echo "    already installed, built, and enabled. The 'PICOBREW' WiFi network should appear within"
-echo "    normal boot time."
+echo "    First boot needs NO internet and NO provisioning wait — nginx and the app are already"
+echo "    installed, built, and enabled. The 'PICOBREW' WiFi network appears shortly after boot"
+echo "    (pi4: created on first boot by repicobrew-first-boot.service; zero-w: hostapd)."

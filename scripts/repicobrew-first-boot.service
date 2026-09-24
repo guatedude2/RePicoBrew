@@ -1,0 +1,17 @@
+[Unit]
+Description=Create the default PICOBREW access point (first boot only)
+After=NetworkManager.service
+Wants=NetworkManager.service
+# Skipped once the access point exists; deleting the connection in Settings/nmcli re-arms it.
+ConditionPathExists=!/etc/NetworkManager/system-connections/picobrew-ap.nmconnection
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/repicobrew-network/first-boot-ap.sh
+# The Wi-Fi driver or NetworkManager may not be ready on the very first attempt.
+Restart=on-failure
+RestartSec=15
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

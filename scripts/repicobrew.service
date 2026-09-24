@@ -1,7 +1,10 @@
+# Reference copy — scripts/deploy-to-pi.sh installs this unit with the deploy user and app directory filled in;
+# the Raspberry Pi image build (pi-image/chroot-provision-nm.sh) installs it as-is.
 [Unit]
 Description=RePicoBrew Server
 Documentation=https://github.com/guatedude2/RePicoBrew
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -10,10 +13,8 @@ Group=pi
 WorkingDirectory=/home/pi/RePicoBrew
 Environment="NODE_ENV=production"
 Environment="PORT=8080"
-# /usr/bin/env, not a hardcoded path: DEPLOY_PI.md's manual NodeSource install puts pnpm at
-# /usr/bin, pi-image/chroot-provision.sh's tarball install puts it at /usr/local/bin — systemd's
-# default PATH covers both, searching it at runtime works for either provisioning method.
-ExecStart=/usr/bin/env pnpm start
+# Runs node directly (not `pnpm start`): one process instead of pnpm + sh + node, and no pnpm needed at runtime.
+ExecStart=/usr/local/bin/node node_modules/@react-router/serve/bin.js build/server/index.js
 Restart=on-failure
 RestartSec=10
 # The app holds open live-update (SSE) connections, so a polite SIGTERM stop can hang until systemd's
@@ -23,20 +24,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=repicobrew
 
-# Security hardening. NOT NoNewPrivileges=true: that systemd flag sets the kernel's
-# PR_SET_NO_NEW_PRIVS bit on this process and everything it execs, which disables setuid escalation
-# entirely — including `sudo` itself, regardless of sudoers rules. This app deliberately relies on
-# a handful of narrowly-scoped passwordless sudo commands (see app/utils/system-control.server.ts,
-# app/utils/network-control.server.ts, /etc/sudoers.d/repicobrew-control) as the ONLY way this
-# unprivileged `pi`-run process can restart itself, reboot the Pi, or apply real network config —
-# confirmed the hard way: with this flag set, every one of those sudo calls fails with
-# "sudo: effective uid is not 0, is /usr/bin/sudo on a file system with the 'nosuid' option set...",
-# even though sudo itself is correctly setuid-root and the sudoers rule matches.
-#
-# Also NOT PrivateTmp=true: `wpa_cli` (the Setup/Settings Wi-Fi network scan, see
-# app/utils/wifi.server.ts) receives wpa_supplicant's replies on a socket it creates in /tmp. With a
-# private /tmp that socket is invisible to the wpa_supplicant daemon, so every scan failed even
-# though the same command works from a shell.
+# Security hardening. NOT NoNewPrivileges=true: it disables setuid escalation entirely, including `sudo`, and this
+# app deliberately relies on a few narrowly-scoped passwordless sudo commands (see app/utils/system-control.server.ts,
+# app/utils/network-control.server.ts, /etc/sudoers.d/repicobrew-control) to restart itself, reboot the Pi and apply
+# network config. Also NOT PrivateTmp=true: `wpa_cli` (the Wi-Fi network scan) receives replies on a socket in /tmp.
 
 [Install]
 WantedBy=multi-user.target
