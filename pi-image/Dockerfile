@@ -4,7 +4,7 @@
 #
 #   docker build -t repicobrew-pi-image-builder pi-image
 #   docker run --rm --privileged -v "$(pwd):/work" -w /work repicobrew-pi-image-builder \
-#     pi-image/build.sh --target zero-w
+#     pi-image/build.sh --target pi4
 #
 # --privileged is required: virt-customize's supermin appliance needs /dev/kvm (if present) and
 # loop-device access to mount the disk image's partitions.
@@ -48,12 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # pnpm via its official standalone installer — neither npm nor corepack come with Debian's
 # `nodejs` package here (confirmed: both "not found" after installing it) — for the host-side
-# `pnpm install`+`pnpm build` in build.sh. esbuild's prebuilt `@esbuild/linux-arm` Go binary is
-# ARMv7-only (confirmed via a real SIGILL once QEMU_CPU correctly restricted emulation to genuine
-# ARMv6, and there's no from-source fallback for a prebuilt Go binary the way there is for a C
-# addon), so the app is built entirely here on the host's own architecture instead of under ARM
-# emulation — see build.sh and chroot-provision.sh (still installs devDependencies too, but
-# neutralizes esbuild's install-time crash there since it's never actually invoked in the chroot).
+# `pnpm install`+`pnpm build` in build.sh (the app is built on the host's own architecture, then copied into the
+# image — see build.sh).
 ENV PNPM_HOME=/root/.local/share/pnpm
 ENV PATH="$PNPM_HOME/bin:$PATH"
 RUN curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash sh -

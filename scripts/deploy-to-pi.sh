@@ -6,25 +6,20 @@
 #   aarch64 (Pi 3/4/5/Zero 2 W, 64-bit OS): copies the source, installs Node.js 20 (official arm64
 #       build), installs dependencies and runs the database migrations ON the Pi (it's fast enough;
 #       needs internet, e.g. Ethernet), installs nginx (port 80 -> the app) and a systemd service.
-#   armv6l (Pi Zero/Zero W): copies the ARMv6-compiled app tree extracted from an image built by
-#       pi-image/build.sh (see pi-image/extract-app.sh) and installs the ARMv6 Node.js build —
-#       nothing is compiled on the device, which is far too slow there.
 #
 # The app itself is always built here, on this machine. Re-running only re-syncs and restarts (the
-# database is left alone) unless --fresh is passed (armv6l only: re-extracts the whole app tree).
+# database is left alone).
 #
 # Refuses to run while a brew is in progress (the app restarts, so the Pico's readings during the ~20-40s outage
 # would be lost and it can show a server-communication error); pass --force to override.
 #
-# Usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh] [--force]
+# Usage: scripts/deploy-to-pi.sh <user>@<host> [--force]
 set -euo pipefail
 
-TARGET="${1:?usage: scripts/deploy-to-pi.sh <user>@<host> [--fresh] [--force]}"
-FRESH=""
+TARGET="${1:?usage: scripts/deploy-to-pi.sh <user>@<host> [--force]}"
 FORCE=""
 for arg in "${@:2}"; do
   case "$arg" in
-    --fresh) FRESH="--fresh" ;;
     --force) FORCE="1" ;;
   esac
 done
@@ -236,48 +231,10 @@ EOF
   install_wlan1_watchdog
 }
 
-deploy_armv6l() {
-  local bundle="$REPO_DIR/pi-image/work/repicobrew-app-armv6.tgz"
-  local node_version="20.9.0"
-  local node_url="https://unofficial-builds.nodejs.org/download/release/v${node_version}/node-v${node_version}-linux-armv6l.tar.gz"
-
-  if [ ! -f "$bundle" ]; then
-    echo "Missing $bundle — run pi-image/extract-app.sh against a built image first." >&2
-    exit 1
-  fi
-
-  local remote_has_app
-  remote_has_app="$(ssh "$TARGET" "test -d '$APP_DIR' && echo yes || echo no")"
-  if [ "$remote_has_app" = "no" ] || [ "$FRESH" = "--fresh" ]; then
-    echo "==> Copying the app tree (node_modules with ARMv6 native modules)..."
-    scp "$bundle" "$TARGET:/tmp/repicobrew-app.tgz"
-    ssh "$TARGET" "sudo systemctl stop repicobrew.service 2>/dev/null || true; rm -rf '$APP_DIR' && tar xzf /tmp/repicobrew-app.tgz -C '$REMOTE_HOME' && rm /tmp/repicobrew-app.tgz"
-  fi
-
-  echo "==> Installing Node.js ${node_version} (ARMv6 build) if missing..."
-  ssh "$TARGET" "bash -s" <<EOF
-set -euo pipefail
-if [ ! -x /usr/local/lib/nodejs/bin/node ]; then
-  curl -fsSL "$node_url" -o /tmp/node.tar.gz
-  sudo mkdir -p /usr/local/lib/nodejs
-  sudo tar -xzf /tmp/node.tar.gz -C /usr/local/lib/nodejs --strip-components=1
-  rm /tmp/node.tar.gz
-  sudo ln -sf /usr/local/lib/nodejs/bin/node /usr/local/bin/node
-fi
-node --version
-EOF
-
-  echo "==> Syncing the production bundle..."
-  rsync -az --delete "$REPO_DIR/build/" "$TARGET:$APP_DIR/build/"
-
-  install_service
-}
-
 case "$ARCH" in
   aarch64) deploy_aarch64 ;;
-  armv6l) deploy_armv6l ;;
   *)
-    echo "Unsupported architecture '$ARCH' (expected aarch64 or armv6l)." >&2
+    echo "Unsupported architecture '$ARCH' (expected aarch64: a 64-bit Raspberry Pi OS on a Pi 3/4/5 or Zero 2 W)." >&2
     exit 1
     ;;
 esac

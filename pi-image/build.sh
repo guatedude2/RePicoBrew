@@ -6,18 +6,17 @@
 #
 # Run this INSIDE the pi-image/Dockerfile builder container (see pi-image/README.md).
 #
-# How: loop-mounts the target image's root partition and chroots into it under qemu-user
-# emulation (pi-image/chroot-provision.sh), on THIS build machine, with THIS machine's real
+# How: loop-mounts the image's root partition and chroots into it (pi-image/chroot-provision.sh) — natively when
+# this machine is arm64, under qemu-user emulation otherwise — on THIS build machine, with THIS machine's real
 # internet access. Every package install, the Node.js runtime, `pnpm install`/`build`, and the
 # Prisma-migrated (schema only, no seed data) database all happen right here, baked into the
 # image — not deferred to the Pi. (An earlier version of this script tried to do this via
 # `virt-customize --run-command`;
 # libguestfs flatly refuses to execute guest commands across a host/guest architecture mismatch,
-# which is unavoidable for a Pi image. A real chroot + qemu-arm-static has no such restriction.)
+# which is unavoidable for a Pi image. A real chroot (+ qemu-aarch64-static off-arm64) has no such restriction.)
 #
 # Usage:
-#   pi-image/build.sh --target zero-w   # Pi Zero W / Zero / 1 — 32-bit, armv6 baseline
-#   pi-image/build.sh --target pi4      # Pi 3/4/5 and CM4 — 64-bit
+#   pi-image/build.sh                   # Pi 3/4/5 and CM4 — 64-bit (--target pi4 is the same thing)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,32 +24,29 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DIR="$SCRIPT_DIR/cache"
 WORK_DIR="$SCRIPT_DIR/work"
 
-# zero-w: the last dhcpcd-based Raspberry Pi OS release (Bullseye) — scripts/setup-pi-ap.sh writes dhcpcd.conf.d
-# config and expects wpa_supplicant to be dhcpcd-managed, which every release since Bookworm (Oct 2023) replaced with
-# NetworkManager. Bullseye is past end of life (its security repository is gone from the main Debian mirror), so this
-# target may no longer build.
-BULLSEYE_DATE="2023-05-03"
-# pi4: current Raspberry Pi OS Lite (Trixie), NetworkManager-based — see chroot-provision-nm.sh.
+# Current Raspberry Pi OS Lite (Trixie), NetworkManager-based — see chroot-provision.sh. The base image (name and
+# checksum) is pinned here; bump both together to move to a newer release.
 TRIXIE_DATE="2026-09-15"
 TRIXIE_SHA256="cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5"
 
-TARGET=""
+TARGET="pi4"
 HOSTNAME="repicobrew"
 OUTPUT=""
 SKIP_DOWNLOAD=0
 GROW_BY_GB=4
 
 usage() {
-  cat <<'EOF'
-Usage: pi-image/build.sh --target <zero-w|pi4> [options]
+  cat <<'USAGE'
+Usage: pi-image/build.sh [options]
 
-  --target <zero-w|pi4>   Required. zero-w = 32-bit/armv6 (Pi Zero W/Zero/1).
-                           pi4 = 64-bit (Pi 3, 4, 5, CM4). Same image works for pi5.
+Builds the 64-bit image for Raspberry Pi 3/4/5 and CM4 (the same image works for all of them).
+
+  --target pi4            The only target (accepted for compatibility; this is the default).
   --hostname <name>       Pi hostname (default: repicobrew)
-  --output <path>         Output .img path (default: pi-image/work/repicobrew-<target>-<date>.img)
+  --output <path>         Output .img path (default: pi-image/work/repicobrew-pi4-<date>.img)
   --skip-download         Reuse a previously downloaded base image from pi-image/cache/
   --grow-by <GB>          Extra space added to the root filesystem (default: 4)
-EOF
+USAGE
 }
 
 while [ $# -gt 0 ]; do
@@ -65,57 +61,24 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# @react-router/dev AND @react-router/serve hard-require Node >=20.0.0 (confirmed by hitting that
-# exact failure with 18.20.8 — this isn't just a build-time tool requirement, `pnpm start` needs it
-# too). Pinned to an early 20.x point release deliberately: the latest (20.20.2) is compiled against
-# a newer glibc/libstdc++ (needs GLIBCXX_3.4.29/30) than Bullseye ships, and fails to even run
-# ("version `GLIBCXX_3.4.30' not found") — confirmed via `objdump -T` that 20.9.0 only needs up to
-# GLIBCXX_3.4.21, comfortably within what Bullseye provides, while still satisfying the >=20.0.0
-# floor. unofficial-builds.nodejs.org publishes genuine ARMv6 builds for this version too.
-NODE_VERSION="20.9.0"
+# @react-router/dev AND @react-router/serve hard-require Node >=20.0.0. 20.18.1 is what scripts/deploy-to-pi.sh
+# installs on a live Pi too.
+NODE_VERSION="20.18.1"
 
 case "$TARGET" in
-  zero-w)
-    ARCH="armhf"
-    OS_NAME="bullseye"
-    OS_DATE="$BULLSEYE_DATE"
-    PROVISION_SCRIPT="chroot-provision.sh"
-    BASE_FILENAME="${BULLSEYE_DATE}-raspios-bullseye-armhf-lite.img.xz"
-    BASE_SHA256="b5e3a1d984a7eaa402a6e078d707b506b962f6804d331dcc0daa61debae3a19a"
-    QEMU_STATIC_BIN="qemu-arm-static"
-    # NOT the official/NodeSource armhf build — that's compiled for ARMv7-A+NEON and crashes with
-    # "Illegal instruction" on a Zero W's real ARMv6 (ARM1176JZF-S) silicon (confirmed via
-    # `readelf -A`: Tag_CPU_arch v7 vs. this build's v6KZ). unofficial-builds.nodejs.org
-    # specifically maintains genuine ARMv6 builds for this exact hardware class.
-    NODE_TARBALL_URL="https://unofficial-builds.nodejs.org/download/release/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-armv6l.tar.gz"
-    # qemu-arm-static's default emulated CPU is a modern ARMv7-class core, NOT the Zero W's real
-    # ARM1176JZF-S — confirmed the hard way: better-sqlite3, compiled from source during this
-    # chroot's `pnpm install` under that default emulation, crashed with "Illegal instruction" at
-    # RUNTIME on real hardware (gcc's own CPU auto-detection sees whatever qemu presents, not the
-    # real target). QEMU_CPU pins the emulated CPU to `arm1176` (a real, exact model qemu-arm-static
-    # supports — see `qemu-arm-static -cpu help`) so every native addon compiled in this chroot
-    # (better-sqlite3, @stoprocent/noble) targets the actual hardware instead.
-    export QEMU_CPU="arm1176"
-    ;;
-  pi4)
-    ARCH="arm64"
-    OS_NAME="trixie"
-    OS_DATE="$TRIXIE_DATE"
-    BASE_FILENAME="${TRIXIE_DATE}-raspios-trixie-arm64-lite.img.xz"
-    BASE_SHA256="$TRIXIE_SHA256"
-    QEMU_STATIC_BIN="qemu-aarch64-static"
-    PROVISION_SCRIPT="chroot-provision-nm.sh"
-    NODE_VERSION="20.18.1"
-    # arm64/aarch64 has no ARMv6-style baseline split — the official build is fine.
-    NODE_TARBALL_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz"
-    # No equivalent baseline-mismatch risk on arm64 — leave qemu-aarch64-static's default CPU as-is.
-    export QEMU_CPU=""
-    ;;
-  "")
-    echo "Error: --target is required" >&2; usage; exit 1 ;;
+  pi4) ;;
   *)
-    echo "Error: unknown --target '$TARGET' (expected zero-w or pi4)" >&2; exit 1 ;;
+    echo "Error: unknown --target '$TARGET' (the only target is pi4)" >&2; exit 1 ;;
 esac
+
+ARCH="arm64"
+OS_NAME="trixie"
+OS_DATE="$TRIXIE_DATE"
+BASE_FILENAME="${TRIXIE_DATE}-raspios-trixie-arm64-lite.img.xz"
+BASE_SHA256="$TRIXIE_SHA256"
+QEMU_STATIC_BIN="qemu-aarch64-static"
+PROVISION_SCRIPT="chroot-provision.sh"
+NODE_TARBALL_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.gz"
 
 BASE_URL="https://downloads.raspberrypi.com/raspios_lite_${ARCH}/images/raspios_lite_${ARCH}-${OS_DATE}/${BASE_FILENAME}"
 DATE_STAMP="$(date +%Y%m%d)"
@@ -188,16 +151,11 @@ PNPM_VERSION="$(grep -o '"packageManager": *"pnpm@[^"]*"' "$REPO_DIR/package.jso
 PNPM_VERSION="${PNPM_VERSION:-9.7.1}"
 
 # --- 3b. Build the app entirely on this host, never under ARM emulation ------------------------
-# esbuild (vite's bundler, used by `pnpm build`) ships a prebuilt Go binary with no from-source
-# fallback at all — confirmed ARMv7-only via a real SIGILL once QEMU_CPU (below) correctly
-# restricted emulation to the Zero W's actual ARM1176 core. The build output itself
-# (build/client, build/server) is pure JS/CSS/HTML with no native code, so building it on this
-# host's own architecture and copying the result into the image afterward is both correct and
-# necessary — see chroot-provision.sh (still installs devDependencies for completeness, but
-# neutralizes esbuild's install-time crash since it's never actually invoked there) and
-# chroot-finish.sh (no longer runs `pnpm build` at all).
+# The build output (build/client, build/server) is pure JS/CSS/HTML with no native code, so building it on this
+# host's own architecture (fast, and no emulation on an amd64 host either) and copying the result into the image
+# afterward is both correct and simpler — see chroot-finish.sh (which no longer runs `pnpm build` at all).
 HOST_BUILD_DIR="$WORK_DIR/host-build"
-echo "==> Building app on this host's own architecture (esbuild has no working ARM build)..."
+echo "==> Building app on this host's own architecture..."
 rm -rf "$HOST_BUILD_DIR"
 cp -a "$STAGE_DIR" "$HOST_BUILD_DIR"
 (cd "$HOST_BUILD_DIR" && HUSKY=0 pnpm install && pnpm build)
@@ -265,12 +223,6 @@ cp /etc/resolv.conf "$ROOT_MNT/etc/resolv.conf"
 echo "$HOSTNAME" > "$ROOT_MNT/etc/hostname"
 sed -i "s/127.0.1.1.*/127.0.1.1\t$HOSTNAME/" "$ROOT_MNT/etc/hosts" 2>/dev/null || true
 touch "$BOOT_MNT/ssh"
-# Without this, the Zero W's GPIO serial console uses the "mini UART", whose clock is tied to the
-# CPU's core frequency and drifts under frequency scaling — producing garbled output. Also pins
-# core_freq to stabilize it. Confirmed necessary the hard way, debugging over a real UART cable.
-if [ "$TARGET" = "zero-w" ] && ! grep -q '^enable_uart=1$' "$BOOT_MNT/config.txt" 2>/dev/null; then
-  printf '\n[all]\nenable_uart=1\n' >> "$BOOT_MNT/config.txt"
-fi
 
 mount --bind /dev "$ROOT_MNT/dev"
 mount -t proc proc "$ROOT_MNT/proc"
@@ -322,4 +274,4 @@ echo "    Flash with Raspberry Pi Imager or: sudo dd if=\"$OUTPUT\" of=/dev/sdX 
 echo ""
 echo "    First boot needs NO internet and NO provisioning wait — nginx and the app are already"
 echo "    installed, built, and enabled. The 'PICOBREW' WiFi network appears shortly after boot"
-echo "    (pi4: created on first boot by repicobrew-first-boot.service; zero-w: hostapd)."
+echo "    (created on first boot by repicobrew-first-boot.service)."

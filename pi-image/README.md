@@ -5,12 +5,9 @@ fully-built, fully-migrated RePicoBrew server, with **no internet and no provisi
 at first boot.** This matters beyond convenience: this project is meant to be flashed by strangers
 (open source). Burn the image, boot the Pi, join the `PICOBREW` network.
 
-There are two targets:
-
-| Target                  | Hardware                             | Base OS                                                 | Network stack    | Provisioning script      |
-| ----------------------- | ------------------------------------ | ------------------------------------------------------- | ---------------- | ------------------------ |
-| **`pi4`** (recommended) | Pi 3/4/5, CM4 (64-bit)               | Raspberry Pi OS Lite **Trixie** (Debian 13), 2026-09-15 | NetworkManager   | `chroot-provision-nm.sh` |
-| `zero-w` (legacy)       | Pi Zero W / Zero / 1 (32-bit, ARMv6) | Raspberry Pi OS Lite **Bullseye**, 2023-05-03           | hostapd + dhcpcd | `chroot-provision.sh`    |
+It targets **Raspberry Pi 3/4/5 and CM4** (64-bit): current Raspberry Pi OS Lite (**Trixie**, Debian 13,
+pinned to a specific release in `build.sh`), which uses NetworkManager. The same image runs on all of
+them. (The 32-bit Pi Zero W/Zero/1 is no longer supported: see "Why Trixie" below.)
 
 > **Recommended: give the Pi a second connection for internet.** The `PICOBREW` access point uses the
 > Pi's built-in Wi-Fi radio, which then can't also join your home network. Plug in **Ethernet** or add a
@@ -19,40 +16,32 @@ There are two targets:
 > search, software updates, and the "internet" indicator in Settings. A USB adapter can be flaky on some
 > chipsets; the `wlan1-watchdog` service recovers it automatically, but Ethernet is the most reliable.
 
-**Status:**
-
-- **`pi4`**: builds end to end. The finished image was checked by mounting it and running the app and
-  SearXNG from inside it (Node 20.18.1, all migrations applied, the app answers, SearXNG returns JSON
-  results). It has **not yet been booted on real Pi hardware**.
-- **`zero-w`**: last built in Sep 2026 before the Trixie port. Bullseye is past end of life and its
-  security packages are gone from the main Debian mirror (`apt-get install` fails on them), so this
-  target likely no longer builds as-is. See "Why two targets" below.
+**Status:** builds end to end. The finished image was checked by mounting it and running the app and SearXNG
+from inside it (Node 20.18.1, all migrations applied, the app answers, SearXNG returns JSON results). It has
+**not yet been booted on real Pi hardware**.
 
 ## How it works: everything is baked in at build time, not first boot
 
 `build.sh` runs inside a small Linux container (see `Dockerfile`) on **this build machine, with
 this machine's real internet access** — not on the Pi, and not in an emulated boot. It:
 
-1. Downloads Raspberry Pi OS **Lite, Bullseye** (2023-05-03) for the target architecture and grows
-   the image (+4GiB by default) to leave room for `node_modules`.
+1. Downloads Raspberry Pi OS **Lite, Trixie, arm64** (the release pinned in `build.sh`, checksum-verified) and
+   grows the image (+4GiB by default) to leave room for `node_modules` and SearXNG.
 2. Loop-mounts the image's partitions directly (`losetup` + `kpartx` — the latter because a
    container has no running `udevd` to create `/dev/loop0pN` partition device nodes on its own).
-3. `chroot`s into the mounted root partition and runs the target's provisioning script inside it
-   (`chroot-provision-nm.sh` for `pi4`, `chroot-provision.sh` for `zero-w`). Under
-   **`qemu-arm-static`/`qemu-aarch64-static`** (real CPU emulation) when the build host is a different
-   architecture; **natively, with no emulation**, when the host is already arm64 (e.g. Docker on an
-   Apple Silicon Mac building `pi4`) — much faster. For `pi4` it installs nginx and the build/Bluetooth
-   headers, an architecture-correct Node.js, pnpm via corepack, the `pi` login, the network wrapper
-   scripts and sudo rules, the systemd services, the app's dependencies, and **SearXNG** (the AI
-   Brewmaster's private web search). It mirrors what `scripts/deploy-to-pi.sh` does to a stock Pi, so
-   an image and a deployed Pi end up the same. `zero-w` additionally sets up hostapd/dnsmasq and
-   compiles the native addons from source under ARMv6 emulation.
+3. `chroot`s into the mounted root partition and runs `chroot-provision.sh` inside it: under
+   **`qemu-aarch64-static`** (CPU emulation) when the build host isn't arm64, or **natively, with no
+   emulation**, when it is (e.g. Docker on an Apple Silicon Mac, or GitHub's arm64 runners) — much faster. It
+   installs nginx and the build/Bluetooth headers, Node.js, pnpm via corepack, the `pi` login, the network
+   wrapper scripts and sudo rules, the systemd services, the app's dependencies, and **SearXNG** (the AI
+   Brewmaster's private web search). It mirrors what `scripts/deploy-to-pi.sh` does to a stock Pi, so an
+   image and a deployed Pi end up the same.
 4. Runs `prisma generate` and `prisma migrate deploy` **on the build host itself**, directly
    against the mounted image — not in the chroot. See "Why Prisma runs on the host" below.
-5. `chroot`s back in a second time (`chroot-finish.sh`) to run `prisma db seed` and `pnpm build`,
-   which do need the emulated ARM environment.
-6. Copies the finished, fully-built app into the image, cleans up build-only artifacts
-   (`qemu-*-static`, apt cache, `resolv.conf`), and unmounts everything.
+5. Builds the production bundle (`pnpm build`) on the build host too, copies it into the image, then
+   `chroot`s back in a second time (`chroot-finish.sh`) to clean the apt cache. No seed data is loaded: the
+   image ships an empty, migrated database so there is no shared default admin login.
+6. Cleans up build-only artifacts (`qemu-*-static`, `resolv.conf`) and unmounts everything.
 
 There is no first-boot provisioning step left at all — `chroot-provision.sh`/`chroot-finish.sh`
 never run on the Pi, only during this build.
@@ -74,52 +63,28 @@ code on the host's own architecture.
 
 ## Why Prisma's `generate`/`migrate deploy` run on the build host, not in the chroot
 
-Prisma publishes native engine binaries only for `amd64`/`arm64` Linux — **32-bit ARM
-(`linux-arm`, the Pi Zero W's actual architecture) has no published binary at all**, confirmed by
-a hard 404 fetching both the query-engine and the schema-engine. The schema's
-`generator client { engineType = "client" }` setting (see `prisma/schema.prisma`) avoids the
-_query_-engine download entirely — the generated client is pure JS+WASM, used only through the
-`@prisma/adapter-better-sqlite3` driver adapter at runtime — but the `prisma` CLI itself still
-resolves a schema-engine binary on startup for `generate`/`migrate`/`db seed`, regardless of that
-setting.
+The schema's `generator client { engineType = "client" }` setting (see `prisma/schema.prisma`) means the
+generated client is pure JS+WASM, used only through the `@prisma/adapter-better-sqlite3` driver adapter at
+runtime, so its output doesn't depend on the architecture that produced it. `prisma generate` and
+`prisma migrate deploy` therefore run on the build host's own architecture, writing directly into the mounted
+image at `$ROOT_MNT/home/pi/RePicoBrew`, instead of inside the chroot. On an arm64 host that is no different
+from the chroot; on an amd64 host it avoids running Prisma's schema engine under CPU emulation. The
+`postinstall` script that would run `prisma generate` is removed from the image's own `package.json` for the
+one in-chroot install (see `chroot-provision.sh`), since it would be redundant.
 
-Since the generated client output is architecture-independent (no native binary in it at all),
-`generate` and `migrate deploy` run on the build host's own architecture instead (amd64/arm64,
-both fully supported by Prisma), writing directly into the mounted image at
-`$ROOT_MNT/home/pi/RePicoBrew`. `db seed` can't follow them there — it loads the ARM-_compiled_
-`better-sqlite3` native binding through the driver adapter, so it has to run back inside the
-chroot's emulation; it also runs as `prisma exec tsx prisma/seed.ts` directly rather than
-`prisma db seed`, since the `prisma` CLI wrapper hits the same missing-schema-engine 404 for _any_
-subcommand, seed included.
+The same reasoning applies to the production bundle: `pnpm build` runs on the host and the resulting
+`build/` (pure JS/CSS/HTML) is copied into the image.
 
-## Why Node is pinned to `20.9.0` on the `zero-w` target
+## Node version and `vite.config.mts`
 
-_(Applies to `zero-w` only. The `pi4` target runs on Trixie's newer glibc and uses Node `20.18.1`, the same version `scripts/deploy-to-pi.sh` installs.)_
+`@react-router/dev` and `@react-router/serve` both hard-require Node `>=20.0.0`. The image installs Node
+`20.18.1` (the official arm64 build, the same version `scripts/deploy-to-pi.sh` installs on a live Pi); it is set
+in `build.sh` as `NODE_VERSION`.
 
-`@react-router/dev` and `@react-router/serve` both hard-require Node `>=20.0.0` — confirmed by
-hitting an actual runtime failure on Node 18. But the _latest_ Node 20.x
-(`unofficial-builds.nodejs.org`'s armv6l build) is compiled against a newer glibc/libstdc++ than
-Bullseye ships, and fails outright at startup:
-
-```
-node: /lib/arm-linux-gnueabihf/libstdc++.so.6: version `GLIBCXX_3.4.30' not found (required by node)
-```
-
-`20.9.0` (an early 20.x point release) only requires up to `GLIBCXX_3.4.21` — confirmed via
-`objdump -T` — comfortably within what Bullseye's toolchain provides, while still satisfying the
-`>=20.0.0` floor. If bumping Node ever becomes necessary, re-check this with:
-
-```bash
-docker run --rm -v /path/to/node/bin:/host repicobrew-pi-image-builder \
-  bash -c "objdump -T /host/node | grep -o 'GLIBCXX_[0-9.]*' | sort -Vu | tail -3"
-```
-
-Separately, `vite.config.ts` is named `vite.config.mts` — Vite bundles a plain `.ts` config as
-CommonJS by default (this project has no `"type": "module"`), and `require()`-ing the ESM-only
-`@tailwindcss/vite` package under CJS fails with `ERR_REQUIRE_ESM` on any Node before `require(esm)`
-support landed (Node 22.12+/20.19+, both newer than the `20.9.0` we need for glibc reasons). The
-`.mts` extension tells Vite to load the config as genuine ESM instead, sidestepping the issue
-regardless of Node version.
+Separately, `vite.config.ts` is named `vite.config.mts` — Vite bundles a plain `.ts` config as CommonJS by
+default (this project has no `"type": "module"`), and `require()`-ing the ESM-only `@tailwindcss/vite` package
+under CJS fails with `ERR_REQUIRE_ESM` on older Node versions. The `.mts` extension tells Vite to load the config
+as genuine ESM instead, sidestepping the issue regardless of Node version.
 
 ## Getting a prebuilt image (GitHub Actions)
 
@@ -153,15 +118,15 @@ emulated build.
 docker build -t repicobrew-pi-image-builder pi-image
 
 docker run --rm --privileged -v "$(pwd):/work" -w /work repicobrew-pi-image-builder \
-  pi-image/build.sh --target pi4   # or: --target zero-w (legacy)
+  pi-image/build.sh
 ```
 
-Add `--skip-download` to reuse a base image already in `pi-image/cache/`. Options: `--hostname`,
-`--output`, `--grow-by`.
+Add `--skip-download` to reuse a base image already in `pi-image/cache/`. Other options: `--hostname`,
+`--output`, `--grow-by` (`--target pi4` is accepted but is the only, default, target).
 
-`pi4` on an arm64 host runs natively and takes on the order of ten minutes (mostly downloads and
-`pnpm install`); `zero-w`, or any build under emulation, takes 20-45+ minutes. Output lands at
-`pi-image/work/repicobrew-<target>-<date>.img`. Compress it before distributing
+On an arm64 host the build runs natively and takes on the order of ten minutes (mostly downloads and
+`pnpm install`); under CPU emulation on an amd64 host expect much longer. Output lands at
+`pi-image/work/repicobrew-pi4-<date>.img`. Compress it before distributing
 (`xz -T0 -k pi-image/work/repicobrew-pi4-....img`).
 
 If a build fails partway it can leave loop devices attached inside Docker's VM, which makes the next
@@ -219,51 +184,45 @@ unless you give it a second connection:
 With neither, brewing and everything on the local network still works, but the AI features, web search
 and software updates won't. Login is `pi` / `raspberry` over SSH (enabled).
 
-**`zero-w`:** hostapd, dnsmasq, nginx and the app are enabled in the image; the AP comes up on the
-virtual `uap0` interface within normal boot time.
+## Why Trixie (and no Pi Zero W)
 
-## Why two targets
+The scripts that manage networking (`apply-ap.sh`, `apply-wifi.sh`, `wifi-client-radio.sh`,
+`wlan1-watchdog.sh`, `setup-nm-ap.sh`) all call `nmcli`, so the image needs a NetworkManager-based Raspberry
+Pi OS (Bookworm or newer, Trixie now) and creates the access point with `setup-nm-ap.sh`, exactly as a live
+deployed Pi does. An older image target based on Raspberry Pi OS Bullseye (hostapd + dhcpcd, for the 32-bit
+ARMv6 Pi Zero W) has been removed: Bullseye reached end of life in 2026 (`deb.debian.org` no longer serves
+its security packages, so even `git` fails to install), and current Raspberry Pi OS has no 32-bit ARMv6 build.
+The manual install guide (`DEPLOY_PI.md`) still describes the older hostapd-based setup for hand-installs.
 
-`scripts/setup-pi-ap.sh` (used by `zero-w`) writes `dhcpcd.conf.d` config and sets `nohook
-wpa_supplicant` — the pre-Bookworm network stack. Since **Bookworm** (Oct 2023) Raspberry Pi OS uses
-**NetworkManager**, which ignores those files and fights hostapd for `wlan0`. The scripts added since
-(`apply-ap.sh`, `apply-wifi.sh`, `wifi-client-radio.sh`, `wlan1-watchdog.sh`, `setup-nm-ap.sh`) all
-call `nmcli`, so a Bullseye image can't run them. The `pi4` target therefore builds on current
-Raspberry Pi OS (Trixie) and creates the AP with `setup-nm-ap.sh`, exactly as a live deployed Pi does.
+## What `chroot-provision.sh` does
 
-Bullseye reached end of life in 2026: `deb.debian.org` no longer serves its security packages (even
-`git` fails to install) and `archive.debian.org` doesn't have them yet. The `zero-w` target still
-points at it and will likely fail at its `apt-get` steps until it is pointed at archive mirrors or
-ported too. Trixie also has no 32-bit ARMv6 build, so a Zero W port would need its own decision.
-
-## What `chroot-provision-nm.sh` does differently from the Bullseye script
-
-- No `dist-upgrade` (the base is recent; upgrading kernel packages in a chroot triggers initramfs
-  rebuilds for no benefit), and no hostapd/dnsmasq/dhcpcd/`uap0` machinery.
+- Installs nginx, git, build tools and the Bluetooth headers. It does not run `dist-upgrade` (the base is
+  recent, and upgrading kernel packages in a chroot triggers initramfs rebuilds for no benefit).
 - The base image's `pi` user has no password and a `nologin` shell, plus a first-boot user wizard
-  (`userconfig.service`) and cloud-init. The script gives `pi` a `bash` shell and the `raspberry`
-  password, masks the wizard, disables cloud-init and enables SSH, so the image works headless.
-- Python 3.13 is already on the image, so SearXNG installs unpinned with the system Python (older
-  Bullseye has 3.9, which current SearXNG doesn't support). `scripts/setup-searxng.sh` takes
-  `SKIP_SERVICE_START=1` for this chroot case: it enables the service by symlink and starts it on
-  first boot. The app finds it at `http://127.0.0.1:8888` by default (`SEARXNG_URL` overrides it).
-- `resolv.conf` is a symlink into `/run` on NetworkManager releases (dangling in a chroot), so
-  `build.sh` swaps in the host's file for the build and restores the symlink afterwards. (The
-  Trixie base image ships none; NetworkManager creates it at boot.)
+  (`userconfig.service`) and cloud-init. The script gives `pi` a `bash` shell and the `raspberry` password,
+  masks the wizard, disables cloud-init and enables SSH, so the image works headless.
+- Python 3.13 is already on the image, so SearXNG installs with the system Python (current SearXNG needs
+  Python 3.10+). `scripts/setup-searxng.sh` takes `SKIP_SERVICE_START=1` for this chroot case: it enables the
+  service by symlink and it starts on first boot. The app finds it at `http://127.0.0.1:8888` by default
+  (`SEARXNG_URL` overrides it).
+- `resolv.conf` is a symlink into `/run` on NetworkManager releases (dangling in a chroot), so `build.sh` swaps
+  in the host's file for the build and restores the symlink afterwards. (The Trixie base image ships none;
+  NetworkManager creates it at boot.)
+- The access point can't be created in a chroot (no NetworkManager or radio), so `repicobrew-first-boot.service`
+  does it on first boot; see "First boot".
 
 ## Known risks / what's been verified
 
-- **`pi4`, verified**: the whole pipeline builds; the image mounts; the `pi` login, sudo rules,
+- **Verified**: the whole pipeline builds; the image mounts; the `pi` login, sudo rules,
   network scripts, nginx config and the app/SearXNG systemd units are in place; Node 20.18.1 runs;
   the database has the full schema; the app and SearXNG both start and answer from inside the image
   (checked in an overlay so the image itself wasn't modified).
-- **`pi4`, not verified**: a real boot on Pi hardware, and any internet path (Ethernet or a USB Wi-Fi
+- **Not verified**: a real boot on Pi hardware, and any internet path (Ethernet or a USB Wi-Fi
   adapter, see above). In particular the first-boot AP creation
   (`first-boot-ap.sh` → `setup-nm-ap.sh`) has only been exercised on a live Pi, never from a fresh
   image, and the Wi-Fi country/rfkill handling is untested on first boot. Check
   `journalctl -u repicobrew-first-boot -u NetworkManager -u repicobrew` over SSH if `PICOBREW`
   doesn't appear.
-- **`zero-w`**: see the status note above; the Bullseye end-of-life makes it likely broken.
 - **Default login** is `pi` / `raspberry`. Raspberry Pi OS ships no working default password, so the
   provisioning scripts set it; change it on any Pi that isn't on a private network.
 - **No KVM on Docker Desktop/OrbStack (Apple Silicon)**: the image resize step (`virt-resize`) runs

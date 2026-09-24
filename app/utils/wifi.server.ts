@@ -60,12 +60,8 @@ function scanRadio(): string {
 }
 
 // Real Wi-Fi scanning only makes sense on the actual Pi hardware this server runs on. Uses
-// `wpa_cli` against wlan0's own wpa_supplicant control socket rather than `nmcli` — this image is
-// deliberately built on Bullseye (see pi-image/README.md) *because* Bookworm's default
-// NetworkManager fights hostapd for wlan0, so nmcli was never actually installed here and this
-// call always silently failed on real hardware. `wpa_cli` needs no extra privilege as long as `pi`
-// is in the `netdev` group (granted alongside `ctrl_interface_group=netdev` in
-// scripts/network/apply-wifi.sh's wpa_supplicant.conf). Any failure (wpa_supplicant not running
+// `wpa_cli` against the radio's own wpa_supplicant control socket rather than `nmcli`. `wpa_cli` needs no
+// extra privilege as long as `pi` is in the `netdev` group (the Pi image adds it). Any failure (wpa_supplicant not running
 // yet, no adapter, scan timeout) falls back to an empty list so the Wi-Fi setup step just drops to
 // manual SSID entry instead of erroring the whole wizard.
 export async function listNearbyNetworks(): Promise<NearbyNetwork[]> {

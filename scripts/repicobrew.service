@@ -1,5 +1,5 @@
 # Reference copy — scripts/deploy-to-pi.sh installs this unit with the deploy user and app directory filled in;
-# the Raspberry Pi image build (pi-image/chroot-provision-nm.sh) installs it as-is.
+# the Raspberry Pi image build (pi-image/chroot-provision.sh) installs it as-is.
 [Unit]
 Description=RePicoBrew Server
 Documentation=https://github.com/guatedude2/RePicoBrew

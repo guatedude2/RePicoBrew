@@ -4,7 +4,7 @@ Deploy RePicoBrew on a Raspberry Pi as a WiFi Access Point that spoofs `picobrew
 
 ## Prerequisites
 
-- Raspberry Pi (Zero W, 3, 4, or 5) running Raspberry Pi OS (Debian-based)
+- Raspberry Pi (3, 4, or 5) running Raspberry Pi OS (Debian-based)
 - WiFi adapter (built-in on most models)
 - Ethernet or second WiFi adapter for internet connectivity (optional, for initial setup)
 - Node.js 20+ and pnpm installed
@@ -354,7 +354,7 @@ RePicoBrew can monitor Tilt wireless hydrometers during fermentation using Bluet
 
 ### Prerequisites
 
-- Raspberry Pi with Bluetooth support (Pi 3, 4, 5, or Zero W)
+- Raspberry Pi with Bluetooth support (Pi 3, 4, or 5)
 - Tilt Hydrometer (any color)
 - Bluetooth enabled on the Pi
 
