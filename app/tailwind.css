@@ -131,3 +131,8 @@ body {
 .page-loader-bar {
   animation: page-loader-slide 1.1s ease-in-out infinite;
 }
+
+/* The three-dot ChartMenu replaces ApexCharts' icon toolbar; the toolbar stays in the DOM so the menu can drive it. */
+.chart-menu-host .apexcharts-toolbar {
+  display: none !important;
+}

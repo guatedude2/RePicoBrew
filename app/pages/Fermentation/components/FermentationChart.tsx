@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
+import { ChartMenu } from '~/components/charts/ChartMenu';
 import { Chart } from '~/components/charts/Chart.client';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
@@ -141,7 +142,9 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
       {data.length === 0 ? (
         <div className="py-8 text-center text-ink-text-faint">Waiting for first reading...</div>
       ) : (
-        <ClientOnly>{() => <Chart options={chartOptions} series={series} type="line" height={350} />}</ClientOnly>
+        <ChartMenu>
+          <ClientOnly>{() => <Chart options={chartOptions} series={series} type="line" height={350} />}</ClientOnly>
+        </ChartMenu>
       )}
     </div>
   );

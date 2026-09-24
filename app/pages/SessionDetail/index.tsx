@@ -23,6 +23,7 @@ import { Card } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
 import { Select } from '~/components/ui/select';
 import { Spinner } from '~/components/ui/spinner';
+import { ChartMenu } from '~/components/charts/ChartMenu';
 import { BrewingAnimation, Phase } from '~/components/BrewingAnimation/BrewingAnimation';
 import { Chart } from '~/components/charts/Chart.client';
 import { ClientOnly } from 'remix-utils/client-only';
@@ -846,7 +847,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </div>
           )}
           {combinedWort.length > 0 && (
-            <div style={{ height: `${brewChartBoxHeight}px` }}>
+            <ChartMenu style={{ height: `${brewChartBoxHeight}px` }}>
               <ClientOnly>
                 {() => (
                   <Chart
@@ -941,7 +942,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
                   />
                 )}
               </ClientOnly>
-            </div>
+            </ChartMenu>
           )}
 
           <div className="flex flex-wrap gap-6 text-xs text-ink-text-faint">
