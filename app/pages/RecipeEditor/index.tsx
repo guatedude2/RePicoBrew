@@ -656,6 +656,17 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
         )}
         {readOnly && recipe && <RecipeActionsMenu recipe={{ id: recipe.id, name: recipe.name }} />}
         {!readOnly && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isSubmitting}
+            onClick={() => navigate(recipe ? `/recipes/${recipe.id}` : '/recipes')}
+          >
+            Cancel
+          </Button>
+        )}
+        {!readOnly && (
           <Button type="submit" form={RECIPE_FORM_ID} variant="brand" size="sm" disabled={hasErrors || isSubmitting}>
             {isSubmitting ? 'Saving…' : 'Save Recipe'}
           </Button>
