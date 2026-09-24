@@ -19,3 +19,8 @@ prisma/*.db-shm
 # .img files (multiple GB) — never meant to be committed, see pi-image/README.md.
 /pi-image/cache
 /pi-image/work
+
+# Local secrets and data dumps — never commit these (connection strings, user tables, request logs).
+/prisma/conn.txt
+/prisma/users-backup-*.sql
+*.log
