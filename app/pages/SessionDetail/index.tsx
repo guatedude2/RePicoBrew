@@ -598,6 +598,8 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
   const timeFormat = useTimeFormat();
   const [aiAdviceList, setAiAdviceList] = useState<AiAdviceRow[]>(aiAdvice);
+  // Pick up advice that arrived via a data reload (e.g. right after Ask AI finishes).
+  useEffect(() => setAiAdviceList(aiAdvice), [aiAdvice]);
   useServerSideEvent<{ batchId: number; advice: AiAdviceRow }>('ai-advice-ready', (data) => {
     if (data.batchId === batch.id) {
       setAiAdviceList((prev) => [data.advice, ...prev]);
