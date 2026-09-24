@@ -61,10 +61,11 @@ jobs:
         id: pack
         run: |
           cd pi-image/work
+          # The builder container ran as root, so everything here is root-owned; take it over first.
+          sudo chown -R "$(id -u):$(id -g)" .
           # Scratch from the build; not needed and takes disk.
-          sudo rm -rf host-build repo-stage
-          sudo xz -T0 -3 "${{ steps.build.outputs.name }}.img"
-          sudo chown "$USER" ./*.xz
+          rm -rf host-build repo-stage
+          xz -T0 -3 "${{ steps.build.outputs.name }}.img"
           sha256sum "${{ steps.build.outputs.name }}.img.xz" > "${{ steps.build.outputs.name }}.img.xz.sha256"
           ls -lh ./*.xz
           echo "size=$(stat -c%s "${{ steps.build.outputs.name }}.img.xz")" >> "$GITHUB_OUTPUT"
