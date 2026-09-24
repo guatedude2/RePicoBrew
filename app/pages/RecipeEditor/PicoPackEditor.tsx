@@ -4,6 +4,7 @@ import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-i
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
 import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
 import { RecipeActionsMenu } from '~/components/recipes/RecipeActionsMenu';
+import { StyleSelect } from '~/components/recipe-editor/StyleSelect';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
@@ -505,10 +506,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   </div>
                   <div className="min-w-[200px] flex-1">
                     <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Style</p>
-                    <Input
+                    <StyleSelect
                       value={style}
-                      onChange={(e) => setStyle(e.target.value)}
-                      placeholder="Double IPA"
+                      onChange={setStyle}
                       className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
                     />
                   </div>

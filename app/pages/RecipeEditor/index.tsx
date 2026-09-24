@@ -2,6 +2,7 @@ import { Form, Link, useNavigate, useNavigation } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
+import { StyleSelect } from '~/components/recipe-editor/StyleSelect';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
@@ -906,9 +907,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 {readOnly ? (
                   <FieldValue>{style || '—'}</FieldValue>
                 ) : (
-                  <Input
+                  <StyleSelect
                     value={style}
-                    onChange={(e) => setStyle(e.target.value)}
+                    onChange={setStyle}
                     className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
                   />
                 )}
