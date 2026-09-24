@@ -175,9 +175,16 @@ chroot), so the network appears a little after boot rather than instantly. Then 
 the Setup wizard/Settings. To use another country, set `WIFI_COUNTRY` in that unit or run
 `sudo raspi-config` (Localisation Options).
 
-The access point occupies the Pi's built-in Wi-Fi radio (NetworkManager hotspot mode), so for
-**internet** (AI features, web search, updates) the Pi needs Ethernet or a second, USB Wi-Fi radio,
-which Settings uses as the client radio. Login is `pi` / `raspberry` over SSH (enabled).
+**Internet: use Ethernet or a USB Wi-Fi adapter (recommended).** The access point occupies the Pi's
+built-in Wi-Fi radio (NetworkManager hotspot mode), so the Pi has no way to reach the internet on its own
+unless you give it a second connection:
+
+- **Ethernet** — the simplest and most reliable; it works with no configuration.
+- **A USB Wi-Fi adapter** — it is picked up automatically as the client radio; join your home network
+  from the Setup wizard or Settings → Wi-Fi.
+
+With neither, brewing and everything on the local network still works, but the AI features, web search
+and software updates won't. Login is `pi` / `raspberry` over SSH (enabled).
 
 **`zero-w`:** hostapd, dnsmasq, nginx and the app are enabled in the image; the AP comes up on the
 virtual `uap0` interface within normal boot time.
@@ -217,7 +224,8 @@ ported too. Trixie also has no 32-bit ARMv6 build, so a Zero W port would need i
   network scripts, nginx config and the app/SearXNG systemd units are in place; Node 20.18.1 runs;
   the database has the full schema; the app and SearXNG both start and answer from inside the image
   (checked in an overlay so the image itself wasn't modified).
-- **`pi4`, not verified**: a real boot on Pi hardware. In particular the first-boot AP creation
+- **`pi4`, not verified**: a real boot on Pi hardware, and any internet path (Ethernet or a USB Wi-Fi
+  adapter, see above). In particular the first-boot AP creation
   (`first-boot-ap.sh` → `setup-nm-ap.sh`) has only been exercised on a live Pi, never from a fresh
   image, and the Wi-Fi country/rfkill handling is untested on first boot. Check
   `journalctl -u repicobrew-first-boot -u NetworkManager -u repicobrew` over SSH if `PICOBREW`
