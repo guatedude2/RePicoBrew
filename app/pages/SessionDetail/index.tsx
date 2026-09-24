@@ -865,7 +865,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
                           show: true,
                           autoSelected: 'zoom',
                           tools: {
-                            download: false,
+                            download: true,
                             selection: false,
                             zoom: true,
                             zoomin: true,
