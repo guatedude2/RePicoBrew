@@ -1,0 +1,109 @@
+name: Build Raspberry Pi image
+
+# Builds the ready-to-flash Pi 4 image (pi-image/build.sh --target pi4) and publishes it as a downloadable
+# artifact. Heavy (roughly 10-20 minutes and ~15GB of disk), so it only runs on demand or for a version tag:
+#   - Actions -> "Build Raspberry Pi image" -> Run workflow   (artifact only, kept 14 days)
+#   - pushing a tag like v1.2.0                                (artifact + attached to a GitHub release)
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner label. ubuntu-24.04-arm builds natively (fast); ubuntu-latest works but emulates arm64 (much slower).'
+        default: ubuntu-24.04-arm
+        required: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # attach the image to a release on tag builds
+
+concurrency:
+  group: pi-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-pi4:
+    name: Build pi4 image
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # The image, its base and Docker's layers need ~15GB; hosted runners ship with a lot of tooling we don't use.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: Cache the Raspberry Pi OS base image
+        uses: actions/cache@v4
+        with:
+          path: pi-image/cache
+          # The base image (name + checksum) is pinned in build.sh, so its hash keys the cache.
+          key: raspios-base-${{ hashFiles('pi-image/build.sh') }}
+
+      - name: Build the image builder container
+        run: docker build -t repicobrew-pi-image-builder pi-image
+
+      - name: Build the image
+        id: build
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then VERSION="${{ github.ref_name }}"; else VERSION="${GITHUB_SHA::7}"; fi
+          NAME="repicobrew-pi4-${VERSION}"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          # --grow-by 3 keeps the image (and the runner's disk use) smaller than the 4GB local default.
+          docker run --rm --privileged -v "$PWD:/work" -w /work repicobrew-pi-image-builder \
+            pi-image/build.sh --target pi4 --skip-download --grow-by 3 --output "/work/pi-image/work/${NAME}.img"
+
+      - name: Compress and checksum
+        id: pack
+        run: |
+          cd pi-image/work
+          # Scratch from the build; not needed and takes disk.
+          sudo rm -rf host-build repo-stage
+          sudo xz -T0 -3 "${{ steps.build.outputs.name }}.img"
+          sudo chown "$USER" ./*.xz
+          sha256sum "${{ steps.build.outputs.name }}.img.xz" > "${{ steps.build.outputs.name }}.img.xz.sha256"
+          ls -lh ./*.xz
+          echo "size=$(stat -c%s "${{ steps.build.outputs.name }}.img.xz")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.name }}
+          path: |
+            pi-image/work/${{ steps.build.outputs.name }}.img.xz
+            pi-image/work/${{ steps.build.outputs.name }}.img.xz.sha256
+          compression-level: 0 # already xz-compressed
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Attach to the GitHub release (tag builds)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SIZE: ${{ steps.pack.outputs.size }}
+        run: |
+          # GitHub caps a release asset at 2GiB.
+          if [ "$SIZE" -ge 2147483648 ]; then
+            echo "::warning::Image is $SIZE bytes, over the 2GiB release-asset limit; it is only available as a workflow artifact."
+            exit 0
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" \
+            "pi-image/work/${{ steps.build.outputs.name }}.img.xz" \
+            "pi-image/work/${{ steps.build.outputs.name }}.img.xz.sha256" --clobber
+
+      - name: Summary
+        run: |
+          {
+            echo "### Raspberry Pi 4 image: \`${{ steps.build.outputs.name }}.img.xz\`"
+            echo
+            echo "Download it from the **Artifacts** section below (or the release, for tag builds), then flash it with"
+            echo "[Raspberry Pi Imager](https://www.raspberrypi.com/software/): **Choose OS → Use custom** and pick the"
+            echo "\`.img.xz\` file (no need to decompress it). When Imager offers OS customisation, choose **No** —"
+            echo "the image is already set up. See \`pi-image/README.md\` for first boot details."
+          } >> "$GITHUB_STEP_SUMMARY"

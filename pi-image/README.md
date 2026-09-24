@@ -121,6 +121,23 @@ support landed (Node 22.12+/20.19+, both newer than the `20.9.0` we need for gli
 `.mts` extension tells Vite to load the config as genuine ESM instead, sidestepping the issue
 regardless of Node version.
 
+## Getting a prebuilt image (GitHub Actions)
+
+The **Build Raspberry Pi image** workflow (`.github/workflows/build-pi-image.yml`) builds the `pi4` image
+and publishes it, so you don't need Docker or a build machine:
+
+- **On demand:** GitHub → **Actions → Build Raspberry Pi image → Run workflow**. When it finishes, download
+  `repicobrew-pi4-<commit>` from the run's **Artifacts** section (kept 14 days). The download is a ZIP
+  containing `…img.xz` and a `.sha256` file.
+- **On a release:** pushing a version tag (`git tag v1.2.0 && git push origin v1.2.0`) runs it and also attaches
+  the image to that tag's GitHub release, where it doesn't expire.
+
+Downloading needs a GitHub login with access to this repository. Then flash the `.img.xz` with
+[Raspberry Pi Imager](https://www.raspberrypi.com/software/) as described under "Usage" below. A compressed
+image is about 1.3GB. The workflow builds natively on GitHub's arm64 runner (`ubuntu-24.04-arm`); the
+"runner" input can be set to `ubuntu-latest` if arm64 runners aren't available, at the cost of a much slower
+emulated build.
+
 ## Prerequisites
 
 - Docker (or anything Docker-compatible — this was built and tested against OrbStack).
@@ -155,13 +172,22 @@ docker run --rm --privileged repicobrew-pi-image-builder bash -c \
   'for l in $(losetup -a | cut -d: -f1); do kpartx -d $l; done; dmsetup remove_all; losetup -D'
 ```
 
-**Flash with Raspberry Pi Imager** (Choose OS → Use custom, leave "Verify" on). Imager reads the
-card back after writing, which `dd` never does. On real hardware, an image written with plain `dd`
-(to a card that had also been hard-power-cycled a few times) ran unusably slowly — SSH logins taking
-minutes, an interactive shell stalling for minutes on trivial commands, `vmstat` showing ~99% I/O
-wait — while the identical image re-flashed with Imager on the same card was fast. The cause wasn't
-pinned down (an unverified bad write and accumulated filesystem damage from the power cuts are both
-plausible), so prefer Imager.
+**Flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/)** — download it for macOS, Windows
+or Linux from https://www.raspberrypi.com/software/ (recommended). Steps:
+
+1. **Choose Device** (Raspberry Pi 4/5/…), then **Choose OS → Use custom** and pick the `.img.xz` (or `.img`) file.
+   Imager decompresses `.xz` itself, so there's no need to unpack it first.
+2. **Choose Storage** (your SD card / USB drive) and click **Next**.
+3. When Imager offers **OS customisation** (hostname, user, Wi-Fi, SSH), choose **No / skip**. The image is
+   already set up (see "First boot"), and it doesn't use cloud-init, so those settings wouldn't be applied
+   anyway.
+4. Leave **Verify** on. Imager reads the card back after writing, which `dd` never does.
+
+On real hardware, an image written with plain `dd` (to a card that had also been hard-power-cycled a few
+times) ran unusably slowly — SSH logins taking minutes, an interactive shell stalling for minutes on trivial
+commands, `vmstat` showing ~99% I/O wait — while the identical image re-flashed with Imager on the same card
+was fast. The cause wasn't pinned down (an unverified bad write and accumulated filesystem damage from the
+power cuts are both plausible), so prefer Imager.
 
 If you do use `dd`, at least check the result, and use the raw device on macOS (`/dev/rdiskX`, much
 faster than the buffered `/dev/diskX`):
