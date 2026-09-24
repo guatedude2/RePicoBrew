@@ -37,7 +37,7 @@ RePicoBrew already implements most of the Pico machine wire protocol under [`app
 - Networking: Pi runs WiFi AP + dnsmasq (reference-style `PICOBREW` network); `picobrew.com` → Pi
 - Recipes: full list + create/edit in Phase 1 (before first real brew)
 
-**Out of scope (later phases):** Zymatic/ZSeries/PicoStill, Tilt/iSpindel/PicoFerm, cloud recipe import from old PicoBrew servers, i18n redesign
+**Out of scope (later phases — see Phases 3–5):** PicoStill, Zymatic, Z Series, Tilt/iSpindel/PicoFerm, cloud recipe import from old PicoBrew servers, i18n redesign
 
 ---
 
@@ -334,11 +334,90 @@ For detailed stage-by-stage implementation notes, see [Phase 2 plan](/.cursor/pl
 
 ---
 
-# Phase 3: TBD
+# Phase 3: PicoStill
+
+Smallest of the remaining machines, so it goes first. Per the reference server (`chiefwigms/picobrew_pico`, `routes_picostill_api.py`): a firmware-address route (`GET /API/PicoStill/getFirmwareAddress`) and a firmware file route (`/firmware/picostill/<file>`); live session data rides on the Pico session protocol we already serve, and the optional internal sensors (T1–T4, pressure) are polled separately (`still_polling.py`).
+
+**Gate before starting:** a PicoStill (or a capture of its traffic) to test against. Verify the details above against real traffic before building on them.
+
+## Stage 0 — Capture + fixtures
+
+- Record a real PicoStill boot/registration/session (or reuse reference captures) and save them as test fixtures.
+
+## Stage 1 — Machine-facing API
+
+- `api.picostill.getFirmwareAddress.ts` and the firmware file route (same shape as the existing `api.picoferm.*` routes; responses through `picoResponse()` so `Content-Length` is always set).
+- Device detection/registration: reuse `DiscoveredDevice`; add the `PICOSTILL` device type.
+
+## Stage 2 — Distillation sessions
+
+- New `SessionType` for distillation; session lifecycle + logging using the existing Pico session routes.
+- Optional sensor polling (T1–T4, pressure) behind a Settings toggle.
+
+## Stage 3 — UI
+
+- Settings → Devices pairing/icon/manual for the new type; New Session device picker; live distillation view with sensor charts (reuse `ChartMenu` / sampled log endpoint).
+
+---
+
+# Phase 4: Zymatic
+
+Older step-filter machine with a small HTTP API (per `routes_zymatic_api.py`, ~10 routes: `/API/usersetup`, `firstSetup`, `zymaticFirmwareCheck`, `SyncUser`, `checksync`, `recoversession`, `sessionerror`, `logsession`, …). Recipes appear to be pushed to the machine through the sync routes.
+
+**Gate before starting:** a Zymatic (or captured traffic). Confirm the recipe sync format against real traffic first.
+
+## Stage 0 — Capture + fixtures
+
+## Stage 1 — Machine-facing API
+
+- The routes above under `app/routes/api.*` (fs-routes), with `picoResponse()`-style explicit `Content-Length`; firmware check endpoint.
+
+## Stage 2 — Recipe format
+
+- Convert app recipes to/from the Zymatic recipe/step format on sync; validation rules for the Zymatic step ranges (analogous to `pico-recipe-validation.ts`). The ZPack editor already holds the brew-science data; Zymatic needs the machine steps generated from it.
+
+## Stage 3 — Sessions
+
+- Session start/recover/log/error handling mapped onto the existing `Session`/`SessionLog`/`Batch` lifecycle; error codes into `pico-error-codes.ts` (or a Zymatic equivalent).
+
+## Stage 4 — UI + AI
+
+- Device pairing, New Session picker, live brew view; extend the AI Brewmaster context for Zymatic steps.
+
+---
+
+# Phase 5: Z Series
+
+Largest machine: everything goes through one multiplexed endpoint, `/Vendors/input.cshtml` (POST/PUT/GET; ~650 lines in `routes_zseries_api.py`), plus a firmware route, with the richest sensor logging.
+
+**Gate before starting:** a Z Series and packet captures. **Known unknown:** how the Z client handles HTTPS/certificates against a local server — resolve this in Stage 0 before writing any handlers.
+
+## Stage 0 — Capture + transport
+
+- Capture a real boot/registration/brew; decide the TLS/DNS approach (nginx already fronts the app on the Pi) and fixture the message types.
+
+## Stage 1 — Message dispatcher
+
+- One route handling `/Vendors/input.cshtml` that dispatches on the message type to typed handlers; firmware route.
+
+## Stage 2 — Recipes
+
+- Z Series recipe/step format converter + validation (extends the Zymatic work where formats overlap).
+
+## Stage 3 — Sessions + sensors
+
+- Session lifecycle, full heat-sensor logging, error handling.
+
+## Stage 4 — UI + AI
+
+- Device pairing, live view with the extra sensors, AI context.
+
+---
+
+# Phase 6: TBD
 
 **Potential directions:**
 
-- Additional brewing devices (Zymatic, Z Series)
 - iSpindel WiFi hydrometer support
 - **Import from PicoBrew DB** — a new option next to "New Recipe" on `/recipes` (`app/routes/_admin.recipes._index.tsx`) that opens a searchable, paginated grid of existing PicoBrew recipes to import, with an Official/Community toggle.
   - **Data source**: [Justin-Credible/picobrew-recipes](https://github.com/Justin-Credible/picobrew-recipes) (a community mirror of PicoBrew Inc.'s own public recipe library, kept alive after PicoBrew's servers were expected to disappear). Structure: `data/recipe-list-official.json` (234 recipes) and `data/recipe-list-community.json` (1,320 recipes — official is a strict subset), each a lightweight index (`Name, Author, Style, OG, FG, IBU, ABV, SRM, Grains, Hops, GUID, ...`) good enough to search/sort/paginate over directly; the full recipe (ingredients, mash/boil/ferment steps) lives one-per-file in the flat `data/recipes/<GUID>.json` (1,320 files), fetched only when a user actually imports one. No LICENSE file in that repo — before shipping this, decide on an attribution approach (preserve each recipe's `Author`/`OriginalAuthor`, credit the source repo) since the underlying data is PicoBrew Inc.'s, not the mirror maintainer's to relicense.
