@@ -12,6 +12,13 @@ There are two targets:
 | **`pi4`** (recommended) | Pi 3/4/5, CM4 (64-bit)               | Raspberry Pi OS Lite **Trixie** (Debian 13), 2026-09-15 | NetworkManager   | `chroot-provision-nm.sh` |
 | `zero-w` (legacy)       | Pi Zero W / Zero / 1 (32-bit, ARMv6) | Raspberry Pi OS Lite **Bullseye**, 2023-05-03           | hostapd + dhcpcd | `chroot-provision.sh`    |
 
+> **Recommended: give the Pi a second connection for internet.** The `PICOBREW` access point uses the
+> Pi's built-in Wi-Fi radio, which then can't also join your home network. Plug in **Ethernet** or add a
+> **USB Wi-Fi adapter** (it becomes the client radio you configure in Settings → Wi-Fi). Without one the
+> brewing itself works, but everything that needs the internet doesn't: the AI Brewmaster and its web
+> search, software updates, and the "internet" indicator in Settings. A USB adapter can be flaky on some
+> chipsets; the `wlan1-watchdog` service recovers it automatically, but Ethernet is the most reliable.
+
 **Status:**
 
 - **`pi4`**: builds end to end. The finished image was checked by mounting it and running the app and
