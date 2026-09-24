@@ -19,12 +19,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # device to the appliance, which fails to launch at all with "failed to find romfile
 # efi-virtio.rom" without this — Debian's qemu-system-common doesn't ship it separately
 # (confirmed by hitting exactly this error while building this).
-# nodejs: NOT for the Pi image itself (that gets its own architecture-correct tarball — see
-# build.sh) — this runs `prisma generate`/`migrate deploy` on the build host's own native
-# architecture (amd64/arm64, both fully supported by Prisma) instead of under this container's ARM
-# emulation, where Prisma publishes no engine binary at all for 32-bit ARM (confirmed via 404s).
-# The generated client itself is pure JS+WASM (engineType="client"), so it doesn't matter which
-# machine produced it — see chroot-provision.sh/chroot-finish.sh for the split.
+# Node.js is installed separately below (from the official tarball, not apt): the host-side app build and the
+# `prisma generate`/`migrate deploy` in build.sh run on this container's own architecture, and need Node >= 20.
 # build-essential/python3: needed for the host-side `pnpm install` in build.sh to succeed at all —
 # native deps like @stoprocent/noble spawn node-gyp during install regardless of whether they'll
 # ever actually run on this host (confirmed: install hard-fails with ENOENT without these, even
@@ -41,10 +37,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       wget \
       rsync \
       ca-certificates \
-      nodejs \
       build-essential \
       python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20 (official build for this container's architecture) for the host-side build. Debian bookworm's own
+# `nodejs` is 18, which @react-router/dev refuses to run on, and which makes pnpm skip optional native packages
+# that declare `engines: node >= 20` (e.g. @tailwindcss/oxide-linux-arm64-gnu) — the build then fails with
+# "Cannot find native binding". Kept in step with NODE_VERSION in build.sh (the version installed on the Pi).
+ARG NODE_VERSION=20.18.1
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) echo "unsupported builder architecture" >&2; exit 1 ;; esac; \
+    wget -qO- "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" | tar -xJ -C /usr/local --strip-components=1; \
+    node --version
 
 # pnpm via its official standalone installer — neither npm nor corepack come with Debian's
 # `nodejs` package here (confirmed: both "not found" after installing it) — for the host-side
@@ -58,9 +63,8 @@ RUN curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/bash sh -
 # exposes it that way, but this standalone install doesn't, so it needs installing explicitly
 # (confirmed: ENOENT spawning node-gyp otherwise, even with build-essential/python3 present).
 # Pinned to v10 — latest node-gyp (v13) pulls in undici@8, which itself needs Node runtime globals
-# newer than Debian bookworm's `nodejs` package (18.20.4) provides, and crashes with
-# `ReferenceError: File is not defined` just trying to load. v10 matches what the corepack-bundled
-# copy inside the chroot already uses successfully.
+# newer than older Node releases provide, and can crash with `ReferenceError: File is not defined` just trying to
+# load. v10 matches what the corepack-bundled copy inside the chroot already uses successfully.
 RUN pnpm add -g node-gyp@10
 
 # libguestfs's supermin appliance needs a kernel it can boot under QEMU to inspect/modify the
