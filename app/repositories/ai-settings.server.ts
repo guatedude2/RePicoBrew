@@ -2,13 +2,15 @@ import { ConfigRepository } from '~/repositories/config.server';
 import { getAppSecret } from '~/services/app-secret.server';
 import { decrypt, encrypt } from '~/utils/encryption';
 
-export type AiProvider = 'openai' | 'claude' | 'opencode-zen' | 'custom';
+export type AiProvider = 'openai' | 'claude' | 'gemini' | 'opencode-zen' | 'custom';
 
 const AI_PROVIDER_CONFIG = 'AI_PROVIDER';
 const OPENAI_API_KEY_CONFIG = 'OPENAI_API_KEY';
 const OPENAI_MODEL_CONFIG = 'OPENAI_MODEL';
 const CLAUDE_API_KEY_CONFIG = 'CLAUDE_API_KEY';
 const CLAUDE_MODEL_CONFIG = 'CLAUDE_MODEL';
+const GEMINI_API_KEY_CONFIG = 'GEMINI_API_KEY';
+const GEMINI_MODEL_CONFIG = 'GEMINI_MODEL';
 const ZEN_API_KEY_CONFIG = 'OPENCODE_ZEN_API_KEY';
 const ZEN_MODEL_CONFIG = 'OPENCODE_ZEN_MODEL';
 const ZEN_PLAN_CONFIG = 'OPENCODE_ZEN_PLAN';
@@ -20,6 +22,10 @@ export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 export const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 // Anthropic's fast/cheap model — same "keep costs down" role gpt-4o-mini plays for OpenAI.
 export const CLAUDE_DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+// Google's Gemini API through its OpenAI-compatible endpoint, so it shares the chat-completions wire format. A free tier
+// (rate-limited, no card) is available with a key from https://aistudio.google.com/apikey.
+export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 // OpenCode's two subscription tiers, both under the same account/API key but different base paths
 // and model catalogs — Zen is the pay-as-you-go gateway, Go is the flat $10/mo plan.
 export type ZenPlan = 'zen' | 'go';
@@ -118,6 +124,35 @@ export class AiSettingsRepository {
     return decryptValue(value);
   }
 
+  // ---- Gemini slot ----
+  public static async hasGeminiKey(): Promise<boolean> {
+    const value = await ConfigRepository.getConfig<EncryptedValue>(GEMINI_API_KEY_CONFIG);
+    return !!value?.encryptedData;
+  }
+
+  public static async getGeminiSettings(): Promise<{ configured: boolean; model: string }> {
+    const configured = await this.hasGeminiKey();
+    const model = await ConfigRepository.getConfig<string>(GEMINI_MODEL_CONFIG);
+    return { configured, model: model ?? GEMINI_DEFAULT_MODEL };
+  }
+
+  public static async setGeminiApiKey(plainKey: string, model?: string): Promise<void> {
+    await ConfigRepository.setConfig<EncryptedValue>(GEMINI_API_KEY_CONFIG, await encryptValue(plainKey));
+    await ConfigRepository.setConfig(GEMINI_MODEL_CONFIG, model || GEMINI_DEFAULT_MODEL);
+    await this.activateProvider('gemini');
+  }
+
+  public static async clearGeminiApiKey(): Promise<void> {
+    await ConfigRepository.deleteConfig(GEMINI_API_KEY_CONFIG);
+    await ConfigRepository.deleteConfig(GEMINI_MODEL_CONFIG);
+    await this.reconcileActiveProvider('gemini');
+  }
+
+  public static async getGeminiApiKeyPlain(): Promise<string | null> {
+    const value = await ConfigRepository.getConfig<EncryptedValue>(GEMINI_API_KEY_CONFIG);
+    return decryptValue(value);
+  }
+
   // ---- OpenCode (Zen or Go plan) slot ----
   // Zen's free models don't need an API key, so "configured" means a plan was saved, with or without a key.
   public static async getZenSettings(): Promise<{
@@ -207,9 +242,10 @@ export class AiSettingsRepository {
     if (current !== justCleared) {
       return;
     }
-    const [hasOpenAi, hasClaude, zen, custom] = await Promise.all([
+    const [hasOpenAi, hasClaude, hasGemini, zen, custom] = await Promise.all([
       this.hasOpenAiKey(),
       this.hasClaudeKey(),
+      this.hasGeminiKey(),
       this.getZenSettings(),
       this.getCustomSettings(),
     ]);
@@ -217,6 +253,8 @@ export class AiSettingsRepository {
       await this.activateProvider('openai');
     } else if (justCleared !== 'claude' && hasClaude) {
       await this.activateProvider('claude');
+    } else if (justCleared !== 'gemini' && hasGemini) {
+      await this.activateProvider('gemini');
     } else if (justCleared !== 'opencode-zen' && zen.configured) {
       await this.activateProvider('opencode-zen');
     } else if (justCleared !== 'custom' && custom.configured) {
@@ -253,6 +291,14 @@ export class AiSettingsRepository {
       }
       const model = (await ConfigRepository.getConfig<string>(CLAUDE_MODEL_CONFIG)) ?? CLAUDE_DEFAULT_MODEL;
       return { kind: 'claude', apiKey, model };
+    }
+    if (provider === 'gemini') {
+      const apiKey = await this.getGeminiApiKeyPlain();
+      if (!apiKey) {
+        return null;
+      }
+      const model = (await ConfigRepository.getConfig<string>(GEMINI_MODEL_CONFIG)) ?? GEMINI_DEFAULT_MODEL;
+      return { kind: 'chat-completions', baseUrl: GEMINI_BASE_URL, apiKey, model };
     }
     if (provider === 'opencode-zen') {
       const zen = await this.getZenSettings();

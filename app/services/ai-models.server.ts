@@ -1,4 +1,4 @@
-import { OPENAI_BASE_URL } from '~/repositories/ai-settings.server';
+import { GEMINI_BASE_URL, OPENAI_BASE_URL } from '~/repositories/ai-settings.server';
 
 const CLAUDE_MODELS_URL = 'https://api.anthropic.com/v1/models';
 
@@ -68,4 +68,16 @@ export async function verifyChatCompletionsAccess(baseUrl: string, apiKey: strin
   if (!response.ok) {
     throw new Error(`Endpoint returned an error (${response.status}).`);
   }
+}
+
+// Gemini's OpenAI-compatible /models lists ids as "models/gemini-2.5-flash" alongside embedding, image, video and
+// speech models; only the chat-capable Gemini ones are offered, without the "models/" prefix chat requests use.
+const GEMINI_NON_CHAT_PATTERN = /embedding|tts|image|imagen|veo|live|audio|aqa|robotics|computer-use/i;
+
+export async function listGeminiModels(apiKey: string): Promise<string[]> {
+  const ids = await listChatCompletionsModels(GEMINI_BASE_URL, apiKey);
+  return ids
+    .map((id) => id.replace(/^models\//, ''))
+    .filter((id) => id.startsWith('gemini') && !GEMINI_NON_CHAT_PATTERN.test(id))
+    .sort();
 }

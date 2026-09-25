@@ -291,11 +291,19 @@ export function describeAiError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   const status = Number(text.match(/\((\d{3})\)/)?.[1]);
   let detail = '';
-  const body = text.slice(text.indexOf('{'));
+  // Bodies are JSON objects, or (Gemini) a one-element array of them.
+  const start = text.search(/[[{]/);
   try {
-    const parsed = JSON.parse(body) as { error?: { message?: string } | string; metadata?: { limitName?: string } };
-    const message = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message;
-    detail = [message, parsed.metadata?.limitName ? `${parsed.metadata.limitName} limit` : '']
+    const raw = JSON.parse(start >= 0 ? text.slice(start) : '') as unknown;
+    const parsed = (Array.isArray(raw) ? raw[0] : raw) as {
+      error?: { message?: string } | string;
+      metadata?: { limitName?: string };
+    };
+    const message = typeof parsed?.error === 'string' ? parsed.error : parsed?.error?.message;
+    detail = [
+      message?.split('\n')[0].slice(0, 160),
+      parsed?.metadata?.limitName ? `${parsed.metadata.limitName} limit` : '',
+    ]
       .filter(Boolean)
       .join(', ');
   } catch {
@@ -308,7 +316,7 @@ export function describeAiError(error: unknown): string {
   if (status === 429) {
     return `The AI provider has refused the request because its usage or rate limit was reached${suffix}. Try again later, or switch provider in Settings → AI.`;
   }
-  if (status === 401 || status === 403) {
+  if (status === 401 || status === 403 || /API key not valid|API_KEY_INVALID|pass a valid API key/i.test(text)) {
     return `The AI provider rejected the API key${suffix}. Check it in Settings → AI.`;
   }
   if (status === 402) {

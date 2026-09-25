@@ -7,6 +7,7 @@ import { UserRepository } from '~/repositories/user.server';
 import {
   listChatCompletionsModels,
   listClaudeModels,
+  listGeminiModels,
   listOpenAiModels,
   verifyChatCompletionsAccess,
 } from '~/services/ai-models.server';
@@ -69,6 +70,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     wifi,
     openAiSettings,
     claudeSettings,
+    geminiSettings,
     zenSettings,
     customSettings,
     activeProvider,
@@ -83,6 +85,7 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     ConfigRepository.getConfig<WifiConfig>('WIFI'),
     AiSettingsRepository.getOpenAiSettings(),
     AiSettingsRepository.getClaudeSettings(),
+    AiSettingsRepository.getGeminiSettings(),
     AiSettingsRepository.getZenSettings(),
     AiSettingsRepository.getCustomSettings(),
     AiSettingsRepository.getActiveProviderName(),
@@ -99,9 +102,14 @@ export const loader = async (_args: LoaderFunctionArgs) => {
     wifi: wifi ?? { name: '', password: '' },
     isRpi: isRaspberryPi(),
     hasAiKey:
-      openAiSettings.configured || claudeSettings.configured || zenSettings.configured || customSettings.configured,
+      openAiSettings.configured ||
+      claudeSettings.configured ||
+      geminiSettings.configured ||
+      zenSettings.configured ||
+      customSettings.configured,
     openAiSettings,
     claudeSettings,
+    geminiSettings,
     zenSettings,
     customSettings,
     activeProvider,
@@ -320,6 +328,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     try {
       const models = await listOpenAiModels(apiKey);
+      return { models };
+    } catch {
+      return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
+    }
+  }
+
+  if (intent === 'saveGeminiApiKey') {
+    const apiKey = (formData.get('apiKey') as string)?.trim();
+    const model = (formData.get('model') as string)?.trim();
+    if (!apiKey) {
+      return data({ error: 'Missing API key' }, { status: 400 });
+    }
+    try {
+      await listGeminiModels(apiKey);
+    } catch {
+      return data({ error: 'That API key was rejected — check it and try again.' }, { status: 400 });
+    }
+    await AiSettingsRepository.setGeminiApiKey(apiKey, model);
+    return { success: true };
+  }
+
+  if (intent === 'clearGeminiApiKey') {
+    await AiSettingsRepository.clearGeminiApiKey();
+    return { success: true };
+  }
+
+  if (intent === 'listGeminiModels') {
+    const typedKey = (formData.get('apiKey') as string)?.trim();
+    const apiKey = typedKey || (await AiSettingsRepository.getGeminiApiKeyPlain());
+    if (!apiKey) {
+      return data({ error: 'Enter an API key first' }, { status: 400 });
+    }
+    try {
+      const models = await listGeminiModels(apiKey);
       return { models };
     } catch {
       return data({ error: 'Could not load models — check the API key.' }, { status: 400 });

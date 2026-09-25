@@ -69,6 +69,7 @@ function internetStatusLabel(fetcherState: 'idle' | 'loading' | 'submitting', co
 const AI_PROVIDER_LABEL: Record<string, string> = {
   openai: 'OpenAI',
   claude: 'Claude',
+  gemini: 'Gemini',
   'opencode-zen': 'OpenCode',
   custom: 'Custom / Local',
 };
@@ -99,6 +100,7 @@ export const Settings: FC = () => {
     wifi,
     isRpi,
     openAiSettings,
+    geminiSettings,
     claudeSettings,
     zenSettings,
     customSettings,
@@ -244,6 +246,38 @@ export const Settings: FC = () => {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openAiApiKey]);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState(geminiSettings.model);
+  const [geminiModelOptions, setGeminiModelOptions] = useState<string[]>([]);
+  const geminiFetcher = useFetcher<{ error?: string }>();
+  const isGeminiSaving = geminiFetcher.state !== 'idle';
+  const geminiModelsFetcher = useFetcher<{ models?: string[]; error?: string }>();
+  const isLoadingGeminiModels = geminiModelsFetcher.state !== 'idle';
+  useEffect(() => {
+    if (geminiModelsFetcher.data?.models) {
+      const models = geminiModelsFetcher.data.models;
+      setGeminiModelOptions(models);
+      setGeminiModel((prev) => {
+        if (models.includes(prev)) {
+          return prev;
+        }
+        return models.includes('gemini-2.5-flash') ? 'gemini-2.5-flash' : models[0] ?? prev;
+      });
+    }
+  }, [geminiModelsFetcher.data]);
+  // Auto-loads the model list shortly after the user stops typing an API key, so the field can
+  // switch from a free-text input to a dropdown of models that key actually has access to.
+  useEffect(() => {
+    if (!geminiApiKey) {
+      setGeminiModelOptions([]);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      geminiModelsFetcher.submit({ intent: 'listGeminiModels', apiKey: geminiApiKey }, { method: 'post' });
+    }, 600);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geminiApiKey]);
 
   const [claudeApiKey, setClaudeApiKey] = useState('');
   const [claudeModel, setClaudeModel] = useState(claudeSettings.model);
@@ -603,6 +637,7 @@ export const Settings: FC = () => {
               >
                 <option value="openai">OpenAI</option>
                 <option value="claude">Claude</option>
+                <option value="gemini">Google Gemini (free tier)</option>
                 <option value="opencode-zen">OpenCode</option>
                 <option value="custom">Custom / Local</option>
               </Select>
@@ -664,9 +699,7 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{openAiModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          {zenPlan === 'go'
-                            ? 'Models load automatically once you enter a valid API key.'
-                            : 'Models load automatically.'}
+                          Models load automatically once you enter a valid API key.
                         </p>
                       )}
                     </div>
@@ -688,6 +721,94 @@ export const Settings: FC = () => {
                     }
                   >
                     {isOpenAiSaving ? 'Saving…' : 'Save Changes'}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {selectedProvider === 'gemini' && (
+              <div className="mt-4 flex flex-col gap-3">
+                <p className="text-[13px] text-ink-text-dim">
+                  Uses Google's Gemini API. There is a free tier (rate-limited, no card needed): create a key at{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-brand-500 underline underline-offset-2"
+                  >
+                    aistudio.google.com/apikey
+                  </a>
+                  . Flash models suit the free tier best.
+                </p>
+                {geminiSettings.configured ? (
+                  <ConfiguredRow
+                    label={`Configured · ${geminiSettings.model}`}
+                    disabled={isGeminiSaving}
+                    onRemove={() => geminiFetcher.submit({ intent: 'clearGeminiApiKey' }, { method: 'post' })}
+                  />
+                ) : (
+                  <div className="flex w-full flex-col gap-3.5 md:w-3/5">
+                    <div>
+                      <FieldLabel htmlFor="gemini-api-key">Gemini API Key</FieldLabel>
+                      <Input
+                        id="gemini-api-key"
+                        type="password"
+                        autoComplete="off"
+                        placeholder="AIza..."
+                        value={geminiApiKey}
+                        onChange={(event) => setGeminiApiKey(event.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="gemini-model">Model</FieldLabel>
+                      {geminiModelOptions.length > 0 ? (
+                        <Select
+                          id="gemini-model"
+                          value={geminiModel}
+                          onChange={(event) => setGeminiModel(event.target.value)}
+                        >
+                          {geminiModelOptions.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Input
+                          id="gemini-model"
+                          placeholder="gemini-2.5-flash"
+                          value={geminiModel}
+                          onChange={(event) => setGeminiModel(event.target.value)}
+                        />
+                      )}
+                      {isLoadingGeminiModels ? (
+                        <p className="mt-1.5 text-xs text-ink-text-faint">Loading available models…</p>
+                      ) : geminiModelsFetcher.data?.error ? (
+                        <p className="mt-1.5 text-xs text-danger-500">{geminiModelsFetcher.data.error}</p>
+                      ) : (
+                        <p className="mt-1.5 text-xs text-ink-text-faint">
+                          Models load automatically once you enter a valid API key.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {geminiFetcher.data?.error ? (
+                  <p className="text-xs text-danger-500">{geminiFetcher.data.error}</p>
+                ) : null}
+                {!geminiSettings.configured && (
+                  <Button
+                    variant="brand"
+                    className="self-start"
+                    disabled={!geminiApiKey || isGeminiSaving}
+                    onClick={() =>
+                      geminiFetcher.submit(
+                        { intent: 'saveGeminiApiKey', apiKey: geminiApiKey, model: geminiModel },
+                        { method: 'post' },
+                      )
+                    }
+                  >
+                    {isGeminiSaving ? 'Saving…' : 'Save Changes'}
                   </Button>
                 )}
               </div>
@@ -884,7 +1005,9 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{zenModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          Models load automatically once you enter a valid API key.
+                          {zenPlan === 'go'
+                            ? 'Models load automatically once you enter a valid API key.'
+                            : 'Models load automatically.'}
                         </p>
                       )}
                       {zenPlan === 'go' && (
