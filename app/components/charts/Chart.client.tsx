@@ -55,9 +55,10 @@ export const Chart: FC<Props> = ({ options, series, ...rest }) => {
   }
 
   return (
-    // `display: contents`: this wrapper only listens for the pointer and adds no box of its own to the layout.
+    // A real box (not `display: contents`): ApexCharts resolves a percentage height against its parent element, which
+    // must therefore have a height — so the wrapper fills its container when the chart is `height="100%"`.
     <div
-      style={{ display: 'contents' }}
+      style={{ height: rest.height === '100%' ? '100%' : undefined }}
       onMouseEnter={() => {
         frozen.current = rendered.current;
         hovering.current = true;
