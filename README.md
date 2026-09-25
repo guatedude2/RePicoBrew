@@ -2,6 +2,33 @@
 
 A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github.com/chiefwigms/picobrew_pico) written in TypeScript with an improved UX using React Router + Tailwind CSS.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" valign="top"><a href="docs/screenshots/signin.jpg"><img src="docs/screenshots/signin.jpg" alt="Sign in" width="400"></a><br><sub>Sign in</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Dashboard" width="400"></a><br><sub>Dashboard: active sessions, devices and ongoing brews</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/screenshots/sessions.png"><img src="docs/screenshots/sessions.png" alt="Sessions" width="400"></a><br><sub>Session history</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/recipes.png"><img src="docs/screenshots/recipes.png" alt="Recipes" width="400"></a><br><sub>Recipes: PicoPacks and ZPacks</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/screenshots/session-fermentation.png"><img src="docs/screenshots/session-fermentation.png" alt="Fermentation session" width="400"></a><br><sub>Fermentation: live gravity and temperature, expected and projected gravity, AI advice</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/session-brew.png"><img src="docs/screenshots/session-brew.png" alt="Brew session chart" width="400"></a><br><sub>Brew chart with each Pico step marked</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/screenshots/recipe-picopack-edit.png"><img src="docs/screenshots/recipe-picopack-edit.png" alt="PicoPack recipe editor" width="400"></a><br><sub>PicoPack editor, with AI-estimated gravity targets</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/recipe-zpack.png"><img src="docs/screenshots/recipe-zpack.png" alt="ZPack recipe" width="400"></a><br><sub>ZPack recipe details</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="docs/screenshots/ai-brewmaster.png"><img src="docs/screenshots/ai-brewmaster.png" alt="AI Brewmaster" width="400"></a><br><sub>AI Brewmaster: chat, draft recipes, start sessions</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/settings-devices.png"><img src="docs/screenshots/settings-devices.png" alt="Devices settings" width="400"></a><br><sub>Devices: Pico, Tilt and Bluetooth</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots show demo data (sample recipes, brews and AI advice); click any image for the full size.</sub>
+
 **Completed Phases:**
 
 - **Phase 1:** Pico C brew sessions with live progress tracking ✅
