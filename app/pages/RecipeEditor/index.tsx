@@ -4,6 +4,7 @@ import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-i
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
 import { StyleSelect } from '~/components/recipe-editor/StyleSelect';
 import { Badge } from '~/components/ui/badge';
+import { InfoTip } from '~/components/ui/info-tip';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -178,8 +179,19 @@ export type RecipeEditorData = {
   ingredients: RecipeEditorIngredient[];
 };
 
-const FieldLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="mb-[5px] text-[11px] font-semibold text-ink-text-secondary">{children}</p>
+const FieldLabel: FC<{ children: React.ReactNode; tip?: string }> = ({ children, tip }) => (
+  <p className="mb-[5px] flex items-center gap-1 text-[11px] font-semibold text-ink-text-secondary">
+    {children}
+    {tip && <InfoTip label={typeof children === 'string' ? children : 'this field'}>{tip}</InfoTip>}
+  </p>
+);
+
+// Small sub-label used inside grouped fields (e.g. under "Yeast"), with an optional (i) explanation.
+const SubLabel: FC<{ children: string; tip?: string }> = ({ children, tip }) => (
+  <p className="mb-1 flex items-center gap-1 text-[10px] text-ink-text-faintest">
+    {children}
+    {tip && <InfoTip label={children}>{tip}</InfoTip>}
+  </p>
 );
 
 const FieldValue: FC<{ children: React.ReactNode; mono?: boolean }> = ({ children, mono }) => (
@@ -209,9 +221,13 @@ const OverviewStat: FC<{
   min?: string;
   max?: string;
   input?: React.ReactNode;
-}> = ({ label, value, min, max, input }) => (
+  tip?: string;
+}> = ({ label, value, min, max, input, tip }) => (
   <div>
-    <p className="text-[11px] font-bold uppercase text-ink-text-faint">{label}</p>
+    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+      {label}
+      {tip && <InfoTip label={label}>{tip}</InfoTip>}
+    </p>
     {input ?? <p className="mt-1 px-2 py-1.5 font-mono text-sm font-bold">{value}</p>}
     {(min || max) && (
       <p className="mt-1 text-[10px] text-ink-text-faintest">
@@ -744,6 +760,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))' }}>
                 <OverviewStat
                   label="OG"
+                  tip="Original gravity: how dense the wort is before fermentation starts. It is used to work out the expected final gravity; the fermentation chart's expected curve starts from the first Tilt reading."
                   value={og.toFixed(3)}
                   min={recipe?.ogMin?.toFixed(3)}
                   max={recipe?.ogMax?.toFixed(3)}
@@ -764,6 +781,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 />
                 <OverviewStat
                   label="FG"
+                  tip="Final gravity: where the gravity should end up when fermentation is finished. The chart's expected and projected gravity lines head toward it. Leave it blank and it is worked out from the yeast attenuation."
                   value={fg != null ? fg.toFixed(3) : '—'}
                   min={recipe?.fgMin?.toFixed(3)}
                   max={recipe?.fgMax?.toFixed(3)}
@@ -919,7 +937,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 )}
               </div>
               <div className="w-[170px]">
-                <FieldLabel>Fermentation (days)</FieldLabel>
+                <FieldLabel tip="How long fermentation should run for this recipe. It sets the fermentation chart's default date range and the time remaining; a batch can be extended later with Ferment longer.">
+                  Fermentation (days)
+                </FieldLabel>
                 {readOnly ? (
                   <FieldValue>{fermentDays === '' ? '—' : fermentDays}</FieldValue>
                 ) : (
@@ -1145,7 +1165,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           <Card className="gap-4 p-[22px]">
             <p className="text-[15px] font-bold">Fermentation</p>
             <div className="max-w-[220px]">
-              <FieldLabel>Fermentation Type</FieldLabel>
+              <FieldLabel tip="Ale or lager. When the yeast has no temperature range set, the chart's recommended range falls back to a typical one for this type (ale 64-72°F, lager 46-58°F).">
+                Fermentation Type
+              </FieldLabel>
               {readOnly ? (
                 <FieldValue>{FERMENTATION_TYPE_LABELS[fermentationType] ?? fermentationType}</FieldValue>
               ) : (
@@ -1172,7 +1194,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   )}
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] text-ink-text-faintest">Expected Attenuation %</p>
+                  <SubLabel tip="How much of the wort's sugar the yeast is expected to ferment (apparent attenuation). Used to work out the final gravity when it is not set.">
+                    Expected Attenuation %
+                  </SubLabel>
                   {readOnly ? (
                     <FieldValue mono>{yeastAttenuation}</FieldValue>
                   ) : (
@@ -1188,7 +1212,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   )}
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] text-ink-text-faintest">Range Temp °F</p>
+                  <SubLabel tip="The fermentation temperature range that suits this yeast, written min-max in °F (for example 64-72). It draws the recommended range on the fermentation chart, and the AI advice tells you if you are outside it.">
+                    Range Temp °F
+                  </SubLabel>
                   {readOnly ? (
                     <FieldValue mono>{yeastRangeTemp || '—'}</FieldValue>
                   ) : (
@@ -1204,7 +1230,9 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   )}
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] text-ink-text-faintest">Pitch Temp °F</p>
+                  <SubLabel tip="The wort temperature to add the yeast at, in °F. Cool the wort to about this before pitching; the AI Brewmaster uses it as context.">
+                    Pitch Temp °F
+                  </SubLabel>
                   {readOnly ? (
                     <FieldValue mono>{yeastPitchTemp}</FieldValue>
                   ) : (
