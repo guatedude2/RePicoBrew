@@ -14,11 +14,11 @@ A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github
     <td align="center" valign="top"><a href="docs/screenshots/recipes.png"><img src="docs/screenshots/recipes.png" alt="Recipes" width="400"></a><br><sub>Recipes: PicoPacks and ZPacks</sub></td>
   </tr>
   <tr>
-    <td align="center" valign="top"><a href="docs/screenshots/session-fermentation.png"><img src="docs/screenshots/session-fermentation.png" alt="Fermentation session" width="400"></a><br><sub>Fermentation: live gravity and temperature, expected and projected gravity, AI advice</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/session-fermentation.png"><img src="docs/screenshots/session-fermentation.png" alt="Fermentation session" width="400"></a><br><sub>Fermentation: gravity and temperature with the recipe&#39;s recommended temperature range, expected and projected gravity, one combined tooltip, and AI advice</sub></td>
     <td align="center" valign="top"><a href="docs/screenshots/session-brew.png"><img src="docs/screenshots/session-brew.png" alt="Brew session chart" width="400"></a><br><sub>Brew chart with each Pico step marked</sub></td>
   </tr>
   <tr>
-    <td align="center" valign="top"><a href="docs/screenshots/recipe-picopack-edit.png"><img src="docs/screenshots/recipe-picopack-edit.png" alt="PicoPack recipe editor" width="400"></a><br><sub>PicoPack editor, with AI-estimated gravity targets</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/recipe-picopack-edit.png"><img src="docs/screenshots/recipe-picopack-edit.png" alt="PicoPack recipe editor" width="400"></a><br><sub>PicoPack editor: optional gravity and fermentation temperature targets, with an AI estimate button</sub></td>
     <td align="center" valign="top"><a href="docs/screenshots/recipe-zpack.png"><img src="docs/screenshots/recipe-zpack.png" alt="ZPack recipe" width="400"></a><br><sub>ZPack recipe details</sub></td>
   </tr>
   <tr>
