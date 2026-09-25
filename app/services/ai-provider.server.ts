@@ -1,4 +1,12 @@
-import { ZEN_BASE_URL, ZEN_GO_BASE_URL, type ResolvedProvider } from '~/repositories/ai-settings.server';
+import {
+  AiSettingsRepository,
+  GEMINI_BASE_URL,
+  ZEN_BASE_URL,
+  ZEN_GO_BASE_URL,
+  type ResolvedProvider,
+} from '~/repositories/ai-settings.server';
+import { listGeminiModels } from '~/services/ai-models.server';
+import { pickGeminiModel } from '~/utils/gemini-models';
 
 // Shared low-level "call whichever AI provider is configured" plumbing, used by every AI feature
 // in the app (the session AI Brewmaster Advisor, the AI Brewmaster recipe-generation sidekick,
@@ -131,7 +139,7 @@ function isOpenCodeGateway(provider: ResolvedProvider): boolean {
 // Single entry point every AI feature should call: resolves the wire format for whichever
 // provider is active and (for OpenCode's gateway, which requires a stable per-conversation
 // session id or it rejects the request outright) attaches the routing/prompt-cache header.
-export async function callAiProvider(
+async function callAiProviderOnce(
   provider: ResolvedProvider,
   args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
 ): Promise<string> {
@@ -187,7 +195,7 @@ async function readSseData(response: Response, onData: (payload: string) => void
 
 // Same request as callAiProvider, but the reply is streamed: `onDelta` gets each new piece of text as it
 // arrives and the full text is returned at the end.
-export async function streamAiProvider(
+async function streamAiProviderOnce(
   provider: ResolvedProvider,
   args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
   onDelta: (text: string) => void,
@@ -313,6 +321,9 @@ export function describeAiError(error: unknown): string {
   if (/FreeTierError|free tier can only be used from within OpenCode/i.test(text)) {
     return 'OpenCode refused the request: its free tier can only be used from within OpenCode itself. Add an OpenCode API key in Settings → AI (free models still cost nothing with a key), or switch provider.';
   }
+  if (status === 404) {
+    return `The AI provider says the model isn't available${suffix}. Choose another model in Settings → AI.`;
+  }
   if (status === 429) {
     return `The AI provider has refused the request because its usage or rate limit was reached${suffix}. Try again later, or switch provider in Settings → AI.`;
   }
@@ -326,4 +337,58 @@ export function describeAiError(error: unknown): string {
     return 'The AI provider took too long to answer. Try again in a moment.';
   }
   return 'The AI request failed. Try again in a moment.';
+}
+
+// A Gemini model can be retired under a saved config ("no longer available to new users"). When a request fails for
+// that reason, pick the newest Flash model the key can see, save it as the model, and retry once.
+async function recoverGeminiModel(provider: ResolvedProvider, error: unknown): Promise<ResolvedProvider | null> {
+  if (provider.kind !== 'chat-completions' || provider.baseUrl !== GEMINI_BASE_URL || !provider.apiKey) {
+    return null;
+  }
+  const text = error instanceof Error ? error.message : String(error);
+  if (!/\(404\)/.test(text) || !/no longer available|not found|not supported/i.test(text)) {
+    return null;
+  }
+  try {
+    const best = pickGeminiModel(await listGeminiModels(provider.apiKey));
+    if (!best || best === provider.model) {
+      return null;
+    }
+    console.warn(`[ai-provider] Gemini model ${provider.model} is unavailable; switching to ${best}`);
+    await AiSettingsRepository.updateGeminiModel(best);
+    return { ...provider, model: best };
+  } catch {
+    return null;
+  }
+}
+
+export async function callAiProvider(
+  provider: ResolvedProvider,
+  args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
+): Promise<string> {
+  try {
+    return await callAiProviderOnce(provider, args);
+  } catch (error) {
+    const recovered = await recoverGeminiModel(provider, error);
+    if (!recovered) {
+      throw error;
+    }
+    return callAiProviderOnce(recovered, args);
+  }
+}
+
+export async function streamAiProvider(
+  provider: ResolvedProvider,
+  args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
+  onDelta: (text: string) => void,
+): Promise<string> {
+  try {
+    return await streamAiProviderOnce(provider, args, onDelta);
+  } catch (error) {
+    const recovered = await recoverGeminiModel(provider, error);
+    if (!recovered) {
+      throw error;
+    }
+    return streamAiProviderOnce(recovered, args, onDelta);
+  }
 }

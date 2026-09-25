@@ -25,7 +25,9 @@ export const CLAUDE_DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 // Google's Gemini API through its OpenAI-compatible endpoint, so it shares the chat-completions wire format. A free tier
 // (rate-limited, no card) is available with a key from https://aistudio.google.com/apikey.
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
-export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+// Only a starting point: the Settings screen and the recovery in ai-provider.server.ts pick the newest Flash model the
+// key can actually see, since Google retires models (2.5 Flash is already closed to new users).
+export const GEMINI_DEFAULT_MODEL = 'gemini-3.8-flash';
 // OpenCode's two subscription tiers, both under the same account/API key but different base paths
 // and model catalogs — Zen is the pay-as-you-go gateway, Go is the flat $10/mo plan.
 export type ZenPlan = 'zen' | 'go';
@@ -146,6 +148,10 @@ export class AiSettingsRepository {
     await ConfigRepository.deleteConfig(GEMINI_API_KEY_CONFIG);
     await ConfigRepository.deleteConfig(GEMINI_MODEL_CONFIG);
     await this.reconcileActiveProvider('gemini');
+  }
+
+  public static async updateGeminiModel(model: string): Promise<void> {
+    await ConfigRepository.setConfig(GEMINI_MODEL_CONFIG, model);
   }
 
   public static async getGeminiApiKeyPlain(): Promise<string | null> {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FC } from 'react';
 import { MdCheckCircle, MdInfoOutline, MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
 import { Button } from '~/components/ui/button';
+import { pickGeminiModel } from '~/utils/gemini-models';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -261,7 +262,7 @@ export const Settings: FC = () => {
         if (models.includes(prev)) {
           return prev;
         }
-        return models.includes('gemini-2.5-flash') ? 'gemini-2.5-flash' : models[0] ?? prev;
+        return pickGeminiModel(models) ?? prev;
       });
     }
   }, [geminiModelsFetcher.data]);
@@ -776,7 +777,7 @@ export const Settings: FC = () => {
                       ) : (
                         <Input
                           id="gemini-model"
-                          placeholder="gemini-2.5-flash"
+                          placeholder="gemini-3.8-flash"
                           value={geminiModel}
                           onChange={(event) => setGeminiModel(event.target.value)}
                         />
