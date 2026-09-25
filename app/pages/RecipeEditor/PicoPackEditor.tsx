@@ -8,6 +8,7 @@ import { StyleSelect } from '~/components/recipe-editor/StyleSelect';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
+import { InfoTip } from '~/components/ui/info-tip';
 import { Input } from '~/components/ui/input';
 import { Spinner } from '~/components/ui/spinner';
 import { Textarea } from '~/components/ui/textarea';
@@ -685,123 +686,153 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   </p>
                 </div>
               </div>
-              {(!readOnly || og !== '' || fg !== '' || yeastAttenuation !== '' || yeastRangeTemp !== null) && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] font-semibold text-ink-text-secondary">
-                      Fermentation targets (optional) — used for the fermentation chart&apos;s expected and projected
-                      gravity and recommended temperature range
-                    </p>
-                    {!readOnly && hasAiKey && (
-                      <Button type="button" variant="outline" size="xs" disabled={estimating} onClick={estimateGravity}>
-                        {estimating ? <Spinner /> : <MdAutoAwesome className="text-brand-500" />}
-                        {estimating ? 'Estimating…' : 'Estimate with AI'}
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">OG</p>
-                      {readOnly ? (
-                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{og === '' ? '—' : og}</p>
-                      ) : (
-                        <Input
-                          type="number"
-                          step={0.001}
-                          placeholder="1.052"
-                          value={og}
-                          onChange={(e) => setOg(e.target.value === '' ? '' : Number(e.target.value))}
-                          className={cn(
-                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
-                            dirtyClass(og, recipe?.og ?? '', isEditingExisting),
-                          )}
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">FG</p>
-                      {readOnly ? (
-                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{fg === '' ? '—' : fg}</p>
-                      ) : (
-                        <Input
-                          type="number"
-                          step={0.001}
-                          placeholder="1.012"
-                          value={fg}
-                          onChange={(e) => setFg(e.target.value === '' ? '' : Number(e.target.value))}
-                          className={cn(
-                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
-                            dirtyClass(fg, recipe?.fg ?? '', isEditingExisting),
-                          )}
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Yeast attenuation %</p>
-                      {readOnly ? (
-                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">
-                          {yeastAttenuation === '' ? '—' : yeastAttenuation}
-                        </p>
-                      ) : (
-                        <Input
-                          type="number"
-                          step={1}
-                          placeholder="75"
-                          value={yeastAttenuation}
-                          onChange={(e) => setYeastAttenuation(e.target.value === '' ? '' : Number(e.target.value))}
-                          className={cn(
-                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
-                            dirtyClass(yeastAttenuation, recipe?.yeastAttenuation ?? '', isEditingExisting),
-                          )}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Ferment temp min °F</p>
-                      {readOnly ? (
-                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMin === '' ? '—' : tempMin}</p>
-                      ) : (
-                        <Input
-                          type="number"
-                          step={1}
-                          placeholder="64"
-                          value={tempMin}
-                          onChange={(e) => setTempMin(e.target.value === '' ? '' : Number(e.target.value))}
-                          className={cn(
-                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
-                            dirtyClass(tempMin, savedTemp?.min ?? '', isEditingExisting),
-                          )}
-                        />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Ferment temp max °F</p>
-                      {readOnly ? (
-                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMax === '' ? '—' : tempMax}</p>
-                      ) : (
-                        <Input
-                          type="number"
-                          step={1}
-                          placeholder="72"
-                          value={tempMax}
-                          onChange={(e) => setTempMax(e.target.value === '' ? '' : Number(e.target.value))}
-                          className={cn(
-                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
-                            dirtyClass(tempMax, savedTemp?.max ?? '', isEditingExisting),
-                          )}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {estimateNote && (
-                    <p className={cn('text-[12px]', estimateNote.error ? 'text-danger-500' : 'text-ink-text-faint')}>
-                      {estimateNote.text}
-                    </p>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold text-ink-text-secondary">
+                    Fermentation targets{readOnly ? '' : ' (optional)'} — used for the fermentation chart&apos;s
+                    expected and projected gravity and recommended temperature range
+                  </p>
+                  {!readOnly && hasAiKey && (
+                    <Button type="button" variant="outline" size="xs" disabled={estimating} onClick={estimateGravity}>
+                      {estimating ? <Spinner /> : <MdAutoAwesome className="text-brand-500" />}
+                      {estimating ? 'Estimating…' : 'Estimate with AI'}
+                    </Button>
                   )}
                 </div>
-              )}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                      OG
+                      <InfoTip label="OG">
+                        Original gravity: how dense the wort is before fermentation starts. The fermentation
+                        chart&apos;s expected-gravity curve begins here. Leave it blank and the first Tilt reading is
+                        used instead.
+                      </InfoTip>
+                    </p>
+                    {readOnly ? (
+                      <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{og === '' ? '—' : og}</p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={0.001}
+                        placeholder="1.052"
+                        value={og}
+                        onChange={(e) => setOg(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(og, recipe?.og ?? '', isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                      FG
+                      <InfoTip label="FG">
+                        Final gravity: where the gravity should end up when fermentation is finished. The expected and
+                        projected gravity lines head toward it. Leave it blank and it is worked out from the yeast
+                        attenuation, or a typical 75%.
+                      </InfoTip>
+                    </p>
+                    {readOnly ? (
+                      <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{fg === '' ? '—' : fg}</p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={0.001}
+                        placeholder="1.012"
+                        value={fg}
+                        onChange={(e) => setFg(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(fg, recipe?.fg ?? '', isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                      Yeast attenuation %
+                      <InfoTip label="yeast attenuation">
+                        How much of the wort&apos;s sugar the yeast is expected to ferment (apparent attenuation). When
+                        FG is blank it is worked out as FG = OG - (OG - 1) x attenuation.
+                      </InfoTip>
+                    </p>
+                    {readOnly ? (
+                      <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">
+                        {yeastAttenuation === '' ? '—' : yeastAttenuation}
+                      </p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={1}
+                        placeholder="75"
+                        value={yeastAttenuation}
+                        onChange={(e) => setYeastAttenuation(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(yeastAttenuation, recipe?.yeastAttenuation ?? '', isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                      Ferment temp min °F
+                      <InfoTip label="the minimum fermentation temperature">
+                        The lowest fermentation temperature that suits this yeast. With the maximum it draws the
+                        recommended range on the fermentation chart, and the AI advice tells you if you are outside it.
+                      </InfoTip>
+                    </p>
+                    {readOnly ? (
+                      <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMin === '' ? '—' : tempMin}</p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={1}
+                        placeholder="64"
+                        value={tempMin}
+                        onChange={(e) => setTempMin(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(tempMin, savedTemp?.min ?? '', isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                      Ferment temp max °F
+                      <InfoTip label="the maximum fermentation temperature">
+                        The highest fermentation temperature that suits this yeast. With the minimum it draws the
+                        recommended range on the fermentation chart, and the AI advice tells you if you are outside it.
+                      </InfoTip>
+                    </p>
+                    {readOnly ? (
+                      <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMax === '' ? '—' : tempMax}</p>
+                    ) : (
+                      <Input
+                        type="number"
+                        step={1}
+                        placeholder="72"
+                        value={tempMax}
+                        onChange={(e) => setTempMax(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn(
+                          'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                          dirtyClass(tempMax, savedTemp?.max ?? '', isEditingExisting),
+                        )}
+                      />
+                    )}
+                  </div>
+                </div>
+                {estimateNote && (
+                  <p className={cn('text-[12px]', estimateNote.error ? 'text-danger-500' : 'text-ink-text-faint')}>
+                    {estimateNote.text}
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
 
