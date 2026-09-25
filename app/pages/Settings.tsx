@@ -280,7 +280,7 @@ export const Settings: FC = () => {
   const zenModelsFetcher = useFetcher<{ models?: string[]; error?: string }>();
   const isLoadingZenModels = zenModelsFetcher.state !== 'idle';
   const ZEN_PLAN_DEFAULT_MODEL: Record<'zen' | 'go', string> = {
-    zen: 'opencode/big-pickle',
+    zen: 'big-pickle',
     go: 'kimi-k3',
   };
   const handleZenPlanChange = (plan: 'zen' | 'go') => {
@@ -292,11 +292,22 @@ export const Settings: FC = () => {
     if (zenModelsFetcher.data?.models) {
       const models = zenModelsFetcher.data.models;
       setZenModelOptions(models);
-      setZenModel((prev) => (models.includes(prev) ? prev : models[0] ?? prev));
+      setZenModel((prev) => {
+        // Older saved defaults carried an "opencode/" prefix the model list doesn't use; prefer the free default.
+        const unprefixed = prev.replace(/^opencode\//, '');
+        if (models.includes(prev)) {
+          return prev;
+        }
+        if (models.includes(unprefixed)) {
+          return unprefixed;
+        }
+        return models.includes(ZEN_PLAN_DEFAULT_MODEL.zen) ? ZEN_PLAN_DEFAULT_MODEL.zen : models[0] ?? prev;
+      });
     }
   }, [zenModelsFetcher.data]);
   useEffect(() => {
-    if (!zenApiKey) {
+    // Zen's model list is public, so it loads without a key; the Go plan needs one.
+    if (!zenApiKey && zenPlan === 'go') {
       setZenModelOptions([]);
       return;
     }
@@ -653,7 +664,9 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{openAiModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          Models load automatically once you enter a valid API key.
+                          {zenPlan === 'go'
+                            ? 'Models load automatically once you enter a valid API key.'
+                            : 'Models load automatically.'}
                         </p>
                       )}
                     </div>
@@ -760,13 +773,16 @@ export const Settings: FC = () => {
             {selectedProvider === 'opencode-zen' && (
               <div className="mt-4 flex flex-col gap-3">
                 <p className="text-[13px] text-ink-text-dim">
-                  OpenCode's hosted models — either the pay-as-you-go Zen gateway or the flat-rate Go plan. Even free
-                  Zen models require a card on file with OpenCode.
+                  OpenCode's hosted models — either the pay-as-you-go Zen gateway or the flat-rate Go plan. The API key
+                  is optional for Zen&apos;s free models, but OpenCode may refuse key-less requests from outside its own
+                  apps (&quot;free tier can only be used from within OpenCode&quot;) — if you see that error, add a key.
                 </p>
                 {zenSettings.configured ? (
                   <div className="flex w-full flex-col gap-2 md:w-3/5">
                     <ConfiguredRow
-                      label={`${zenSettings.plan === 'go' ? 'Go' : 'Zen'} · ${zenSettings.model}`}
+                      label={`${zenSettings.plan === 'go' ? 'Go' : 'Zen'} · ${zenSettings.model}${
+                        zenSettings.hasKey ? '' : ' · no API key'
+                      }`}
                       disabled={isZenSaving}
                       onRemove={() => zenFetcher.submit({ intent: 'clearZenSettings' }, { method: 'post' })}
                     />
@@ -832,12 +848,14 @@ export const Settings: FC = () => {
                       </Select>
                     </div>
                     <div>
-                      <FieldLabel htmlFor="zen-api-key">{zenPlan === 'go' ? 'Go' : 'Zen'} API Key</FieldLabel>
+                      <FieldLabel htmlFor="zen-api-key">
+                        {zenPlan === 'go' ? 'Go API Key' : 'Zen API Key (optional for free models)'}
+                      </FieldLabel>
                       <Input
                         id="zen-api-key"
                         type="password"
                         autoComplete="off"
-                        placeholder="API key"
+                        placeholder={zenPlan === 'go' ? 'API key' : 'Leave blank to use free models'}
                         value={zenApiKey}
                         onChange={(event) => setZenApiKey(event.target.value)}
                       />
@@ -884,7 +902,7 @@ export const Settings: FC = () => {
                   <Button
                     variant="brand"
                     className="self-start"
-                    disabled={!zenApiKey || isZenSaving}
+                    disabled={(zenPlan === 'go' && !zenApiKey) || isZenSaving}
                     onClick={() =>
                       zenFetcher.submit(
                         { intent: 'saveZenSettings', apiKey: zenApiKey, model: zenModel, plan: zenPlan },

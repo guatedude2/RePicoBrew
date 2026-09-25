@@ -33,9 +33,9 @@ export async function listClaudeModels(apiKey: string): Promise<string[]> {
   return (json.data ?? []).map((m) => m.id);
 }
 
-export async function listChatCompletionsModels(baseUrl: string, apiKey: string): Promise<string[]> {
+export async function listChatCompletionsModels(baseUrl: string, apiKey: string | null): Promise<string[]> {
   const response = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) {

@@ -24,7 +24,8 @@ export const CLAUDE_DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 // and model catalogs — Zen is the pay-as-you-go gateway, Go is the flat $10/mo plan.
 export type ZenPlan = 'zen' | 'go';
 export const ZEN_BASE_URL = 'https://opencode.ai/zen/v1';
-export const ZEN_DEFAULT_MODEL = 'opencode/big-pickle';
+// Model ids on Zen's /models list have no provider prefix either; big-pickle is one of its free models.
+export const ZEN_DEFAULT_MODEL = 'big-pickle';
 export const ZEN_GO_BASE_URL = 'https://opencode.ai/zen/go/v1';
 // Model ids on Go's /models list have no provider prefix (confirmed against the live API) — e.g.
 // "kimi-k3", not "opencode-go/kimi-k3" (that prefix is only used in OpenCode's own CLI config).
@@ -118,19 +119,31 @@ export class AiSettingsRepository {
   }
 
   // ---- OpenCode (Zen or Go plan) slot ----
-  public static async getZenSettings(): Promise<{ configured: boolean; model: string; plan: ZenPlan }> {
+  // Zen's free models don't need an API key, so "configured" means a plan was saved, with or without a key.
+  public static async getZenSettings(): Promise<{
+    configured: boolean;
+    hasKey: boolean;
+    model: string;
+    plan: ZenPlan;
+  }> {
     const value = await ConfigRepository.getConfig<EncryptedValue>(ZEN_API_KEY_CONFIG);
-    const plan = (await ConfigRepository.getConfig<ZenPlan>(ZEN_PLAN_CONFIG)) ?? 'zen';
+    const savedPlan = await ConfigRepository.getConfig<ZenPlan>(ZEN_PLAN_CONFIG);
+    const plan = savedPlan ?? 'zen';
     const model = await ConfigRepository.getConfig<string>(ZEN_MODEL_CONFIG);
-    return { configured: !!value?.encryptedData, model: model ?? this.zenDefaultModel(plan), plan };
+    const hasKey = !!value?.encryptedData;
+    return { configured: hasKey || savedPlan !== null, hasKey, model: model ?? this.zenDefaultModel(plan), plan };
   }
 
   private static zenDefaultModel(plan: ZenPlan): string {
     return plan === 'go' ? ZEN_GO_DEFAULT_MODEL : ZEN_DEFAULT_MODEL;
   }
 
-  public static async setZenSettings(input: { apiKey: string; model: string; plan: ZenPlan }): Promise<void> {
-    await ConfigRepository.setConfig<EncryptedValue>(ZEN_API_KEY_CONFIG, await encryptValue(input.apiKey));
+  public static async setZenSettings(input: { apiKey?: string | null; model: string; plan: ZenPlan }): Promise<void> {
+    if (input.apiKey) {
+      await ConfigRepository.setConfig<EncryptedValue>(ZEN_API_KEY_CONFIG, await encryptValue(input.apiKey));
+    } else {
+      await ConfigRepository.deleteConfig(ZEN_API_KEY_CONFIG);
+    }
     await ConfigRepository.setConfig(ZEN_PLAN_CONFIG, input.plan);
     await ConfigRepository.setConfig(ZEN_MODEL_CONFIG, input.model || this.zenDefaultModel(input.plan));
     await this.activateProvider('opencode-zen');
@@ -242,14 +255,18 @@ export class AiSettingsRepository {
       return { kind: 'claude', apiKey, model };
     }
     if (provider === 'opencode-zen') {
-      const value = await ConfigRepository.getConfig<EncryptedValue>(ZEN_API_KEY_CONFIG);
-      const apiKey = await decryptValue(value);
-      if (!apiKey) {
+      const zen = await this.getZenSettings();
+      if (!zen.configured) {
         return null;
       }
-      const plan = (await ConfigRepository.getConfig<ZenPlan>(ZEN_PLAN_CONFIG)) ?? 'zen';
-      const model = (await ConfigRepository.getConfig<string>(ZEN_MODEL_CONFIG)) ?? this.zenDefaultModel(plan);
-      return { kind: 'chat-completions', baseUrl: this.zenBaseUrlForPlan(plan), apiKey, model };
+      // May be null: Zen's free models are used without a key (no Authorization header is sent).
+      const apiKey = await this.getZenApiKeyPlain();
+      return {
+        kind: 'chat-completions',
+        baseUrl: this.zenBaseUrlForPlan(zen.plan),
+        apiKey,
+        model: zen.model,
+      };
     }
     if (provider === 'custom') {
       const baseUrl = await ConfigRepository.getConfig<string>(CUSTOM_BASE_URL_CONFIG);

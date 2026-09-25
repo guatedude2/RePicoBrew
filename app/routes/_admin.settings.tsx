@@ -364,18 +364,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const apiKey = (formData.get('apiKey') as string)?.trim();
     const model = (formData.get('model') as string)?.trim();
     const plan = (formData.get('plan') as string) === 'go' ? 'go' : 'zen';
-    if (!apiKey) {
-      return data({ error: 'Missing API key' }, { status: 400 });
+    // Zen's free models work without a key; the flat-rate Go plan is a paid subscription and always needs one.
+    if (!apiKey && plan === 'go') {
+      return data({ error: 'The Go plan needs an API key.' }, { status: 400 });
     }
     try {
-      await verifyChatCompletionsAccess(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey);
+      await verifyChatCompletionsAccess(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey || null);
     } catch (error) {
       return data(
         { error: error instanceof Error ? error.message : 'Could not verify that API key.' },
         { status: 400 },
       );
     }
-    await AiSettingsRepository.setZenSettings({ apiKey, model, plan });
+    await AiSettingsRepository.setZenSettings({ apiKey: apiKey || null, model, plan });
     return { success: true };
   }
 
@@ -383,11 +384,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const typedKey = (formData.get('apiKey') as string)?.trim();
     const plan = (formData.get('plan') as string) === 'go' ? 'go' : 'zen';
     const apiKey = typedKey || (await AiSettingsRepository.getZenApiKeyPlain());
-    if (!apiKey) {
+    if (!apiKey && plan === 'go') {
       return data({ error: 'Enter an API key first' }, { status: 400 });
     }
     try {
-      const models = await listChatCompletionsModels(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey);
+      const models = await listChatCompletionsModels(AiSettingsRepository.zenBaseUrlForPlan(plan), apiKey || null);
       return { models };
     } catch {
       return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
@@ -401,7 +402,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const settings = await AiSettingsRepository.getZenSettings();
     const apiKey = await AiSettingsRepository.getZenApiKeyPlain();
-    if (!settings.configured || !apiKey) {
+    if (!settings.configured) {
       return data({ error: 'OpenCode is not configured' }, { status: 400 });
     }
     try {

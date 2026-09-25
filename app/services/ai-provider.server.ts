@@ -302,6 +302,9 @@ export function describeAiError(error: unknown): string {
     // body wasn't JSON; fall through to the status-only messages
   }
   const suffix = detail ? ` (${detail})` : '';
+  if (/FreeTierError|free tier can only be used from within OpenCode/i.test(text)) {
+    return 'OpenCode refused the request: its free tier can only be used from within OpenCode itself. Add an OpenCode API key in Settings → AI (free models still cost nothing with a key), or switch provider.';
+  }
   if (status === 429) {
     return `The AI provider has refused the request because its usage or rate limit was reached${suffix}. Try again later, or switch provider in Settings → AI.`;
   }
