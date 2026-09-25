@@ -283,3 +283,36 @@ export async function streamAiProvider(
   }
   return text;
 }
+
+// The provider calls above throw `AI provider request failed (<status>): <body>` (or the Claude equivalent). Turns
+// that into something the user can act on — a used-up quota or rate limit and a rejected API key are by far the most
+// common causes — instead of a generic "the request failed".
+export function describeAiError(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  const status = Number(text.match(/\((\d{3})\)/)?.[1]);
+  let detail = '';
+  const body = text.slice(text.indexOf('{'));
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } | string; metadata?: { limitName?: string } };
+    const message = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message;
+    detail = [message, parsed.metadata?.limitName ? `${parsed.metadata.limitName} limit` : '']
+      .filter(Boolean)
+      .join(', ');
+  } catch {
+    // body wasn't JSON; fall through to the status-only messages
+  }
+  const suffix = detail ? ` (${detail})` : '';
+  if (status === 429) {
+    return `The AI provider has refused the request because its usage or rate limit was reached${suffix}. Try again later, or switch provider in Settings → AI.`;
+  }
+  if (status === 401 || status === 403) {
+    return `The AI provider rejected the API key${suffix}. Check it in Settings → AI.`;
+  }
+  if (status === 402) {
+    return `The AI provider says the account is out of credit${suffix}. Add credit, or switch provider in Settings → AI.`;
+  }
+  if (/aborted|timeout|timed out/i.test(text)) {
+    return 'The AI provider took too long to answer. Try again in a moment.';
+  }
+  return 'The AI request failed. Try again in a moment.';
+}

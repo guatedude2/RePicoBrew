@@ -1,7 +1,7 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
-import { streamAiProvider } from '~/services/ai-provider.server';
+import { streamAiProvider, describeAiError } from '~/services/ai-provider.server';
 import {
   generatePicoPackRecipe,
   generateZPackRecipe,
@@ -272,7 +272,7 @@ export async function runGeneralChat(input: {
     );
   } catch (error) {
     console.error('[ai-chat-assistant] request failed', error);
-    return { success: false, error: 'The AI request failed. Try again in a moment.' };
+    return { success: false, error: describeAiError(error) };
   }
 
   let parsed = parseJsonResponse(raw);

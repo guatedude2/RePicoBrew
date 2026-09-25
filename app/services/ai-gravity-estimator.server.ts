@@ -1,5 +1,5 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
-import { callAiProvider } from '~/services/ai-provider.server';
+import { callAiProvider, describeAiError } from '~/services/ai-provider.server';
 
 // Fills in the gravity targets a PicoPack recipe doesn't carry (PicoBrew's pak format has steps only): an estimated
 // original gravity, final gravity and yeast attenuation from the grain bill, hops, yeast, style and the recipe's
@@ -93,7 +93,7 @@ export async function estimateGravityTargets(input: GravityEstimateInput): Promi
     });
   } catch (error) {
     console.error('[ai-gravity-estimator] request failed', error);
-    return { success: false, error: 'The AI request failed. Try again in a moment.' };
+    return { success: false, error: describeAiError(error) };
   }
 
   const parsed = parseJson(raw);

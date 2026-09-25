@@ -5,7 +5,7 @@ import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
 import { describeGravityOutlook, describeRecipeForAi, describeSessionsForAi } from '~/services/ai-context.server';
-import { callAiProvider, streamAiProvider } from '~/services/ai-provider.server';
+import { callAiProvider, streamAiProvider, describeAiError } from '~/services/ai-provider.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
 import { BatchPhase, SessionType } from '~/types';
@@ -335,6 +335,6 @@ export async function analyzeBatch(
     return { success: true, advice };
   } catch (error) {
     console.error('[ai-advisor] analyzeBatch failed', error);
-    return { success: false, error: 'The AI request failed. Try again in a moment.' };
+    return { success: false, error: describeAiError(error) };
   }
 }

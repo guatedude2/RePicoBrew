@@ -1,5 +1,5 @@
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
-import { callAiProvider } from '~/services/ai-provider.server';
+import { callAiProvider, describeAiError } from '~/services/ai-provider.server';
 import {
   gatherReferences,
   referenceBlock,
@@ -663,7 +663,7 @@ async function runGeneration(packKind: PackKind, input: GenerationInput): Promis
     });
   } catch (error) {
     console.error('[ai-recipe-generator] request failed', error);
-    return { success: false, error: 'The AI request failed. Try again in a moment.' };
+    return { success: false, error: describeAiError(error) };
   }
 
   const parsed = parseJsonResponse(raw);
