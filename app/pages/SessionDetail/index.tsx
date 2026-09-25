@@ -1129,6 +1129,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
             sessionId={fermSession.id}
             startTime={fermSession.createdAt}
             fermentDays={batch.fermentDays ?? batch.recipe?.fermentDays}
+            expectedGravity={{
+              days: fermentDaysTotal,
+              recipeOg: batch.recipe?.og,
+              recipeFg: batch.recipe?.fg,
+              recipeAbv: batch.recipe?.abv,
+              yeastAttenuation: batch.recipe?.yeastAttenuation,
+            }}
           />
         </div>
         {hasAiKey && (

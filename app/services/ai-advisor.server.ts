@@ -4,7 +4,7 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
-import { describeRecipeForAi, describeSessionsForAi } from '~/services/ai-context.server';
+import { describeGravityOutlook, describeRecipeForAi, describeSessionsForAi } from '~/services/ai-context.server';
 import { callAiProvider, streamAiProvider } from '~/services/ai-provider.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
@@ -207,7 +207,25 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
     const progress = fermSession
       ? describeFermentationProgress(fermSession.createdAt, batch.fermentDays ?? recipe?.fermentDays)
       : '';
-    stageSummary = [progress, buildFermentSummary(logs)].filter(Boolean).join(' ');
+    const readings = logs.flatMap((log) => {
+      try {
+        const row = JSON.parse(log.data) as FermLogRow;
+        return typeof row.gravity === 'number' ? [{ time: new Date(log.time).getTime(), gravity: row.gravity }] : [];
+      } catch {
+        return [];
+      }
+    });
+    const outlook = fermSession
+      ? describeGravityOutlook(readings, {
+          startMs: new Date(fermSession.createdAt).getTime(),
+          days: batch.fermentDays ?? recipe?.fermentDays ?? 7,
+          recipeOg: fullRecipe?.og,
+          recipeFg: fullRecipe?.fg,
+          recipeAbv: fullRecipe?.abv,
+          yeastAttenuation: fullRecipe?.yeastAttenuation,
+        })
+      : '';
+    stageSummary = [progress, buildFermentSummary(logs), outlook].filter(Boolean).join(' ');
   }
 
   // Errors the machine reported during this brew (e.g. "reservoir empty") — context for anything odd in the readings.

@@ -1,4 +1,10 @@
 import { IngredientSection, RecipePackType } from '~/types';
+import {
+  expectedGravityAt,
+  projectGravity,
+  resolveGravityTargets,
+  type GravityReading,
+} from '~/utils/gravity-projection';
 
 // Plain-text descriptions of a recipe and a batch's sessions for the AI Brewmaster's prompts (session advice, the
 // session chat and the recipe chat all share these), so the model works from the actual recipe and session facts
@@ -197,4 +203,69 @@ export function describeSessionsForAi(sessions: SessionForAi[]): string {
       }, started ${ago(s.createdAt)}.`;
     })
     .join('\n');
+}
+
+// Where the gravity is versus where the recipe says it should be, and where the current trend leads by the end of the
+// fermentation window — so the AI can spot a lagging ferment early and suggest fixes or how many more days to wait.
+export function describeGravityOutlook(
+  readings: GravityReading[],
+  opts: {
+    startMs: number;
+    days: number;
+    recipeOg?: number | null;
+    recipeFg?: number | null;
+    recipeAbv?: number | null;
+    yeastAttenuation?: number | null;
+  },
+): string {
+  const valid = readings.filter((r) => r.gravity > 0);
+  const last = valid[valid.length - 1];
+  const targets = resolveGravityTargets({ ...opts, firstReading: valid[0]?.gravity ?? null });
+  if (!last || !targets) {
+    return '';
+  }
+  const endMs = opts.startMs + opts.days * 86400000;
+  const expectedNow = expectedGravityAt(last.time, opts.startMs, endMs, targets);
+  const projection = projectGravity(valid, targets.fg);
+  const g = (n: number) => n.toFixed(3);
+  const diff = last.gravity - expectedNow;
+  const vsExpected =
+    Math.abs(diff) < 0.0015
+      ? 'on track'
+      : `${g(Math.abs(diff))} ${diff > 0 ? 'above (behind)' : 'below (ahead of)'} expected`;
+
+  const parts = [
+    `Gravity outlook: expected gravity now ≈${g(expectedNow)} (curve from ${g(
+      targets.og,
+    )} to an expected final gravity of ${g(targets.fg)} over ${opts.days} days); actual ${g(
+      last.gravity,
+    )}, ${vsExpected}.`,
+  ];
+  if (projection && last.time < endMs) {
+    const atEnd = projection.at(endMs);
+    const gap = atEnd - targets.fg;
+    parts.push(
+      projection.ratePerHour === 0
+        ? `The gravity has stopped dropping, so it is projected to stay at ${g(atEnd)} — ${g(
+            gap,
+          )} above the expected final gravity.`
+        : `At the current rate it is projected to reach ${g(atEnd)} by the end of day ${opts.days}, ${
+            gap > 0.002
+              ? `${g(gap)} ABOVE the expected final gravity of ${g(targets.fg)}`
+              : 'in line with the expected final gravity'
+          }.`,
+    );
+    if (projection.ratePerHour > 0 && projection.current - targets.fg > 0.002) {
+      const hours = Math.log((projection.current - targets.fg) / 0.002) / projection.ratePerHour;
+      const days = hours / 24;
+      if (days > 0.25 && days < 60) {
+        parts.push(
+          `At this rate it would get within 0.002 of the expected final gravity in about ${days.toFixed(1)} more days.`,
+        );
+      }
+    }
+  } else if (!projection) {
+    parts.push('There is not enough recent data yet to project where it will end up.');
+  }
+  return parts.join(' ');
 }
