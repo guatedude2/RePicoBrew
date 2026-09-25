@@ -19,7 +19,14 @@ export type GravityEstimateInput = {
   hops: Array<{ name: string; ounces: number }>;
 };
 
-export type GravityEstimate = { og: number; fg: number; attenuation: number; explanation: string };
+export type GravityEstimate = {
+  og: number;
+  fg: number;
+  attenuation: number;
+  tempMin: number | null;
+  tempMax: number | null;
+  explanation: string;
+};
 export type GravityEstimateResult = ({ success: true } & GravityEstimate) | { success: false; error: string };
 
 const SYSTEM =
@@ -27,9 +34,12 @@ const SYSTEM =
   "Estimate the original gravity (OG), the final gravity (FG) and the yeast's apparent attenuation for THIS recipe, " +
   'from the grain bill and batch size (assume roughly 70-75% brewhouse efficiency), the style, the yeast, and the ' +
   "recipe's stated ABV — the ABV should roughly equal (OG - FG) x 131.25, so pick numbers consistent with it. " +
+  'Also give the fermentation temperature range in degrees Fahrenheit that suits this beer and its yeast (e.g. ' +
+  'a clean American ale yeast: 64 to 72). ' +
   'Respond with ONLY one JSON object, no markdown: {"og": 1.0xx, "fg": 1.0xx, "attenuation": <percent number>, ' +
-  '"explanation": "one or two short sentences on how you got there"}. OG and FG are specific gravities with three ' +
-  'decimals (e.g. 1.056 and 1.012); attenuation is apparent attenuation as a percentage (e.g. 79).';
+  '"tempMinF": <number>, "tempMaxF": <number>, "explanation": "one or two short sentences on how you got there"}. ' +
+  'OG and FG are specific gravities with three decimals (e.g. 1.056 and 1.012); attenuation is apparent attenuation as ' +
+  'a percentage (e.g. 79).';
 
 const OZ_PER_LB = 16;
 const GAL_PER_L = 0.264172;
@@ -111,12 +121,18 @@ export async function estimateGravityTargets(input: GravityEstimateInput): Promi
   if (!Number.isFinite(attenuation) || attenuation < 40 || attenuation > 100) {
     attenuation = ((og - fg) / (og - 1)) * 100;
   }
+  // The temperature range is a bonus: kept only when it is a sane min < max in °F, otherwise ignored.
+  const tMin = num(parsed.tempMinF);
+  const tMax = num(parsed.tempMaxF);
+  const tempOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMin >= 30 && tMax <= 100 && tMin < tMax;
   const explanation = typeof parsed.explanation === 'string' ? parsed.explanation.trim().slice(0, 400) : '';
   return {
     success: true,
     og: round3(og),
     fg: round3(fg),
     attenuation: Math.round(attenuation * 10) / 10,
+    tempMin: tempOk ? Math.round(tMin) : null,
+    tempMax: tempOk ? Math.round(tMax) : null,
     explanation,
   };
 }

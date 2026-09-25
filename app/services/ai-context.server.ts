@@ -1,4 +1,5 @@
 import { IngredientSection, RecipePackType } from '~/types';
+import { resolveRecommendedTemp } from '~/utils/ferment-temp-range';
 import {
   expectedGravityAt,
   projectGravity,
@@ -268,4 +269,32 @@ export function describeGravityOutlook(
     parts.push('There is not enough recent data yet to project where it will end up.');
   }
   return parts.join(' ');
+}
+
+// The recipe's recommended fermentation temperature range against the batch's recent temperatures, so the AI can say
+// whether the ferment is too cold or too warm for its yeast.
+export function describeTempOutlook(
+  temps: number[],
+  recipe: { yeastRangeTemp?: string | null; fermentationType?: number | null } | null | undefined,
+): string {
+  const recommended = recipe ? resolveRecommendedTemp(recipe) : null;
+  const current = temps[temps.length - 1];
+  if (!recommended || current === undefined) {
+    return '';
+  }
+  const { min, max } = recommended.range;
+  let where = 'within';
+  if (current < min) {
+    where = `${(min - current).toFixed(1)}°F BELOW`;
+  } else if (current > max) {
+    where = `${(current - max).toFixed(1)}°F ABOVE`;
+  }
+  const recent = temps.slice(-36);
+  const outside = recent.filter((t) => t < min || t > max).length;
+  const basis = recommended.source === 'yeast' ? "the yeast's range" : `a typical range for this beer type`;
+  return `Recommended fermentation temperature: ${min}-${max}°F (${basis}); the current ${current.toFixed(
+    1,
+  )}°F is ${where} that range${
+    outside > 0 ? `, and ${outside} of the last ${recent.length} readings were outside it` : ''
+  }.`;
 }

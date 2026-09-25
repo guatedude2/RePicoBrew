@@ -38,6 +38,7 @@ import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
 import { postEventStream } from '~/utils/event-stream';
+import { resolveRecommendedTemp } from '~/utils/ferment-temp-range';
 import { formatRelativeTime } from '~/utils/relative-time';
 import { srmSwatchUrl } from '~/utils/srm-swatch';
 import { useServerSideEvent } from '~/utils/sse';
@@ -1129,6 +1130,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             sessionId={fermSession.id}
             startTime={fermSession.createdAt}
             fermentDays={batch.fermentDays ?? batch.recipe?.fermentDays}
+            recommendedTemp={batch.recipe ? resolveRecommendedTemp(batch.recipe)?.range ?? null : null}
             expectedGravity={{
               days: fermentDaysTotal,
               recipeOg: batch.recipe?.og,

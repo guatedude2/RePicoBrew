@@ -16,6 +16,8 @@ interface FermentationChartProps {
   fermentDays?: number | null;
   // With the recipe's gravity targets and the fermentation length, the chart also draws a dashed EXPECTED gravity
   // curve and a dashed PROJECTED one (the current trend carried to the end of the window); see gravity-projection.ts.
+  // The recipe's recommended fermentation temperature range (°F), drawn as a shaded band on the temperature axis.
+  recommendedTemp?: { min: number; max: number } | null;
   expectedGravity?: {
     days: number;
     recipeOg?: number | null;
@@ -60,12 +62,14 @@ const GRID_COLOR = 'oklch(0.24 0.008 260)';
 const DAY_LINE_COLOR = 'oklch(0.42 0.01 260)';
 const PROJECTED_COLOR = 'oklch(0.85 0.09 235)';
 const EXPECTED_COLOR = 'oklch(0.75 0.14 150)';
+const TEMP_BAND_COLOR = 'oklch(0.72 0.13 150)';
 
 export default function FermentationChart({
   sessionId,
   startTime,
   fermentDays,
   expectedGravity,
+  recommendedTemp,
 }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
 
@@ -205,6 +209,13 @@ export default function FermentationChart({
       {
         title: { text: 'Temperature (°F)', style: { color: TEMP_COLOR } },
         labels: { style: { colors: TEMP_COLOR }, formatter: (val) => val.toFixed(1) },
+        // Keep the whole recommended band on the axis even when the readings sit in a narrow part of it.
+        ...(recommendedTemp
+          ? {
+              min: (min: number) => Math.floor(Math.min(min, recommendedTemp.min) - 1),
+              max: (max: number) => Math.ceil(Math.max(max, recommendedTemp.max) + 1),
+            }
+          : {}),
       },
       {
         opposite: true,
@@ -283,6 +294,28 @@ export default function FermentationChart({
     grid: { borderColor: GRID_COLOR },
     annotations: {
       xaxis: dayLines.map((x) => ({ x, borderColor: DAY_LINE_COLOR, strokeDashArray: 4 })),
+      yaxis: recommendedTemp
+        ? [
+            {
+              y: recommendedTemp.min,
+              y2: recommendedTemp.max,
+              yAxisIndex: 0,
+              fillColor: TEMP_BAND_COLOR,
+              opacity: 0.12,
+              borderColor: TEMP_BAND_COLOR,
+              strokeDashArray: 0,
+              label: {
+                text: `Recommended ${recommendedTemp.min}–${recommendedTemp.max}°F`,
+                position: 'right',
+                textAnchor: 'end',
+                offsetX: -8,
+                offsetY: -4,
+                borderWidth: 0,
+                style: { color: TEMP_BAND_COLOR, background: 'transparent', fontSize: '11px' },
+              },
+            },
+          ]
+        : [],
     },
   };
 

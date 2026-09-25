@@ -62,7 +62,7 @@ export type CreateRecipeInput = {
   yeastName?: string;
   yeastAmount?: number;
   yeastAttenuation?: number | null;
-  yeastRangeTemp?: string;
+  yeastRangeTemp?: string | null;
   yeastPitchTemp?: number;
   ingredients: IngredientRow[];
 };

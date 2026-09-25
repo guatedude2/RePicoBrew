@@ -4,7 +4,12 @@ import { BatchRepository } from '~/repositories/batch.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
-import { describeGravityOutlook, describeRecipeForAi, describeSessionsForAi } from '~/services/ai-context.server';
+import {
+  describeGravityOutlook,
+  describeRecipeForAi,
+  describeSessionsForAi,
+  describeTempOutlook,
+} from '~/services/ai-context.server';
 import { callAiProvider, streamAiProvider, describeAiError } from '~/services/ai-provider.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
@@ -225,7 +230,16 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
           yeastAttenuation: fullRecipe?.yeastAttenuation,
         })
       : '';
-    stageSummary = [progress, buildFermentSummary(logs), outlook].filter(Boolean).join(' ');
+    const temps = logs.flatMap((log) => {
+      try {
+        const row = JSON.parse(log.data) as FermLogRow;
+        return typeof row.temp === 'number' ? [row.temp] : [];
+      } catch {
+        return [];
+      }
+    });
+    const tempOutlook = describeTempOutlook(temps, fullRecipe);
+    stageSummary = [progress, buildFermentSummary(logs), outlook, tempOutlook].filter(Boolean).join(' ');
   }
 
   // Errors the machine reported during this brew (e.g. "reservoir empty") — context for anything odd in the readings.

@@ -19,6 +19,7 @@ import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-edit
 import { cn } from '~/lib/utils';
 import type { AiIngredientRow, PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
+import { formatTempRange, parseTempRange } from '~/utils/ferment-temp-range';
 import { dirtyClass } from '~/utils/form-dirty';
 import { validatePicoRecipe } from '~/utils/pico-recipe-validation';
 import { displayToOz, ozToDisplay, useWeightUnit, type WeightUnit } from '~/utils/weight-unit';
@@ -153,6 +154,7 @@ export type PicoPackEditorData = {
   og?: number | null;
   fg?: number | null;
   yeastAttenuation?: number | null;
+  yeastRangeTemp?: string | null;
   steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
   ingredients?: RecipeEditorIngredient[];
 };
@@ -186,6 +188,11 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const [og, setOg] = useState<number | ''>(recipe?.og ?? '');
   const [fg, setFg] = useState<number | ''>(recipe?.fg ?? '');
   const [yeastAttenuation, setYeastAttenuation] = useState<number | ''>(recipe?.yeastAttenuation ?? '');
+  const savedTemp = parseTempRange(recipe?.yeastRangeTemp);
+  const [tempMin, setTempMin] = useState<number | ''>(savedTemp?.min ?? '');
+  const [tempMax, setTempMax] = useState<number | ''>(savedTemp?.max ?? '');
+  const yeastRangeTemp =
+    tempMin !== '' && tempMax !== '' && tempMin < tempMax ? formatTempRange(tempMin, tempMax) : null;
   const [estimating, setEstimating] = useState(false);
   const [estimateNote, setEstimateNote] = useState<{ text: string; error: boolean } | null>(null);
   const [photoUrl] = useState(recipe?.photoUrl ?? null);
@@ -228,6 +235,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       og: recipe?.og ?? null,
       fg: recipe?.fg ?? null,
       yeastAttenuation: recipe?.yeastAttenuation ?? null,
+      yeastRangeTemp: savedTemp ? formatTempRange(savedTemp.min, savedTemp.max) : null,
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
@@ -249,6 +257,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         og: og === '' ? null : og,
         fg: fg === '' ? null : fg,
         yeastAttenuation: yeastAttenuation === '' ? null : yeastAttenuation,
+        yeastRangeTemp,
         steps: machineSteps.map(({ id: _id, ...rest }) => rest),
         grains: stripPakRowIds(grains),
         hops: stripPakRowIds(hops),
@@ -265,6 +274,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       og,
       fg,
       yeastAttenuation,
+      yeastRangeTemp,
       machineSteps,
       grains,
       hops,
@@ -414,6 +424,8 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         og?: number;
         fg?: number;
         attenuation?: number;
+        tempMin?: number | null;
+        tempMax?: number | null;
         explanation?: string;
         error?: string;
       };
@@ -425,6 +437,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       setFg(result.fg);
       if (result.attenuation != null) {
         setYeastAttenuation(result.attenuation);
+      }
+      if (result.tempMin != null && result.tempMax != null) {
+        setTempMin(result.tempMin);
+        setTempMax(result.tempMax);
       }
       setEstimateNote({ text: `AI estimate: ${result.explanation || 'filled in from the grain bill.'}`, error: false });
     } catch {
@@ -449,6 +465,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       og: og === '' ? null : og,
       fg: fg === '' ? null : fg,
       yeastAttenuation: yeastAttenuation === '' ? null : yeastAttenuation,
+      yeastRangeTemp,
       photoUrl: photoUrl ?? undefined,
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
@@ -470,6 +487,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       og,
       fg,
       yeastAttenuation,
+      yeastRangeTemp,
       photoUrl,
       machineSteps,
       grains,
@@ -502,7 +520,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
           <p className="text-xs text-ink-text-faint">{style || ' '}</p>
         </div>
         {readOnly && recipe && (
-          <Link to={`/recipes/${recipe.id}`}>
+          <Link to={`/recipes/${recipe.id}?mode=edit`}>
             <Button variant="brand" size="sm">
               <MdEdit />
               Edit Recipe
@@ -667,11 +685,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   </p>
                 </div>
               </div>
-              {(!readOnly || og !== '' || fg !== '' || yeastAttenuation !== '') && (
+              {(!readOnly || og !== '' || fg !== '' || yeastAttenuation !== '' || yeastRangeTemp !== null) && (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold text-ink-text-secondary">
-                      Gravity targets (optional) — used for the fermentation chart&apos;s expected and projected gravity
+                      Fermentation targets (optional) — used for the fermentation chart&apos;s expected and projected
+                      gravity and recommended temperature range
                     </p>
                     {!readOnly && hasAiKey && (
                       <Button type="button" variant="outline" size="xs" disabled={estimating} onClick={estimateGravity}>
@@ -733,6 +752,44 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                           className={cn(
                             'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
                             dirtyClass(yeastAttenuation, recipe?.yeastAttenuation ?? '', isEditingExisting),
+                          )}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Ferment temp min °F</p>
+                      {readOnly ? (
+                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMin === '' ? '—' : tempMin}</p>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={1}
+                          placeholder="64"
+                          value={tempMin}
+                          onChange={(e) => setTempMin(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={cn(
+                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                            dirtyClass(tempMin, savedTemp?.min ?? '', isEditingExisting),
+                          )}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Ferment temp max °F</p>
+                      {readOnly ? (
+                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{tempMax === '' ? '—' : tempMax}</p>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={1}
+                          placeholder="72"
+                          value={tempMax}
+                          onChange={(e) => setTempMax(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={cn(
+                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                            dirtyClass(tempMax, savedTemp?.max ?? '', isEditingExisting),
                           )}
                         />
                       )}
