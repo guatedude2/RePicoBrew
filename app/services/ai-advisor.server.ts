@@ -1,11 +1,15 @@
 import { AiAdviceRepository, type AiAdviceTrigger } from '~/repositories/ai-advice.server';
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { BatchRepository } from '~/repositories/batch.server';
+import { DeviceRepository } from '~/repositories/device.server';
+import { RecipeRepository } from '~/repositories/recipe.server';
 import { SessionRepository } from '~/repositories/session.server';
+import { describeRecipeForAi, describeSessionsForAi } from '~/services/ai-context.server';
 import { callAiProvider, streamAiProvider } from '~/services/ai-provider.server';
 import { PICOBREW_DOMAIN_KNOWLEDGE } from '~/services/picobrew-knowledge.server';
 import pubsub from '~/services/pubsub.server';
 import { BatchPhase, SessionType } from '~/types';
+import { describePicoErrorCode } from '~/utils/pico-error-codes';
 
 const MANUAL_COOLDOWN_MS = 2 * 60 * 1000;
 
@@ -164,37 +168,73 @@ function buildFermentSummary(logs: Array<{ data: string; time: Date }>) {
   return lines.length > 0 ? lines.join(' ') : 'No fermentation readings yet.';
 }
 
-// Everything the AI is told about a batch: recipe, the phase, and live telemetry for it (current step, the
-// recipe's target for that step, recent readings, ...). Shared by the scheduled/step advice and the chat.
+// How long ago something started, for the prompt ("3.2 days ago").
+function agoText(from: Date): string {
+  const hours = (Date.now() - new Date(from).getTime()) / 3600000;
+  return hours < 48 ? `${Math.round(hours)} hours ago` : `${(hours / 24).toFixed(1)} days ago`;
+}
+
+function describeCarbonation(batch: NonNullable<Awaited<ReturnType<typeof BatchRepository.getBatch>>>): string {
+  if (!batch.carbMethod) {
+    return '';
+  }
+  const duration = batch.carbDuration ? ` for ${batch.carbDuration} ${batch.carbUnit ?? ''}`.trimEnd() : '';
+  const started = batch.carbStartedAt ? `, started ${agoText(batch.carbStartedAt)}` : '';
+  return `Carbonation: ${batch.carbMethod}${duration}${batch.carbStatus ? ` (${batch.carbStatus})` : ''}${started}.`;
+}
+
+// Everything the AI is told about a batch: the batch and its sessions/devices, the full recipe (targets, brew
+// parameters, yeast, ingredients, notes), the phase, and live telemetry for it (current step, the recipe's target for
+// that step, recent readings, machine errors, ...). Shared by the scheduled/step advice and the session chat.
 async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof BatchRepository.getBatch>>>) {
   const recipe = batch.recipe;
-  const recipeLines = recipe
-    ? [
-        `Recipe: ${recipe.name}${recipe.style ? ` (${recipe.style})` : ''}.`,
-        `Targets — OG ${recipe.og ?? '—'}, FG ${recipe.fg ?? '—'}, ABV ${recipe.abv}%, IBU ${recipe.ibu}.`,
-        recipe.fermentDays ? `Expected fermentation length: ${recipe.fermentDays} days.` : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : 'No recipe details attached to this batch.';
+  // getBatch only carries the recipe's machine steps; the full recipe (ingredients, yeast, notes, ...) is fetched here.
+  const fullRecipe = recipe ? await RecipeRepository.getRecipe(recipe.id) : null;
+  const recipeBlock = fullRecipe ? describeRecipeForAi(fullRecipe) : 'No recipe details attached to this batch.';
+
+  const brewSession = batch.sessions.find((s: { type: number }) => BREW_SESSION_TYPES.includes(s.type));
+  const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION);
 
   let stageSummary = '';
   let step: string | null = null;
   if (batch.phase === BatchPhase.BREWING) {
-    const brewSession = batch.sessions.find((s: { type: number }) => BREW_SESSION_TYPES.includes(s.type));
     const logs = brewSession ? await SessionRepository.listSessionLogs(brewSession.id) : [];
     const brew = buildBrewSummary(logs, batch.recipe?.steps ?? []);
     stageSummary = brew.summary;
     step = brew.step;
   } else if (batch.phase === BatchPhase.FERMENTING) {
-    const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION);
     const logs = fermSession ? await SessionRepository.listSessionLogs(fermSession.id) : [];
     const progress = fermSession ? describeFermentationProgress(fermSession.createdAt, recipe?.fermentDays) : '';
     stageSummary = [progress, buildFermentSummary(logs)].filter(Boolean).join(' ');
   }
 
+  // Errors the machine reported during this brew (e.g. "reservoir empty") — context for anything odd in the readings.
+  let errorLines = '';
+  if (brewSession) {
+    const errors = await DeviceRepository.listErrorLogsForSession(brewSession.deviceId, brewSession.uid);
+    if (errors.length > 0) {
+      errorLines = `Machine errors reported during the brew: ${errors
+        .slice(0, 6)
+        .map((e) => `code ${e.data.errorCode} (${describePicoErrorCode(e.data.errorCode).summary}) ${agoText(e.time)}`)
+        .join('; ')}.`;
+    }
+  }
+
+  const header = `Batch: ${batch.recipe?.name ?? batch.name}. Phase: ${batch.phase}. Started ${agoText(
+    batch.createdAt,
+  )}. Current time: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`;
+
   return {
-    text: [`Batch: ${batch.name}. Phase: ${batch.phase}.`, recipeLines, stageSummary].filter(Boolean).join(' '),
+    text: [
+      header,
+      recipeBlock,
+      describeSessionsForAi(batch.sessions),
+      describeCarbonation(batch),
+      errorLines,
+      stageSummary,
+    ]
+      .filter(Boolean)
+      .join('\n'),
     step,
   };
 }
@@ -217,7 +257,10 @@ async function buildPrompt(batch: NonNullable<Awaited<ReturnType<typeof BatchRep
     'sentences of plain prose (no markdown, no headers, no bullet points — it renders in a small card). While brewing, ' +
     'focus on the step the brew is on right now: what is happening, what to watch for, and what comes next. Flag genuine ' +
     "anomalies (stalled fermentation, temperature swings outside a safe range, mash temp off target) but don't invent " +
-    'problems from normal readings — a brief reassurance that things look on track is a perfectly good response.';
+    'problems from normal readings — a brief reassurance that things look on track is a perfectly good response. ' +
+    'The context lists the batch, its recipe (targets, ingredients, yeast, notes), the machines involved and any ' +
+    "machine errors: ground your advice in those specifics — compare readings to the recipe's targets and the " +
+    "yeast's pitch and fermentation range, and mention only what is relevant.";
 
   return {
     system: `${basePrompt}\n\n${PICOBREW_DOMAIN_KNOWLEDGE}`,

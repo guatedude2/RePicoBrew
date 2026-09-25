@@ -4,37 +4,11 @@ import { AiChatRepository, type AiChatScope } from '~/repositories/ai-chat.serve
 import { BatchRepository } from '~/repositories/batch.server';
 import { RecipeRepository } from '~/repositories/recipe.server';
 import { describeBatchForChat } from '~/services/ai-advisor.server';
+import { describeRecipeForAi } from '~/services/ai-context.server';
 import { runGeneralChat } from '~/services/ai-chat-assistant.server';
 import { requireUser } from '~/services/auth.server';
 import type { AiChatAction } from '~/services/ai-chat-assistant.server';
 import { eventStreamResponse } from '~/utils/event-stream.server';
-
-// -1 is this app's "not set" sentinel for ABV/IBU (see app/utils/brew-stats.ts) — skip rather than
-// show a misleading "-1% ABV" to the AI.
-function describeRecipe(recipe: {
-  name: string;
-  style: string | null;
-  deviceType: string;
-  abv: number;
-  ibu: number;
-  ingredients: Array<{ section: string; name: string }>;
-}): string {
-  const stats = [recipe.abv >= 0 ? `${recipe.abv}% ABV` : null, recipe.ibu >= 0 ? `${recipe.ibu} IBU` : null]
-    .filter(Boolean)
-    .join(', ');
-  const fermentables = recipe.ingredients.filter((i) => i.section === 'FERMENTABLE').map((i) => i.name);
-  const hops = recipe.ingredients.filter((i) => i.section === 'BOIL_HOP' || i.section === 'DRY_HOP').map((i) => i.name);
-  const ingredientBits = [
-    fermentables.length ? `fermentables: ${fermentables.slice(0, 6).join(', ')}` : null,
-    hops.length ? `hops: ${hops.slice(0, 6).join(', ')}` : null,
-  ]
-    .filter(Boolean)
-    .join('; ');
-  const styleBit = recipe.style ? ` (${recipe.style})` : '';
-  const statsBit = stats ? `, ${stats}` : '';
-  const ingredientsBit = ingredientBits ? `. Ingredients — ${ingredientBits}` : '';
-  return `Recipe "${recipe.name}"${styleBit}, ${recipe.deviceType} device${statsBit}${ingredientsBit}.`;
-}
 
 // GET  /api/ai-chat?scope=general|recipe|session&scopeId=<number, omitted for general>
 //      Returns { threadId, messages } for that scope — the AI Brewmaster sidekick (see
@@ -95,7 +69,7 @@ async function runChatTurn(
   } else if (scope === 'recipe' && scopeId != null) {
     const recipe = await RecipeRepository.getRecipe(scopeId);
     if (recipe) {
-      contextLine = describeRecipe(recipe);
+      contextLine = describeRecipeForAi(recipe);
       editRecipeUrl = `/recipes/${recipe.id}`;
     }
   }
