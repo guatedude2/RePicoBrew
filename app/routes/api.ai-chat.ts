@@ -63,14 +63,14 @@ async function runChatTurn(
       // The live session data (current step, recent readings, targets) — without it the AI can only guess.
       contextLine = (await describeBatchForChat(scopeId)) ?? `Batch "${batch.name}", phase ${batch.phase}.`;
       if (batch.recipe) {
-        editRecipeUrl = `/recipes/${batch.recipe.id}`;
+        editRecipeUrl = `/recipes/${batch.recipe.id}?mode=edit`;
       }
     }
   } else if (scope === 'recipe' && scopeId != null) {
     const recipe = await RecipeRepository.getRecipe(scopeId);
     if (recipe) {
       contextLine = describeRecipeForAi(recipe);
-      editRecipeUrl = `/recipes/${recipe.id}`;
+      editRecipeUrl = `/recipes/${recipe.id}?mode=edit`;
     }
   }
 

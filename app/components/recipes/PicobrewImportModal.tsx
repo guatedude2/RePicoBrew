@@ -109,7 +109,7 @@ export const PicobrewImportModal: FC<{ open: boolean; onOpenChange: (open: boole
     if (importFetcher.state === 'idle' && importFetcher.data?.success && importFetcher.data.recipeId) {
       const recipeId = importFetcher.data.recipeId;
       onOpenChange(false);
-      navigate(`/recipes/${recipeId}`);
+      navigate(`/recipes/${recipeId}?mode=edit`);
     }
   }, [importFetcher.state, importFetcher.data, navigate, onOpenChange]);
 

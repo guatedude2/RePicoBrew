@@ -656,7 +656,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           <p className="text-xs text-ink-text-faint">{style || ' '}</p>
         </div>
         {readOnly && recipe && (
-          <Link to={`/recipes/${recipe.id}`}>
+          <Link to={`/recipes/${recipe.id}?mode=edit`}>
             <Button variant="brand" size="sm">
               <MdEdit />
               Edit Recipe

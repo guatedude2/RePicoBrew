@@ -280,7 +280,7 @@ const RecipeRow: FC<{ recipe: Recipe; onRequestDelete: (recipe: Recipe) => void 
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/recipes/${recipe.id}`)}>
+            <DropdownMenuItem onClick={() => navigate(`/recipes/${recipe.id}?mode=edit`)}>
               <MdEdit className="size-4" />
               Edit
             </DropdownMenuItem>

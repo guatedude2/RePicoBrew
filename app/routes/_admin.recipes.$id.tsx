@@ -23,7 +23,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     throw new Response('Recipe not found', { status: 404 });
   }
 
-  const readOnly = new URL(request.url).searchParams.get('mode') === 'view';
+  // Recipes open read-only; editing is an explicit `?mode=edit` (the editors' Edit Recipe button).
+  const readOnly = new URL(request.url).searchParams.get('mode') !== 'edit';
 
   return { recipe, readOnly };
 };
