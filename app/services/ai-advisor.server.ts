@@ -204,7 +204,9 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
     step = brew.step;
   } else if (batch.phase === BatchPhase.FERMENTING) {
     const logs = fermSession ? await SessionRepository.listSessionLogs(fermSession.id) : [];
-    const progress = fermSession ? describeFermentationProgress(fermSession.createdAt, recipe?.fermentDays) : '';
+    const progress = fermSession
+      ? describeFermentationProgress(fermSession.createdAt, batch.fermentDays ?? recipe?.fermentDays)
+      : '';
     stageSummary = [progress, buildFermentSummary(logs)].filter(Boolean).join(' ');
   }
 

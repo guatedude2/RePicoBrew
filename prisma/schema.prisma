@@ -145,6 +145,10 @@ model Batch {
   // section can pre-fill "Start Tracking" once the batch actually reaches that phase.
   fermentDeviceId Int?
 
+  // Total fermentation length for THIS batch, in days. Overrides the recipe's expected fermentDays once set (e.g. by
+  // "Ferment longer"), so extending one batch never changes its recipe.
+  fermentDays Int?
+
   recipe        Recipe?   @relation(fields: [recipeId], references: [id])
   fermentDevice Device?   @relation(fields: [fermentDeviceId], references: [id])
   sessions      Session[]

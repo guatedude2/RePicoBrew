@@ -7,7 +7,7 @@ import { requireWriter } from '~/services/auth.server';
 
 /**
  * POST /api/batches/:id
- * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice', ... }
+ * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice' | 'extendFermentation', ... }
  */
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireWriter(request);
@@ -51,6 +51,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     case 'archive': {
       const batch = await BatchRepository.archiveBatch(id);
       return { success: true, batch };
+    }
+    case 'extendFermentation': {
+      const days = Number(body.days);
+      if (!Number.isInteger(days) || days < 1 || days > 60) {
+        return data({ error: 'Enter a whole number of days between 1 and 60.' }, { status: 400 });
+      }
+      try {
+        const batch = await BatchRepository.extendFermentation(id, days);
+        return { success: true, batch };
+      } catch (error) {
+        return data(
+          { error: error instanceof Error ? error.message : 'Could not extend fermentation.' },
+          { status: 400 },
+        );
+      }
     }
     case 'requestAiAdvice': {
       const result = await analyzeBatch(id, 'manual');

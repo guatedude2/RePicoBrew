@@ -21,6 +21,7 @@ import type { IconType } from 'react-icons';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog';
+import { Input } from '~/components/ui/input';
 import { Select } from '~/components/ui/select';
 import { Spinner } from '~/components/ui/spinner';
 import { ChartMenu } from '~/components/charts/ChartMenu';
@@ -31,7 +32,7 @@ import type { loader as sessionDetailLoader } from '~/routes/_admin.sessions.$id
 import { ACCENT, StatCard } from '~/components/ui/StatCard';
 import { cn } from '~/lib/utils';
 import { BatchPhase } from '~/types';
-import { batchOverallProgress, phaseAccent, phaseLabel } from '~/utils/batch-phase';
+import { batchOverallProgress, effectiveFermentDays, phaseAccent, phaseLabel } from '~/utils/batch-phase';
 import { phaseForStep } from '~/utils/brew-step-phase';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { useChartZoom } from '~/utils/chart-zoom';
@@ -402,6 +403,8 @@ export const SessionDetail: FC<SessionDetailData> = ({
   );
   const [endModalOpen, setEndModalOpen] = useState(false);
   const [skipFermentModalOpen, setSkipFermentModalOpen] = useState(false);
+  const [extendModalOpen, setExtendModalOpen] = useState(false);
+  const [extendDays, setExtendDays] = useState(3);
   const [selectedTiltId, setSelectedTiltId] = useState(batch.fermentDeviceId ? String(batch.fermentDeviceId) : '');
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -753,7 +756,8 @@ export const SessionDetail: FC<SessionDetailData> = ({
   // Same formula the Dashboard's ongoing-brews list uses, so both show the same number for a batch.
   const overallProgress = batchOverallProgress(batch);
 
-  const fermMs = (batch.recipe?.fermentDays ?? 7) * 86400000;
+  const fermentDaysTotal = effectiveFermentDays(batch);
+  const fermMs = fermentDaysTotal * 86400000;
   const fermStart = fermSession ? new Date(fermSession.createdAt).getTime() : new Date(batch.updatedAt).getTime();
   const clampPct = (start: number, totalMs: number) =>
     totalMs > 0 ? Math.max(0, Math.min(99, Math.round(((Date.now() - start) / totalMs) * 100))) : 0;
@@ -785,6 +789,28 @@ export const SessionDetail: FC<SessionDetailData> = ({
 
   // Once the recipe's estimated fermentation window has elapsed, moving on is the expected next
   // step; before that, it's cutting fermentation short, so confirm first.
+  // When the latest fermentation advice says to leave it "another N days", offer that as the default.
+  const suggestedExtendDays = (() => {
+    const text = latestFermAdvice?.content ?? '';
+    const match =
+      text.match(/(?:another|additional|extra)\s+(\d{1,2})(?:\s*(?:-|to)\s*\d{1,2})?\s+(?:more\s+)?days?/i) ??
+      text.match(/(\d{1,2})\s+(?:more|extra|additional)\s+days?/i);
+    const days = match ? Number(match[1]) : null;
+    return days && days >= 1 && days <= 60 ? days : null;
+  })();
+  const openExtendModal = () => {
+    setExtendDays(suggestedExtendDays ?? 3);
+    setExtendModalOpen(true);
+  };
+  const submitExtend = () => {
+    fetcher.submit(JSON.stringify({ intent: 'extendFermentation', days: extendDays }), {
+      method: 'post',
+      action: `/api/batches/${batch.id}`,
+      encType: 'application/json',
+    });
+    setExtendModalOpen(false);
+  };
+
   const handleBottleClick = () => {
     if (fermentationTimeUp) {
       startBottling();
@@ -1083,7 +1109,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           <StatCard
             label="Time Remaining"
             value={fermentationTimeUp ? 'Time up' : formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
-            sub={`${formatDuration(fermSession.createdAt)} elapsed of ${batch.recipe?.fermentDays ?? 7}d total`}
+            sub={`${formatDuration(fermSession.createdAt)} elapsed of ${fermentDaysTotal}d total`}
             icon={MdTimer}
             accent={ACCENT.brand}
           />
@@ -1102,7 +1128,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           <FermentationChart
             sessionId={fermSession.id}
             startTime={fermSession.createdAt}
-            fermentDays={batch.recipe?.fermentDays}
+            fermentDays={batch.fermentDays ?? batch.recipe?.fermentDays}
           />
         </div>
         {hasAiKey && (
@@ -1115,14 +1141,19 @@ export const SessionDetail: FC<SessionDetailData> = ({
           />
         )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button
-            variant={fermentationTimeUp ? 'brand' : 'link'}
-            size={fermentationTimeUp ? 'default' : 'sm'}
-            disabled={fetcher.state !== 'idle'}
-            onClick={handleBottleClick}
-          >
-            {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={fermentationTimeUp ? 'brand' : 'link'}
+              size={fermentationTimeUp ? 'default' : 'sm'}
+              disabled={fetcher.state !== 'idle'}
+              onClick={handleBottleClick}
+            >
+              {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+            </Button>
+            <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
+              Ferment longer
+            </Button>
+          </div>
         )}
       </div>
     );
@@ -1199,14 +1230,19 @@ export const SessionDetail: FC<SessionDetailData> = ({
           />
         )}
         {batch.phase === BatchPhase.FERMENTING && (
-          <Button
-            variant={fermentationTimeUp ? 'brand' : 'link'}
-            size={fermentationTimeUp ? 'default' : 'sm'}
-            disabled={fetcher.state !== 'idle'}
-            onClick={handleBottleClick}
-          >
-            {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={fermentationTimeUp ? 'brand' : 'link'}
+              size={fermentationTimeUp ? 'default' : 'sm'}
+              disabled={fetcher.state !== 'idle'}
+              onClick={handleBottleClick}
+            >
+              {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+            </Button>
+            <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
+              Ferment longer
+            </Button>
+          </div>
         )}
       </div>
     );
@@ -1466,6 +1502,57 @@ export const SessionDetail: FC<SessionDetailData> = ({
               }}
             >
               End Session
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={extendModalOpen} onOpenChange={setExtendModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ferment longer</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            {fermentationTimeUp
+              ? 'The expected fermentation time is up. How many more days should this batch keep fermenting?'
+              : `This adds days to the ${`${fermentDaysTotal}-day`} fermentation window.`}{' '}
+            The recipe itself isn&apos;t changed.
+          </p>
+          {suggestedExtendDays && (
+            <p className="text-xs text-ink-text-faint">
+              The AI Brewmaster suggested leaving it for another {suggestedExtendDays} day
+              {suggestedExtendDays === 1 ? '' : 's'}.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {[1, 2, 3, 5, 7].map((d) => (
+              <Button
+                key={d}
+                type="button"
+                size="sm"
+                variant={extendDays === d ? 'brand' : 'outline'}
+                onClick={() => setExtendDays(d)}
+              >
+                +{d}d
+              </Button>
+            ))}
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={extendDays}
+              onChange={(e) => setExtendDays(Math.max(1, Math.min(60, Math.round(Number(e.target.value)) || 1)))}
+              className="h-8 w-20"
+              aria-label="Days to add"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={submitExtend}>
+              Add {extendDays} day{extendDays === 1 ? '' : 's'}
             </Button>
           </DialogFooter>
         </DialogContent>

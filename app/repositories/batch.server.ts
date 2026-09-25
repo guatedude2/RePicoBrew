@@ -1,6 +1,6 @@
 import prisma from '~/services/prisma.server';
 import { BatchPhase, SessionState, SessionType } from '~/types';
-import { batchNeedsAttention } from '~/utils/batch-phase';
+import { batchNeedsAttention, effectiveFermentDays } from '~/utils/batch-phase';
 import { QUEUED_STATUS_TEXT } from '~/utils/queued-brew';
 
 export class BatchRepository {
@@ -32,6 +32,21 @@ export class BatchRepository {
         },
       },
     });
+  }
+
+  // "Ferment longer": adds `days` to the batch's fermentation length. If the expected time is already up, the days are
+  // counted from now (the length becomes the days already elapsed, rounded up, plus `days`), so there is always at
+  // least `days` left. Only the batch changes, never its recipe.
+  public static async extendFermentation(id: number, days: number) {
+    const batch = await this.getBatch(id);
+    if (!batch || batch.phase !== BatchPhase.FERMENTING) {
+      throw new Error('Batch is not fermenting');
+    }
+    const fermSession = batch.sessions.find((s: { type: number }) => s.type === SessionType.FERMENTATION);
+    const fermStart = new Date(fermSession?.createdAt ?? batch.updatedAt).getTime();
+    const elapsedDays = Math.ceil((Date.now() - fermStart) / 86400000);
+    const base = Math.max(effectiveFermentDays(batch), elapsedDays);
+    return await prisma.batch.update({ where: { id }, data: { fermentDays: base + days } });
   }
 
   // A session's "detail" page is really its batch's detail page — resolve one from the other.

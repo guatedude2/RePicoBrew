@@ -33,6 +33,15 @@ const carbMsFor = (duration: number, unit: string | null) =>
 // fully manual with no automatic exit, so they always need a click; fermenting needs one once its
 // estimated window has elapsed; carbonating needs one once it was never configured or its
 // countdown finished with no one clicking "Done".
+// How many days this batch's fermentation is meant to run: the batch's own length (set by "Ferment longer") wins
+// over the recipe's expectation, which wins over the 7-day default.
+export function effectiveFermentDays(batch: {
+  fermentDays: number | null;
+  recipe: { fermentDays: number | null } | null;
+}): number {
+  return batch.fermentDays ?? batch.recipe?.fermentDays ?? 7;
+}
+
 export function batchNeedsAttention(batch: {
   phase: string;
   updatedAt: string | Date;
@@ -41,6 +50,7 @@ export function batchNeedsAttention(batch: {
   carbUnit: string | null;
   carbStartedAt: string | Date | null;
   carbExtendMinutes: number | null;
+  fermentDays: number | null;
   recipe: { fermentDays: number | null } | null;
   sessions: Array<{ type: number; state: number; createdAt: string | Date }>;
 }): boolean {
@@ -50,7 +60,7 @@ export function batchNeedsAttention(batch: {
   if (batch.phase === BatchPhase.FERMENTING) {
     const fermSession = batch.sessions.find((s) => s.type === FERMENTATION_SESSION_TYPE);
     const fermStart = new Date(fermSession?.createdAt ?? batch.updatedAt).getTime();
-    const fermMs = (batch.recipe?.fermentDays ?? 7) * 86400000;
+    const fermMs = effectiveFermentDays(batch) * 86400000;
     return Date.now() - fermStart >= fermMs;
   }
   if (batch.phase === BatchPhase.CARBONATING) {
@@ -90,6 +100,7 @@ type StageTimingInput = {
   carbDuration: number | null;
   carbUnit: string | null;
   carbStartedAt: string | Date | null;
+  fermentDays: number | null;
   recipe: { fermentDays: number | null; steps: Array<{ stepTime: number; drainTime: number }> } | null;
   sessions: Array<{ type: number; createdAt: string | Date }>;
 };
@@ -108,7 +119,7 @@ function currentStageWindow(batch: StageTimingInput): { startMs: number; totalMs
     const fermSession = batch.sessions.find((s) => s.type === FERMENTATION_SESSION_TYPE);
     return {
       startMs: new Date(fermSession?.createdAt ?? batch.updatedAt).getTime(),
-      totalMs: (batch.recipe?.fermentDays ?? 7) * 86400000,
+      totalMs: effectiveFermentDays(batch) * 86400000,
     };
   }
   if (batch.phase === BatchPhase.CARBONATING) {
