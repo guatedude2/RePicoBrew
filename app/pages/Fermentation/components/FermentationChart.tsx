@@ -6,7 +6,7 @@ import { Chart } from '~/components/charts/Chart.client';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
 import { expectedGravityAt, projectGravity, resolveGravityTargets, sampleCurve } from '~/utils/gravity-projection';
-import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
+import { chartTimeToken, formatDateTime, useTimeFormat } from '~/utils/time-format';
 
 interface FermentationChartProps {
   sessionId: number;
@@ -144,14 +144,15 @@ export default function FermentationChart({
     if (!targets) {
       return null;
     }
-    const expected = sampleCurve((t) => expectedGravityAt(t, startMs, endMs, targets), startMs, endMs);
+    const expectedAt = (t: number) => expectedGravityAt(t, startMs, endMs, targets);
+    const expected = sampleCurve(expectedAt, startMs, endMs, 120);
     const projection = projectGravity(gravityReadings, targets.fg);
     const last = gravityReadings[gravityReadings.length - 1];
     const projected =
       projection && last && last.time < endMs
-        ? [{ x: last.time, y: last.gravity }, ...sampleCurve(projection.at, last.time, endMs, 30).slice(1)]
+        ? [{ x: last.time, y: last.gravity }, ...sampleCurve(projection.at, last.time, endMs, 60).slice(1)]
         : [];
-    return { expected, projected };
+    return { expected, projected, expectedAt, projectedAt: projection?.at ?? null, lastTime: last?.time ?? startMs };
   })();
 
   // One explicit scale for every gravity line (the actual, expected and projected ones each get their own axis object
@@ -222,7 +223,57 @@ export default function FermentationChart({
     ],
     tooltip: {
       theme: 'dark',
+      shared: true,
+      intersect: false,
       x: { format: `MMM dd, ${chartTimeToken(timeFormat)}` },
+      // One tooltip for every line: past the last reading it shows gravity, temperature and the expected gravity at that
+      // moment; ahead of it, the projected and expected gravity.
+      ...(gravityLines
+        ? {
+            custom: ({
+              seriesIndex,
+              dataPointIndex,
+              w,
+            }: {
+              seriesIndex: number;
+              dataPointIndex: number;
+              w: { globals: { seriesX?: number[][] } };
+            }) => {
+              const x = w.globals.seriesX?.[seriesIndex]?.[dataPointIndex];
+              if (typeof x !== 'number') {
+                return '';
+              }
+              const row = (color: string, label: string, value: string) =>
+                `<div style="display:flex;align-items:center;gap:8px;margin-top:4px"><span style="width:8px;height:8px;border-radius:50%;background:${color}"></span><span style="color:${TEXT_COLOR}">${label}</span><b style="margin-left:auto;padding-left:12px">${value}</b></div>`;
+              const rows: string[] = [];
+              if (x <= gravityLines.lastTime + 1000) {
+                let lo = 0;
+                let hi = data.length - 1;
+                while (lo < hi) {
+                  const mid = (lo + hi) >> 1;
+                  if (data[mid].time < x) {
+                    lo = mid + 1;
+                  } else {
+                    hi = mid;
+                  }
+                }
+                const near =
+                  lo > 0 && Math.abs(data[lo - 1].time - x) < Math.abs(data[lo].time - x) ? data[lo - 1] : data[lo];
+                if (near) {
+                  rows.push(row(GRAVITY_COLOR, 'Specific gravity', `${near.gravity.toFixed(3)} SG`));
+                  rows.push(row(TEMP_COLOR, 'Temperature', `${near.temp.toFixed(1)}°F`));
+                }
+              } else if (gravityLines.projectedAt) {
+                rows.push(row(PROJECTED_COLOR, 'Projected gravity', `${gravityLines.projectedAt(x).toFixed(3)} SG`));
+              }
+              rows.push(row(EXPECTED_COLOR, 'Expected gravity', `${gravityLines.expectedAt(x).toFixed(3)} SG`));
+              return `<div style="padding:8px 12px;font-size:12px;min-width:190px"><div style="color:${TEXT_COLOR};font-weight:600">${formatDateTime(
+                x,
+                timeFormat,
+              )}</div>${rows.join('')}</div>`;
+            },
+          }
+        : {}),
       y: [
         { formatter: (val) => `${val.toFixed(1)}°F` },
         ...Array.from({ length: gravityLines ? 3 : 1 }, () => ({ formatter: (val: number) => `${val.toFixed(3)} SG` })),
