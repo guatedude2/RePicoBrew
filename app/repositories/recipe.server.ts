@@ -34,8 +34,8 @@ export type CreateRecipeInput = {
   abv: number;
   ibu: number;
   style?: string;
-  og?: number;
-  fg?: number;
+  og?: number | null;
+  fg?: number | null;
   colorSRM?: number;
   fermentDays?: number | null;
   image: string;
@@ -61,7 +61,7 @@ export type CreateRecipeInput = {
   fermentationType?: number;
   yeastName?: string;
   yeastAmount?: number;
-  yeastAttenuation?: number;
+  yeastAttenuation?: number | null;
   yeastRangeTemp?: string;
   yeastPitchTemp?: number;
   ingredients: IngredientRow[];

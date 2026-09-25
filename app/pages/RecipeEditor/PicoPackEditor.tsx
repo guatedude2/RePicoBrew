@@ -1,6 +1,6 @@
-import { Form, Link, useNavigate, useNavigation } from 'react-router';
+import { Form, Link, useNavigate, useNavigation, useRouteLoaderData } from 'react-router';
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
-import { MdArrowBack, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
+import { MdArrowBack, MdAutoAwesome, MdCameraAlt, MdEdit, MdError, MdExpandMore } from 'react-icons/md';
 import { useRegisterAiRecipeBridge } from '~/components/recipes/AiSidekickContext';
 import { UnsavedChangesPrompt } from '~/components/UnsavedChangesPrompt';
 import { RecipeActionsMenu } from '~/components/recipes/RecipeActionsMenu';
@@ -9,6 +9,7 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import { Spinner } from '~/components/ui/spinner';
 import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { HopCompartmentInfo } from '~/components/recipe-editor/HopCompartmentInfo';
@@ -149,6 +150,9 @@ export type PicoPackEditorData = {
   yeastName?: string | null;
   yeastAmount?: number | null;
   fermentDays?: number | null;
+  og?: number | null;
+  fg?: number | null;
+  yeastAttenuation?: number | null;
   steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
   ingredients?: RecipeEditorIngredient[];
 };
@@ -177,6 +181,13 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   const [yeastName, setYeastName] = useState(recipe?.yeastName ?? '');
   const [yeastAmount, setYeastAmount] = useState(recipe?.yeastAmount ?? 2);
   const [fermentDays, setFermentDays] = useState<number | ''>(recipe?.fermentDays ?? '');
+  // Gravity targets are optional: PicoPacks carry none, so these start blank (or from the saved recipe) and can be
+  // estimated by the AI. They feed the fermentation chart's expected/projected gravity lines.
+  const [og, setOg] = useState<number | ''>(recipe?.og ?? '');
+  const [fg, setFg] = useState<number | ''>(recipe?.fg ?? '');
+  const [yeastAttenuation, setYeastAttenuation] = useState<number | ''>(recipe?.yeastAttenuation ?? '');
+  const [estimating, setEstimating] = useState(false);
+  const [estimateNote, setEstimateNote] = useState<{ text: string; error: boolean } | null>(null);
   const [photoUrl] = useState(recipe?.photoUrl ?? null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(recipe?.photoUrl ?? null);
 
@@ -214,6 +225,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       yeastName: recipe?.yeastName ?? '',
       yeastAmount: recipe?.yeastAmount ?? 2,
       fermentDays: recipe?.fermentDays ?? null,
+      og: recipe?.og ?? null,
+      fg: recipe?.fg ?? null,
+      yeastAttenuation: recipe?.yeastAttenuation ?? null,
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
@@ -232,11 +246,30 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         yeastName,
         yeastAmount,
         fermentDays: fermentDays === '' ? null : fermentDays,
+        og: og === '' ? null : og,
+        fg: fg === '' ? null : fg,
+        yeastAttenuation: yeastAttenuation === '' ? null : yeastAttenuation,
         steps: machineSteps.map(({ id: _id, ...rest }) => rest),
         grains: stripPakRowIds(grains),
         hops: stripPakRowIds(hops),
       }) !== initialSnapshot,
-    [name, style, notes, abv, ibu, yeastName, yeastAmount, fermentDays, machineSteps, grains, hops, initialSnapshot],
+    [
+      name,
+      style,
+      notes,
+      abv,
+      ibu,
+      yeastName,
+      yeastAmount,
+      fermentDays,
+      og,
+      fg,
+      yeastAttenuation,
+      machineSteps,
+      grains,
+      hops,
+      initialSnapshot,
+    ],
   );
 
   // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors how a manual edit would
@@ -352,6 +385,55 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   }, [name, hops, machineValidation.errors]);
   const hasErrors = errors.length > 0;
 
+  const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
+  const estimateGravity = async () => {
+    setEstimating(true);
+    setEstimateNote(null);
+    try {
+      const rows = (list: PakRow[], section: IngredientSection) =>
+        pakRowsToIngredients(list, section, weightUnit)
+          .filter((i) => i.amount != null)
+          .map((i) => ({ name: i.name, ounces: i.amount as number }));
+      const response = await fetch('/api/ai-gravity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          style,
+          abv,
+          ibu,
+          notes,
+          batchLiters: PICOPACK_BATCH_SIZE_L,
+          yeastName,
+          yeastAmountGrams: yeastAmount,
+          grains: rows(grains, IngredientSection.FERMENTABLE),
+          hops: rows(hops, IngredientSection.BOIL_HOP),
+        }),
+      });
+      const result = (await response.json()) as {
+        og?: number;
+        fg?: number;
+        attenuation?: number;
+        explanation?: string;
+        error?: string;
+      };
+      if (!response.ok || result.og == null || result.fg == null) {
+        setEstimateNote({ text: result.error ?? 'The estimate failed. Try again.', error: true });
+        return;
+      }
+      setOg(result.og);
+      setFg(result.fg);
+      if (result.attenuation != null) {
+        setYeastAttenuation(result.attenuation);
+      }
+      setEstimateNote({ text: `AI estimate: ${result.explanation || 'filled in from the grain bill.'}`, error: false });
+    } catch {
+      setEstimateNote({ text: 'The estimate failed. Try again.', error: true });
+    } finally {
+      setEstimating(false);
+    }
+  };
+
   const payload = useMemo(
     () => ({
       name,
@@ -364,6 +446,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       yeastName: yeastName.trim() || undefined,
       yeastAmount,
       fermentDays: fermentDays === '' ? null : fermentDays,
+      og: og === '' ? null : og,
+      fg: fg === '' ? null : fg,
+      yeastAttenuation: yeastAttenuation === '' ? null : yeastAttenuation,
       photoUrl: photoUrl ?? undefined,
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
@@ -382,6 +467,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       yeastName,
       yeastAmount,
       fermentDays,
+      og,
+      fg,
+      yeastAttenuation,
       photoUrl,
       machineSteps,
       grains,
@@ -579,6 +667,84 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   </p>
                 </div>
               </div>
+              {(!readOnly || og !== '' || fg !== '' || yeastAttenuation !== '') && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-ink-text-secondary">
+                      Gravity targets (optional) — used for the fermentation chart&apos;s expected and projected gravity
+                    </p>
+                    {!readOnly && hasAiKey && (
+                      <Button type="button" variant="outline" size="xs" disabled={estimating} onClick={estimateGravity}>
+                        {estimating ? <Spinner /> : <MdAutoAwesome className="text-brand-500" />}
+                        {estimating ? 'Estimating…' : 'Estimate with AI'}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">OG</p>
+                      {readOnly ? (
+                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{og === '' ? '—' : og}</p>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={0.001}
+                          placeholder="1.052"
+                          value={og}
+                          onChange={(e) => setOg(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={cn(
+                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                            dirtyClass(og, recipe?.og ?? '', isEditingExisting),
+                          )}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">FG</p>
+                      {readOnly ? (
+                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{fg === '' ? '—' : fg}</p>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={0.001}
+                          placeholder="1.012"
+                          value={fg}
+                          onChange={(e) => setFg(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={cn(
+                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                            dirtyClass(fg, recipe?.fg ?? '', isEditingExisting),
+                          )}
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase text-ink-text-faint">Yeast attenuation %</p>
+                      {readOnly ? (
+                        <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">
+                          {yeastAttenuation === '' ? '—' : yeastAttenuation}
+                        </p>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={1}
+                          placeholder="75"
+                          value={yeastAttenuation}
+                          onChange={(e) => setYeastAttenuation(e.target.value === '' ? '' : Number(e.target.value))}
+                          className={cn(
+                            'mt-1 h-[30px] border-ink-card-border bg-ink-bg font-mono font-bold',
+                            dirtyClass(yeastAttenuation, recipe?.yeastAttenuation ?? '', isEditingExisting),
+                          )}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {estimateNote && (
+                    <p className={cn('text-[12px]', estimateNote.error ? 'text-danger-500' : 'text-ink-text-faint')}>
+                      {estimateNote.text}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </Card>
 

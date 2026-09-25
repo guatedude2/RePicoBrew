@@ -19,8 +19,13 @@ const DEFAULT_ATTENUATION = 0.75;
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-// OG from the recipe or, failing that, the first reading; FG from the recipe, else the yeast's attenuation, else the
-// recipe's ABV (only meaningful next to the recipe's own OG), else a typical 75% apparent attenuation.
+// The gravity the expected curve starts from, and the final gravity it heads for.
+//  - Final gravity (from the recipe's OG, or the first reading if there's none): the recipe's FG, else the yeast's
+//    attenuation, else the recipe's ABV (only meaningful next to the recipe's own OG), else a typical 75% apparent
+//    attenuation.
+//  - Start: the first reading the batch actually had, when there is one — a Tilt often starts tracking after
+//    fermentation is under way, and anchoring the curve at the recipe's OG would then misjudge the whole ferment —
+//    otherwise the recipe's OG.
 export function resolveGravityTargets(input: {
   recipeOg?: number | null;
   recipeFg?: number | null;
@@ -28,21 +33,22 @@ export function resolveGravityTargets(input: {
   yeastAttenuation?: number | null;
   firstReading?: number | null;
 }): GravityTargets | null {
-  const og = input.recipeOg ?? input.firstReading ?? null;
-  if (!og || og <= 1) {
+  const baseOg = input.recipeOg ?? input.firstReading ?? null;
+  if (!baseOg || baseOg <= 1) {
     return null;
   }
   let fg: number;
-  if (input.recipeFg != null && input.recipeFg < og) {
+  if (input.recipeFg != null && input.recipeFg < baseOg) {
     fg = input.recipeFg;
   } else if (input.yeastAttenuation != null && input.yeastAttenuation > 0) {
-    fg = og - (og - 1) * (input.yeastAttenuation / 100);
+    fg = baseOg - (baseOg - 1) * (input.yeastAttenuation / 100);
   } else if (input.recipeOg != null && input.recipeAbv != null && input.recipeAbv > 0) {
-    fg = og - input.recipeAbv / 131.25;
+    fg = baseOg - input.recipeAbv / 131.25;
   } else {
-    fg = og - (og - 1) * DEFAULT_ATTENUATION;
+    fg = baseOg - (baseOg - 1) * DEFAULT_ATTENUATION;
   }
   fg = Math.max(0.99, fg);
+  const og = input.firstReading != null && input.firstReading > fg ? input.firstReading : baseOg;
   return fg < og ? { og, fg } : null;
 }
 
