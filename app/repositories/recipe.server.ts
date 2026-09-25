@@ -37,7 +37,7 @@ export type CreateRecipeInput = {
   og?: number;
   fg?: number;
   colorSRM?: number;
-  fermentDays?: number;
+  fermentDays?: number | null;
   image: string;
   notes?: string;
   steps: RecipeStep[];

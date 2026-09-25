@@ -148,6 +148,7 @@ export type PicoPackEditorData = {
   ibu: number;
   yeastName?: string | null;
   yeastAmount?: number | null;
+  fermentDays?: number | null;
   steps: Array<{ name: string; temperature: number; stepTime: number; drainTime: number; location: number }>;
   ingredients?: RecipeEditorIngredient[];
 };
@@ -175,6 +176,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
   // a new recipe, not a guess at any particular strain.
   const [yeastName, setYeastName] = useState(recipe?.yeastName ?? '');
   const [yeastAmount, setYeastAmount] = useState(recipe?.yeastAmount ?? 2);
+  const [fermentDays, setFermentDays] = useState<number | ''>(recipe?.fermentDays ?? '');
   const [photoUrl] = useState(recipe?.photoUrl ?? null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(recipe?.photoUrl ?? null);
 
@@ -211,6 +213,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       ibu: recipe?.ibu ?? 30,
       yeastName: recipe?.yeastName ?? '',
       yeastAmount: recipe?.yeastAmount ?? 2,
+      fermentDays: recipe?.fermentDays ?? null,
       steps: (recipe?.steps?.length ? recipe.steps.map(machineStepToRow) : DEFAULT_MACHINE_STEPS).map(
         ({ id: _id, ...rest }) => rest,
       ),
@@ -228,11 +231,12 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         ibu,
         yeastName,
         yeastAmount,
+        fermentDays: fermentDays === '' ? null : fermentDays,
         steps: machineSteps.map(({ id: _id, ...rest }) => rest),
         grains: stripPakRowIds(grains),
         hops: stripPakRowIds(hops),
       }) !== initialSnapshot,
-    [name, style, notes, abv, ibu, yeastName, yeastAmount, machineSteps, grains, hops, initialSnapshot],
+    [name, style, notes, abv, ibu, yeastName, yeastAmount, fermentDays, machineSteps, grains, hops, initialSnapshot],
   );
 
   // Pre-fills the in-progress form from an AI Brewmaster draft — mirrors how a manual edit would
@@ -359,6 +363,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       notes,
       yeastName: yeastName.trim() || undefined,
       yeastAmount,
+      fermentDays: fermentDays === '' ? null : fermentDays,
       photoUrl: photoUrl ?? undefined,
       batchSize: PICOPACK_BATCH_SIZE_GAL,
       steps: machineSteps.map(({ id: _id, ...rest }) => rest),
@@ -376,6 +381,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       notes,
       yeastName,
       yeastAmount,
+      fermentDays,
       photoUrl,
       machineSteps,
       grains,
@@ -491,7 +497,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               {readOnly ? (
                 <div>
                   <p className="text-xl font-bold">{name}</p>
-                  <p className="mt-0.5 text-[13px] text-ink-text-dim">{style}</p>
+                  <p className="mt-0.5 text-[13px] text-ink-text-dim">
+                    {style}
+                    {fermentDays !== '' && `${style ? ' · ' : ''}${fermentDays} day fermentation`}
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3.5">
@@ -510,6 +519,21 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                       value={style}
                       onChange={setStyle}
                       className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
+                    />
+                  </div>
+                  <div className="w-[170px]">
+                    <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Fermentation (days)</p>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder="Optional"
+                      title="Optional. Sets the default date range of the fermentation chart."
+                      value={fermentDays}
+                      onChange={(e) =>
+                        setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
+                      }
+                      className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
                     />
                   </div>
                 </div>

@@ -1099,7 +1099,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
               <span>Temp</span>
             </div>
           </div>
-          <FermentationChart sessionId={fermSession.id} />
+          <FermentationChart
+            sessionId={fermSession.id}
+            startTime={fermSession.createdAt}
+            fermentDays={batch.recipe?.fermentDays}
+          />
         </div>
         {hasAiKey && (
           <AiAdviceBlock

@@ -146,6 +146,7 @@ export type RecipeEditorData = {
   id: number;
   name: string;
   style: string | null;
+  fermentDays: number | null;
   notes: string | null;
   photoUrl: string | null;
   og: number | null;
@@ -289,6 +290,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
 
   const [og, setOg] = useState(recipe?.og ?? 1.05);
   const [ibu, setIbu] = useState(recipe?.ibu ?? 30);
+  const [fermentDays, setFermentDays] = useState<number | ''>(recipe?.fermentDays ?? '');
   const [fg, setFg] = useState<number | null>(recipe?.fg ?? null);
   const [srm, setSrm] = useState<number | null>(recipe?.colorSRM ?? null);
   const abv = fg != null ? Math.max(0, (og - fg) * 131.25) : recipe?.abv ?? 0;
@@ -560,6 +562,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       fg: fg ?? undefined,
       colorSRM: srm ?? undefined,
       notes,
+      fermentDays: fermentDays === '' ? null : fermentDays,
       photoUrl: photoUrl ?? undefined,
       batchSize,
       mashType: Number(mashType),
@@ -597,6 +600,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
       fg,
       srm,
       notes,
+      fermentDays,
       photoUrl,
       batchSize,
       mashType,
@@ -911,6 +915,25 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                     value={style}
                     onChange={setStyle}
                     className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
+                  />
+                )}
+              </div>
+              <div className="w-[170px]">
+                <FieldLabel>Fermentation (days)</FieldLabel>
+                {readOnly ? (
+                  <FieldValue>{fermentDays === '' ? '—' : fermentDays}</FieldValue>
+                ) : (
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="Optional"
+                    title="Optional. Sets the default date range of the fermentation chart."
+                    value={fermentDays}
+                    onChange={(e) =>
+                      setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
+                    }
+                    className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
                   />
                 )}
               </div>

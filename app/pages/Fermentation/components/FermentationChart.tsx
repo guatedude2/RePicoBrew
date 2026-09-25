@@ -9,6 +9,26 @@ import { chartTimeToken, useTimeFormat } from '~/utils/time-format';
 
 interface FermentationChartProps {
   sessionId: number;
+  // When the fermentation started and how long the recipe expects it to run: together they set the chart's default
+  // date range (start to start + days, stretched to include any later readings).
+  startTime?: string | number | Date | null;
+  fermentDays?: number | null;
+}
+
+const DAY_MS = 86400000;
+const MAX_DAY_LINES = 120;
+
+// Local-time midnights after `min` up to `max`, for the day dividers.
+function midnightsBetween(min: number, max: number): number[] {
+  const out: number[] = [];
+  const d = new Date(min);
+  d.setHours(24, 0, 0, 0);
+  while (d.getTime() <= max && out.length < MAX_DAY_LINES) {
+    out.push(d.getTime());
+    d.setDate(d.getDate() + 1);
+    d.setHours(0, 0, 0, 0);
+  }
+  return out;
 }
 
 interface DataPoint {
@@ -27,8 +47,9 @@ const TEMP_COLOR = 'oklch(0.78 0.135 65)';
 const GRAVITY_COLOR = 'oklch(0.72 0.1 235)';
 const TEXT_COLOR = 'oklch(0.75 0.006 260)';
 const GRID_COLOR = 'oklch(0.24 0.008 260)';
+const DAY_LINE_COLOR = 'oklch(0.42 0.01 260)';
 
-export default function FermentationChart({ sessionId }: FermentationChartProps) {
+export default function FermentationChart({ sessionId, startTime, fermentDays }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
 
   const { logs, onZoomChange } = useSessionLogs(sessionId);
@@ -50,7 +71,26 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
     () => [...history, ...live.filter((p) => p.time > lastHistoryTime)],
     [history, live, lastHistoryTime],
   );
-  const zoom = useChartZoom(data.length > 0 ? [data[0].time, data[data.length - 1].time] : null, onZoomChange);
+  const startMs = startTime ? new Date(startTime).getTime() : null;
+  const lastDataMs = data.length > 0 ? data[data.length - 1].time : null;
+  const defaultRange =
+    fermentDays && startMs !== null && Number.isFinite(startMs)
+      ? { min: startMs, max: Math.max(startMs + fermentDays * DAY_MS, lastDataMs ?? 0) }
+      : null;
+  const zoom = useChartZoom(
+    data.length > 0 ? [data[0].time, data[data.length - 1].time] : null,
+    onZoomChange,
+    defaultRange,
+  );
+  // Day dividers across everything the chart can show (the default range and all the data); lines outside the
+  // visible range simply aren't drawn.
+  const dayLines =
+    data.length > 0
+      ? midnightsBetween(
+          Math.min(data[0].time, defaultRange?.min ?? Infinity),
+          Math.max(data[data.length - 1].time, defaultRange?.max ?? -Infinity),
+        )
+      : [];
 
   // Subscribe to live updates
   useEffect(() => {
@@ -122,6 +162,9 @@ export default function FermentationChart({ sessionId }: FermentationChartProps)
     },
     legend: { labels: { colors: TEXT_COLOR } },
     grid: { borderColor: GRID_COLOR },
+    annotations: {
+      xaxis: dayLines.map((x) => ({ x, borderColor: DAY_LINE_COLOR, strokeDashArray: 4 })),
+    },
   };
 
   const series = [
