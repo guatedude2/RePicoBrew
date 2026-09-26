@@ -1159,9 +1159,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
             >
               {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
             </Button>
-            <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
-              Ferment longer
-            </Button>
+            {fermentationTimeUp && (
+              <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
+                Ferment longer
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1248,9 +1250,11 @@ export const SessionDetail: FC<SessionDetailData> = ({
             >
               {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
             </Button>
-            <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
-              Ferment longer
-            </Button>
+            {fermentationTimeUp && (
+              <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
+                Ferment longer
+              </Button>
+            )}
           </div>
         )}
       </div>
