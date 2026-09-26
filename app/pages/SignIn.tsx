@@ -15,7 +15,7 @@ const getErrorMessage = (message: string | undefined) => {
   return 'Oh no, something went wrong';
 };
 
-const Logo = () => (
+export const Logo = () => (
   <div className="mb-10 flex items-center gap-2.5">
     <div className="flex size-9 items-center justify-center rounded-[9px] bg-gradient-to-br from-brand-300 to-brand-600">
       <svg viewBox="0 0 24 24" className="size-[19px] text-ink-on-brand">

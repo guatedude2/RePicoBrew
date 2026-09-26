@@ -3,7 +3,9 @@ import { redirect } from 'react-router';
 import { z } from 'zod';
 import { UserRepository } from '~/repositories/user.server';
 import { authenticateUser, sessionKey } from '~/services/auth.server';
-import { rememberMeCookie, sessionStorage } from '~/services/session.server';
+import { sessionStorage } from '~/services/session.server';
+
+const REMEMBER_SECONDS = 30 * 24 * 60 * 60;
 
 const bodyValidator = z.object({
   email: z.string().email(),
@@ -38,11 +40,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // and store the user data
     session.set(sessionKey, user);
 
-    // commit the session
-    const headers = new Headers({ 'Set-Cookie': await sessionStorage.commitSession(session) });
-
-    // commit remember me
-    headers.append('Set-Cookie', await rememberMeCookie.serialize(remember ? user.email : null));
+    // "Keep me logged in" makes the session cookie persistent; otherwise it lasts until the browser closes.
+    const headers = new Headers({
+      'Set-Cookie': await sessionStorage.commitSession(session, remember ? { maxAge: REMEMBER_SECONDS } : undefined),
+    });
 
     return redirect(redirectTo, { headers });
   } catch (error) {

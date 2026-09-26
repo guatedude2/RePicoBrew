@@ -1,4 +1,4 @@
-import { createCookie, createCookieSessionStorage } from 'react-router';
+import { createCookieSessionStorage } from 'react-router';
 
 // export the whole sessionStorage object
 // `secure` is deliberately always false, NOT tied to NODE_ENV: this app runs on a Raspberry Pi's
@@ -16,14 +16,6 @@ export const sessionStorage = createCookieSessionStorage({
     secrets: ['s3cr3t'], // replace this with an actual secret
     secure: false,
   },
-});
-
-export const rememberMeCookie = createCookie('auth.rememberId', {
-  sameSite: 'lax', // this helps with CSRF
-  path: '/', // remember to add this so the cookie will work in all routes
-  httpOnly: true, // for security reasons, make this cookie http only
-  secrets: ['s3cr3t'], // replace this with an actual secret
-  secure: false,
 });
 
 // you can also export the methods individually for your own usage
