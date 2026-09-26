@@ -936,27 +936,6 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   />
                 )}
               </div>
-              <div className="w-[170px]">
-                <FieldLabel tip="How long fermentation should run for this recipe. It sets the fermentation chart's default date range and the time remaining; a batch can be extended later with Ferment longer.">
-                  Fermentation (days)
-                </FieldLabel>
-                {readOnly ? (
-                  <FieldValue>{fermentDays === '' ? '—' : fermentDays}</FieldValue>
-                ) : (
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    placeholder="Optional"
-                    title="Optional. Sets the default date range of the fermentation chart."
-                    value={fermentDays}
-                    onChange={(e) =>
-                      setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
-                    }
-                    className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
-                  />
-                )}
-              </div>
             </div>
             <div>
               <FieldLabel>Notes</FieldLabel>
@@ -1164,19 +1143,42 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           {/* Fermentation */}
           <Card className="gap-4 p-[22px]">
             <p className="text-[15px] font-bold">Fermentation</p>
-            <div className="max-w-[220px]">
-              <FieldLabel tip="Ale or lager. When the yeast has no temperature range set, the chart's recommended range falls back to a typical one for this type (ale 64-72°F, lager 46-58°F).">
-                Fermentation Type
-              </FieldLabel>
-              {readOnly ? (
-                <FieldValue>{FERMENTATION_TYPE_LABELS[fermentationType] ?? fermentationType}</FieldValue>
-              ) : (
-                <Select value={fermentationType} onChange={(e) => setFermentationType(e.target.value)}>
-                  <option value="0">Ale</option>
-                  <option value="1">Lager</option>
-                  <option value="2">Advanced / Custom</option>
-                </Select>
-              )}
+            <div className="flex flex-wrap gap-3.5">
+              <div className="w-[220px]">
+                <FieldLabel tip="Ale or lager. When the yeast has no temperature range set, the chart's recommended range falls back to a typical one for this type (ale 64-72°F, lager 46-58°F).">
+                  Fermentation Type
+                </FieldLabel>
+                {readOnly ? (
+                  <FieldValue>{FERMENTATION_TYPE_LABELS[fermentationType] ?? fermentationType}</FieldValue>
+                ) : (
+                  <Select value={fermentationType} onChange={(e) => setFermentationType(e.target.value)}>
+                    <option value="0">Ale</option>
+                    <option value="1">Lager</option>
+                    <option value="2">Advanced / Custom</option>
+                  </Select>
+                )}
+              </div>
+              <div className="w-[170px]">
+                <FieldLabel tip="How long fermentation should run for this recipe. It sets the fermentation chart's default date range and the time remaining; a batch can be extended later with Ferment longer.">
+                  Fermentation (days)
+                </FieldLabel>
+                {readOnly ? (
+                  <FieldValue>{fermentDays === '' ? '—' : fermentDays}</FieldValue>
+                ) : (
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="Optional"
+                    title="Optional. Sets the default date range of the fermentation chart."
+                    value={fermentDays}
+                    onChange={(e) =>
+                      setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
+                    }
+                    className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
+                  />
+                )}
+              </div>
             </div>
             <div>
               <SectionLabel>Yeast</SectionLabel>
