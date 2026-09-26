@@ -327,6 +327,9 @@ export function describeAiError(error: unknown): string {
   if (status === 429) {
     return `The AI provider has refused the request because its usage or rate limit was reached${suffix}. Try again later, or switch provider in Settings → AI.`;
   }
+  if (status === 503 || /UNAVAILABLE|high demand/i.test(text)) {
+    return `The AI provider is overloaded right now${suffix}. This is usually temporary; try again in a minute.`;
+  }
   if (status === 401 || status === 403 || /API key not valid|API_KEY_INVALID|pass a valid API key/i.test(text)) {
     return `The AI provider rejected the API key${suffix}. Check it in Settings → AI.`;
   }
@@ -362,18 +365,35 @@ async function recoverGeminiModel(provider: ResolvedProvider, error: unknown): P
   }
 }
 
+// Providers answer 503 when overloaded (Gemini's free tier does it regularly); a short backoff usually clears it.
+const OVERLOAD_RETRY_DELAYS_MS = [1500, 4000];
+const isOverloaded = (error: unknown) => /\((503|529)\)/.test(error instanceof Error ? error.message : String(error));
+
+async function retryOnOverload<T>(run: () => Promise<T>, canRetry: () => boolean = () => true): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (!isOverloaded(error) || !canRetry() || attempt >= OVERLOAD_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, OVERLOAD_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 export async function callAiProvider(
   provider: ResolvedProvider,
   args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
 ): Promise<string> {
   try {
-    return await callAiProviderOnce(provider, args);
+    return await retryOnOverload(() => callAiProviderOnce(provider, args));
   } catch (error) {
     const recovered = await recoverGeminiModel(provider, error);
     if (!recovered) {
       throw error;
     }
-    return callAiProviderOnce(recovered, args);
+    return retryOnOverload(() => callAiProviderOnce(recovered, args));
   }
 }
 
@@ -382,13 +402,24 @@ export async function streamAiProvider(
   args: { system: string; user: string; maxTokens?: number; timeoutMs?: number; sessionId?: string },
   onDelta: (text: string) => void,
 ): Promise<string> {
+  let streamed = false;
+  const track = (text: string) => {
+    streamed = true;
+    onDelta(text);
+  };
   try {
-    return await streamAiProviderOnce(provider, args, onDelta);
+    return await retryOnOverload(
+      () => streamAiProviderOnce(provider, args, track),
+      () => !streamed,
+    );
   } catch (error) {
     const recovered = await recoverGeminiModel(provider, error);
     if (!recovered) {
       throw error;
     }
-    return streamAiProviderOnce(recovered, args, onDelta);
+    return retryOnOverload(
+      () => streamAiProviderOnce(recovered, args, track),
+      () => !streamed,
+    );
   }
 }
