@@ -23,7 +23,7 @@ A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github
   </tr>
   <tr>
     <td align="center" valign="top"><a href="docs/screenshots/ai-brewmaster.png"><img src="docs/screenshots/ai-brewmaster.png" alt="AI Brewmaster" width="400"></a><br><sub>AI Brewmaster: chat, draft recipes, start sessions</sub></td>
-    <td align="center" valign="top"><a href="docs/screenshots/settings-devices.png"><img src="docs/screenshots/settings-devices.png" alt="Devices settings" width="400"></a><br><sub>Devices: Pico, Tilt and Bluetooth</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/settings-ai.png"><img src="docs/screenshots/settings-ai.png" alt="AI settings" width="400"></a><br><sub>AI settings: OpenAI, Claude, Gemini (free tier) or OpenCode, with model suggestions before you enter a key</sub></td>
   </tr>
 </table>
 
