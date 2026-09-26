@@ -604,10 +604,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               {readOnly ? (
                 <div>
                   <p className="text-xl font-bold">{name}</p>
-                  <p className="mt-0.5 text-[13px] text-ink-text-dim">
-                    {style}
-                    {fermentDays !== '' && `${style ? ' · ' : ''}${fermentDays} day fermentation`}
-                  </p>
+                  <p className="mt-0.5 text-[13px] text-ink-text-dim">{style}</p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3.5">
@@ -626,21 +623,6 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                       value={style}
                       onChange={setStyle}
                       className={dirtyClass(style, recipe?.style ?? '', isEditingExisting)}
-                    />
-                  </div>
-                  <div className="w-[170px]">
-                    <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Fermentation (days)</p>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      placeholder="Optional"
-                      title="Optional. Sets the default date range of the fermentation chart."
-                      value={fermentDays}
-                      onChange={(e) =>
-                        setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
-                      }
-                      className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
                     />
                   </div>
                 </div>
@@ -685,6 +667,31 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                     {PICOPACK_BATCH_SIZE_L} L (fixed)
                   </p>
                 </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="gap-3.5 p-[22px]">
+            <p className="text-[15px] font-bold">Fermentation</p>
+            <div className="flex flex-col gap-4">
+              <div className="w-[170px]">
+                <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Fermentation (days)</p>
+                {readOnly ? (
+                  <p className="px-2.5 py-2 font-mono text-sm font-bold">{fermentDays === '' ? '—' : fermentDays}</p>
+                ) : (
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="Optional"
+                    title="Optional. Sets the default date range of the fermentation chart."
+                    value={fermentDays}
+                    onChange={(e) =>
+                      setFermentDays(e.target.value === '' ? '' : Math.max(1, Math.round(Number(e.target.value))))
+                    }
+                    className={dirtyClass(fermentDays, recipe?.fermentDays ?? '', isEditingExisting)}
+                  />
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
