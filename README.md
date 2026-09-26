@@ -36,7 +36,7 @@ A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github
 
 - [Project Plan](PLAN.md)
 - [React Router Docs](https://reactrouter.com/)
-- [Raspberry Pi Deployment Guide](DEPLOY_PI.md) — manual setup on an existing Pi
+- [Raspberry Pi Deployment Guide](DEPLOY_PI.md) — install on an existing Pi with `scripts/deploy-to-pi.sh`
 - [Raspberry Pi Image Builder](pi-image/README.md) — build a ready-to-flash `.img` that boots with zero internet/setup needed
 
 ## Features
@@ -83,5 +83,5 @@ see the two real deployment paths:
 
 - [Raspberry Pi Image Builder](pi-image/README.md) — build a ready-to-flash `.img` that boots with
   zero internet/setup needed on the Pi. The recommended path.
-- [Raspberry Pi Deployment Guide](DEPLOY_PI.md) — manual, step-by-step setup on a Pi you already
-  have running Raspberry Pi OS.
+- [Raspberry Pi Deployment Guide](DEPLOY_PI.md) — install on a Pi you already have running Raspberry Pi
+  OS, with `scripts/deploy-to-pi.sh`.

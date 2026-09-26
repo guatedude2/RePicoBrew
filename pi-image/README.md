@@ -192,7 +192,7 @@ Pi OS (Bookworm or newer, Trixie now) and creates the access point with `setup-n
 deployed Pi does. An older image target based on Raspberry Pi OS Bullseye (hostapd + dhcpcd, for the 32-bit
 ARMv6 Pi Zero W) has been removed: Bullseye reached end of life in 2026 (`deb.debian.org` no longer serves
 its security packages, so even `git` fails to install), and current Raspberry Pi OS has no 32-bit ARMv6 build.
-The manual install guide (`DEPLOY_PI.md`) still describes the older hostapd-based setup for hand-installs.
+To install on a Pi you already have instead of flashing this image, see [DEPLOY_PI.md](../DEPLOY_PI.md).
 
 ## What `chroot-provision.sh` does
 

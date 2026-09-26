@@ -8,7 +8,7 @@ export type SystemControlResult = { success: true } | { success: false; error: s
 
 // These two argv arrays ARE the entire sudo surface this app is allowed to use — granted to the
 // `pi` user via the passwordless /etc/sudoers.d/repicobrew-control rule that
-// pi-image/chroot-provision.sh (automated image builds) and DEPLOY_PI.md (manual setup) both
+// pi-image/chroot-provision.sh (image builds) and scripts/deploy-to-pi.sh (installs on an existing Pi) both
 // install. repicobrew.service runs as the unprivileged User=pi, so the running Node
 // process otherwise has no privilege to restart itself or reboot the host.
 //
