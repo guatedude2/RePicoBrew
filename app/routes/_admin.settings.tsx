@@ -5,6 +5,7 @@ import { ConfigRepository } from '~/repositories/config.server';
 import { DeviceRepository } from '~/repositories/device.server';
 import { UserRepository } from '~/repositories/user.server';
 import {
+  listCatalogModels,
   listChatCompletionsModels,
   listClaudeModels,
   listGeminiModels,
@@ -331,6 +332,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return { models };
     } catch {
       return data({ error: 'Could not load models — check the API key.' }, { status: 400 });
+    }
+  }
+
+  if (intent === 'listCatalogModels') {
+    try {
+      return { catalog: await listCatalogModels() };
+    } catch {
+      return data({ error: 'Could not load the model catalog.' }, { status: 400 });
     }
   }
 

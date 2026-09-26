@@ -225,6 +225,12 @@ export const Settings: FC = () => {
   const [openAiModelOptions, setOpenAiModelOptions] = useState<string[]>([]);
   const openAiFetcher = useFetcher<{ error?: string }>();
   const isOpenAiSaving = openAiFetcher.state !== 'idle';
+  const catalogFetcher = useFetcher<{ catalog?: { openai: string[]; gemini: string[]; claude: string[] } }>();
+  const catalog = catalogFetcher.data?.catalog;
+  useEffect(() => {
+    catalogFetcher.submit({ intent: 'listCatalogModels' }, { method: 'post' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const openAiModelsFetcher = useFetcher<{ models?: string[]; error?: string }>();
   const isLoadingOpenAiModels = openAiModelsFetcher.state !== 'idle';
   useEffect(() => {
@@ -238,7 +244,7 @@ export const Settings: FC = () => {
   // switch from a free-text input to a dropdown of models that key actually has access to.
   useEffect(() => {
     if (!openAiApiKey) {
-      setOpenAiModelOptions([]);
+      setOpenAiModelOptions(catalog?.openai ?? []);
       return;
     }
     const timeout = setTimeout(() => {
@@ -247,6 +253,13 @@ export const Settings: FC = () => {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openAiApiKey]);
+  useEffect(() => {
+    if (catalog && !openAiSettings.configured) {
+      setOpenAiModelOptions((prev) => (prev.length ? prev : catalog.openai));
+      setOpenAiModel((prev) => (catalog.openai.includes(prev) ? prev : catalog.openai[0] ?? prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState(geminiSettings.model);
   const [geminiModelOptions, setGeminiModelOptions] = useState<string[]>([]);
@@ -270,7 +283,7 @@ export const Settings: FC = () => {
   // switch from a free-text input to a dropdown of models that key actually has access to.
   useEffect(() => {
     if (!geminiApiKey) {
-      setGeminiModelOptions([]);
+      setGeminiModelOptions(catalog?.gemini ?? []);
       return;
     }
     const timeout = setTimeout(() => {
@@ -279,6 +292,13 @@ export const Settings: FC = () => {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geminiApiKey]);
+  useEffect(() => {
+    if (catalog && !geminiSettings.configured) {
+      setGeminiModelOptions((prev) => (prev.length ? prev : catalog.gemini));
+      setGeminiModel((prev) => (catalog.gemini.includes(prev) ? prev : pickGeminiModel(catalog.gemini) ?? prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
 
   const [claudeApiKey, setClaudeApiKey] = useState('');
   const [claudeModel, setClaudeModel] = useState(claudeSettings.model);
@@ -296,7 +316,7 @@ export const Settings: FC = () => {
   }, [claudeModelsFetcher.data]);
   useEffect(() => {
     if (!claudeApiKey) {
-      setClaudeModelOptions([]);
+      setClaudeModelOptions(catalog?.claude ?? []);
       return;
     }
     const timeout = setTimeout(() => {
@@ -305,6 +325,13 @@ export const Settings: FC = () => {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claudeApiKey]);
+  useEffect(() => {
+    if (catalog && !claudeSettings.configured) {
+      setClaudeModelOptions((prev) => (prev.length ? prev : catalog.claude));
+      setClaudeModel((prev) => (catalog.claude.includes(prev) ? prev : catalog.claude[0] ?? prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
 
   const [zenApiKey, setZenApiKey] = useState('');
   const [zenPlan, setZenPlan] = useState<'zen' | 'go'>(zenSettings.plan);
@@ -700,7 +727,7 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{openAiModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          Models load automatically once you enter a valid API key.
+                          Suggested models shown; the exact list your key can use loads once you enter it.
                         </p>
                       )}
                     </div>
@@ -788,7 +815,7 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{geminiModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          Models load automatically once you enter a valid API key.
+                          Suggested models shown; the list your key can use loads once you enter it.
                         </p>
                       )}
                     </div>
@@ -865,7 +892,7 @@ export const Settings: FC = () => {
                         <p className="mt-1.5 text-xs text-danger-500">{claudeModelsFetcher.data.error}</p>
                       ) : (
                         <p className="mt-1.5 text-xs text-ink-text-faint">
-                          Models load automatically once you enter a valid API key.
+                          Suggested models shown; the list your key can use loads once you enter it.
                         </p>
                       )}
                     </div>

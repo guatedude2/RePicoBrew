@@ -81,3 +81,42 @@ export async function listGeminiModels(apiKey: string): Promise<string[]> {
     .filter((id) => id.startsWith('gemini') && !GEMINI_NON_CHAT_PATTERN.test(id))
     .sort();
 }
+
+// Keyless model suggestions from the public models.dev catalog, so the dropdowns are populated before an API key
+// is entered. Cached in memory; the key-based lists above replace it once available.
+type CatalogProvider = 'openai' | 'gemini' | 'claude';
+const CATALOG_URL = 'https://models.dev/api.json';
+const CATALOG_KEYS: Record<CatalogProvider, string> = { openai: 'openai', gemini: 'google', claude: 'anthropic' };
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+let catalogCache: { at: number; data: Record<CatalogProvider, string[]> } | null = null;
+
+type CatalogModel = { id: string; release_date?: string; tool_call?: boolean; modalities?: { output?: string[] } };
+
+export async function listCatalogModels(): Promise<Record<CatalogProvider, string[]>> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) {
+    return catalogCache.data;
+  }
+  const response = await fetch(CATALOG_URL, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) {
+    throw new Error(`Model catalog request failed (${response.status})`);
+  }
+  const json = (await response.json()) as Record<string, { models?: Record<string, CatalogModel> }>;
+  const data = {} as Record<CatalogProvider, string[]>;
+  for (const provider of Object.keys(CATALOG_KEYS) as CatalogProvider[]) {
+    const models = Object.values(json[CATALOG_KEYS[provider]]?.models ?? {}).filter(
+      (m) => m.tool_call !== false && (m.modalities?.output ?? ['text']).join() === 'text',
+    );
+    const isChatModel = (id: string) => {
+      if (provider === 'gemini') {
+        return id.startsWith('gemini') && !GEMINI_NON_CHAT_PATTERN.test(id);
+      }
+      return provider === 'openai' ? !NON_CHAT_PATTERN.test(id) : true;
+    };
+    const filtered = models.filter((m) => isChatModel(m.id));
+    data[provider] = filtered
+      .sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))
+      .map((m) => m.id);
+  }
+  catalogCache = { at: Date.now(), data };
+  return data;
+}
