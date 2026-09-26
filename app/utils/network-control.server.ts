@@ -45,9 +45,7 @@ export async function applyAccessPoint(ssid: string, password: string): Promise<
 }
 
 export async function applyWifi(ssid: string, password: string): Promise<NetworkControlResult> {
-  // Shares wifi.server.ts's radio lock with listNearbyNetworks() — a scan overlapping with a real
-  // join (dhcpcd/wpa_supplicant restart) was observed to destabilize the radio badly enough to
-  // take the whole access point down. dhcpcd restart + association + DHCP lease acquisition can
-  // also take a few seconds longer than the other two scripts' near-instant service restarts.
+  // Shares wifi.server.ts's radio lock with listNearbyNetworks(), since a scan overlapping a join can take the
+  // access point down. Joining (association + DHCP lease) takes longer than the other scripts, hence the timeout.
   return withWifiRadioLock(() => runSudoScript(WIFI_SCRIPT, [ssid, password], 20_000));
 }

@@ -25,12 +25,9 @@ function decodeSsid(raw: string): string {
   return Buffer.from(bytes).toString('utf8').replace(/\0/g, '');
 }
 
-// Serializes every operation in this app that touches the wlan0 radio (scanning, joining a
-// network) — confirmed the hard way that a scan overlapping with a real join (dhcpcd/wpa_supplicant
-// restart) while hostapd is also actively beaconing on uap0 can destabilize the Pi Zero W's single
-// BCM43430 radio badly enough to take the whole access point down, not just the app. Every caller
-// chains onto this promise instead of running concurrently; also used by
-// app/utils/network-control.server.ts's applyWifi.
+// Serializes every operation in this app that touches the Wi-Fi radios (scanning, joining a network): a scan
+// overlapping a join can knock the radio, and with it the access point, over. Every caller chains onto this
+// promise instead of running concurrently; also used by app/utils/network-control.server.ts's applyWifi.
 let wifiRadioLock: Promise<unknown> = Promise.resolve();
 export function withWifiRadioLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = wifiRadioLock.then(fn, fn);

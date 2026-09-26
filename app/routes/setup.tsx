@@ -112,9 +112,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const connected = await checkInternetConnectivity();
     if (!connected) {
-      // apply-wifi.sh's own success just means the config was written and dhcpcd restarted — a
-      // wrong password fails association asynchronously in the driver, not as a script error, so
-      // this is also how a bad password surfaces: no route ever comes up, and the check times out.
+      // apply-wifi.sh succeeding means NetworkManager joined the network; this also confirms that network
+      // actually reaches the internet.
       return data(
         { error: 'Could not reach the internet on that network — check the password and try again.' },
         { status: 400 },

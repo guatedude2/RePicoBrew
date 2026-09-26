@@ -24,3 +24,6 @@ prisma/*.db-shm
 /prisma/conn.txt
 /prisma/users-backup-*.sql
 *.log
+
+# macOS Finder metadata
+.DS_Store

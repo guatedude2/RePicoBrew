@@ -187,7 +187,7 @@ Acceptance = full **brew + track** loop on hardware:
 - Join AP → register → approve → create recipe → start brew on Pico → live progress on Dashboard → complete → history
 - Capture/compare against [`test.log`](test.log) sequence
 - Fix port/path mismatches (React Router routes are `api.pico.*` → ensure nginx exposes `/API/pico/...` casing the firmware expects)
-- Update [`TODO.md`](TODO.md) / README with Pi AP + Phase 1 brew runbook
+- Update TODO / README with Pi AP + Phase 1 brew runbook
 
 ---
 

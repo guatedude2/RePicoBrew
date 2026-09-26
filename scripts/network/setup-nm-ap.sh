@@ -1,6 +1,5 @@
 #!/bin/bash
-# Creates (or replaces) the PICOBREW access point on a NetworkManager-based Raspberry Pi OS
-# (Bookworm/Trixie), where the hostapd + dhcpcd scripts written for the Zero W image don't apply.
+# Creates (or replaces) the PICOBREW access point on Raspberry Pi OS (Bookworm/Trixie, NetworkManager).
 # Uses NetworkManager's own hotspot mode: `ipv4.method shared` runs a private dnsmasq for DHCP/DNS
 # on the AP subnet and NATs it out through whatever uplink the Pi has (Ethernet on a Pi 4).
 #
@@ -33,7 +32,7 @@ AP_MAC="$(radio_mac "$AP_IF")"
 CON_NAME="picobrew-ap"
 AP_IP="192.168.72.1"
 
-# NetworkManager's shared-mode dnsmasq reads this directory. Same DNS spoof the hostapd setup uses:
+# NetworkManager's shared-mode dnsmasq reads this directory. DNS spoof:
 # the PicoBrew devices look up picobrew.com and must land on this Pi.
 mkdir -p /etc/NetworkManager/dnsmasq-shared.d
 cat > /etc/NetworkManager/dnsmasq-shared.d/picobrew.conf <<EOF

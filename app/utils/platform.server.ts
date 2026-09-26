@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 // Access Point / Wi-Fi settings only make sense when this server is actually running on the Pi
-// whose hostapd/wpa_supplicant it would be managing — hide those tabs everywhere else (e.g. a dev
+// whose NetworkManager it would be managing — hide those tabs everywhere else (e.g. a dev
 // machine). Detected via the device-tree model file Linux exposes on Raspberry Pi boards, falling
 // back to the /proc/cpuinfo "Hardware"/"Model" line older Raspbian images use instead.
 export function isRaspberryPi(): boolean {
