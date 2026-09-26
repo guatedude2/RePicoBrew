@@ -13,6 +13,7 @@ import { Select } from '~/components/ui/select';
 import { Textarea } from '~/components/ui/textarea';
 import { EditableRowList } from '~/components/recipe-editor/EditableRowList';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
+import { GLOSSARY } from '~/utils/brewing-glossary';
 import { cn } from '~/lib/utils';
 import type { AiIngredientRow, ZPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
@@ -211,8 +212,11 @@ const FERMENTATION_TYPE_LABELS: Record<string, string> = {
   '2': 'Advanced / Custom',
 };
 
-const SectionLabel: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">{children}</p>
+const SectionLabel: FC<{ children: string; tip?: string }> = ({ children, tip }) => (
+  <p className="mb-2 flex items-center gap-1 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">
+    {children}
+    {tip && <InfoTip label={children}>{tip}</InfoTip>}
+  </p>
 );
 
 const OverviewStat: FC<{
@@ -802,6 +806,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 />
                 <OverviewStat
                   label="IBU"
+                  tip={GLOSSARY.ibu}
                   value={ibu}
                   min={recipe?.ibuMin?.toString()}
                   max={recipe?.ibuMax?.toString()}
@@ -821,6 +826,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 />
                 <OverviewStat
                   label="SRM"
+                  tip={GLOSSARY.srm}
                   value={srm ?? '—'}
                   min={recipe?.srmMin?.toString()}
                   max={recipe?.srmMax?.toString()}
@@ -840,6 +846,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 />
                 <OverviewStat
                   label="ABV %"
+                  tip={GLOSSARY.abv}
                   value={abv.toFixed(1)}
                   min={recipe?.abvMin?.toString()}
                   max={recipe?.abvMax?.toString()}
@@ -853,7 +860,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <p className="text-[15px] font-bold">Composition</p>
             <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <div className="flex flex-col items-center gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Grain Bill</p>
+                <SectionLabel tip={GLOSSARY.grainBill}>Grain Bill</SectionLabel>
                 <div className="relative size-[120px] rounded-full" style={{ background: grain.background }}>
                   <div className="absolute inset-4 rounded-full bg-ink-card" />
                 </div>
@@ -867,7 +874,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 </div>
               </div>
               <div className="flex flex-col items-center gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Hop Bill</p>
+                <SectionLabel tip={GLOSSARY.hopBill}>Hop Bill</SectionLabel>
                 <div className="relative size-[120px] rounded-full" style={{ background: hopDonut.background }}>
                   <div className="absolute inset-4 rounded-full bg-ink-card" />
                 </div>
@@ -881,7 +888,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 </div>
               </div>
               <div className="flex flex-col items-center gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Wort Curve</p>
+                <SectionLabel tip={GLOSSARY.wortCurve}>Wort Curve</SectionLabel>
                 <svg width="100%" height="120px" viewBox="0 0 260 120" preserveAspectRatio="none">
                   <line x1={30} y1={10} x2={30} y2={100} stroke="oklch(0.3 0.01 260)" strokeWidth={1} />
                   <line x1={30} y1={100} x2={250} y2={100} stroke="oklch(0.3 0.01 260)" strokeWidth={1} />
@@ -957,7 +964,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <p className="text-[15px] font-bold">Water</p>
             <div className="flex flex-wrap gap-3.5">
               <div className="min-w-[160px] flex-1">
-                <FieldLabel>Batch Size (Gal)</FieldLabel>
+                <FieldLabel tip={GLOSSARY.batchSize}>Batch Size (Gal)</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{batchSize}</FieldValue>
                 ) : (
@@ -971,13 +978,13 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 )}
               </div>
               <div className="min-w-[160px] flex-1">
-                <FieldLabel>Starting Water (Gal)</FieldLabel>
+                <FieldLabel tip={GLOSSARY.startingWater}>Starting Water (Gal)</FieldLabel>
                 <p className="px-2.5 py-2 font-mono text-[13px] text-ink-text-muted">{startingWater}</p>
               </div>
             </div>
             {(!readOnly || amendments.length > 0) && (
               <div>
-                <SectionLabel>Water Amendments</SectionLabel>
+                <SectionLabel tip={GLOSSARY.waterAmendments}>Water Amendments</SectionLabel>
                 <EditableRowList
                   rows={amendments}
                   templateColumns="1.5fr 1fr 1fr"
@@ -1000,7 +1007,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
           <Card className="gap-4 p-[22px]">
             <p className="text-[15px] font-bold">Mash &amp; Fermentables</p>
             <div className="max-w-[220px]">
-              <FieldLabel>Mash Type</FieldLabel>
+              <FieldLabel tip={GLOSSARY.mashType}>Mash Type</FieldLabel>
               {readOnly ? (
                 <FieldValue>{MASH_TYPE_LABELS[mashType] ?? mashType}</FieldValue>
               ) : (
@@ -1014,7 +1021,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             </div>
             {(!readOnly || mashSteps.length > 0) && (
               <div>
-                <SectionLabel>Mash Steps</SectionLabel>
+                <SectionLabel tip={GLOSSARY.mashSteps}>Mash Steps</SectionLabel>
                 <EditableRowList
                   rows={mashSteps}
                   templateColumns="1.6fr 0.9fr 0.9fr"
@@ -1034,14 +1041,14 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             )}
             {(!readOnly || fermentables.length > 0) && (
               <div>
-                <SectionLabel>Fermentables</SectionLabel>
+                <SectionLabel tip={GLOSSARY.fermentables}>Fermentables</SectionLabel>
                 <EditableRowList
                   rows={fermentables}
                   templateColumns="1.6fr 0.9fr 0.9fr"
                   columns={[
                     { key: 'name', label: 'Ingredient', type: 'text' },
                     { key: 'amount', label: 'Amount (lbs)', type: 'number', step: 0.1 },
-                    { key: 'color', label: 'Color (pts)', type: 'number' },
+                    { key: 'color', label: 'Color (pts)', type: 'number', tip: GLOSSARY.fermentableColor },
                   ]}
                   onChange={fermentableActions.onChange}
                   onAdd={() => fermentableActions.onAdd({ amount: 1, color: 2 })}
@@ -1058,7 +1065,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             <p className="text-[15px] font-bold">Boil</p>
             <div className="flex flex-wrap gap-3.5">
               <div className="min-w-[160px] flex-1">
-                <FieldLabel>Total Boil Time (min)</FieldLabel>
+                <FieldLabel tip={GLOSSARY.boilTime}>Total Boil Time (min)</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{boilTime}</FieldValue>
                 ) : (
@@ -1071,7 +1078,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 )}
               </div>
               <div className="min-w-[160px] flex-1">
-                <FieldLabel>Boil Temp °F</FieldLabel>
+                <FieldLabel tip={GLOSSARY.boilTemp}>Boil Temp °F</FieldLabel>
                 {readOnly ? (
                   <FieldValue mono>{boilTemp}</FieldValue>
                 ) : (
@@ -1084,7 +1091,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 )}
               </div>
               <div className="min-w-[180px] flex-1">
-                <FieldLabel>First Wort Hopping</FieldLabel>
+                <FieldLabel tip={GLOSSARY.firstWortHopping}>First Wort Hopping</FieldLabel>
                 {readOnly ? (
                   <FieldValue>{firstWortHopping ? 'Enabled' : 'Disabled'}</FieldValue>
                 ) : (
@@ -1107,8 +1114,8 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                   columns={[
                     { key: 'name', label: 'Type', type: 'text' },
                     { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
-                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
-                    { key: 'time', label: 'Time (min)', type: 'number' },
+                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1, tip: GLOSSARY.aa },
+                    { key: 'time', label: 'Time (min)', type: 'number', tip: GLOSSARY.hopTime },
                   ]}
                   onChange={hopActions.onChange}
                   onAdd={() => hopActions.onAdd({ amount: 1, aa: 5, time: 15 })}
@@ -1120,7 +1127,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             )}
             {(!readOnly || otherBoil.length > 0) && (
               <div>
-                <SectionLabel>Other Boil Ingredients</SectionLabel>
+                <SectionLabel tip={GLOSSARY.otherBoil}>Other Boil Ingredients</SectionLabel>
                 <EditableRowList
                   rows={otherBoil}
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
@@ -1159,9 +1166,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
                 )}
               </div>
               <div className="w-[170px]">
-                <FieldLabel tip="How long fermentation should run for this recipe. It sets the fermentation chart's default date range and the time remaining; a batch can be extended later with Ferment longer.">
-                  Fermentation (days)
-                </FieldLabel>
+                <FieldLabel tip={GLOSSARY.fermentDays}>Fermentation (days)</FieldLabel>
                 {readOnly ? (
                   <FieldValue>{fermentDays === '' ? '—' : fermentDays}</FieldValue>
                 ) : (
@@ -1253,7 +1258,7 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             </div>
             {(!readOnly || fermentationSteps.length > 0) && (
               <div>
-                <SectionLabel>Fermentation Steps</SectionLabel>
+                <SectionLabel tip={GLOSSARY.fermentationSteps}>Fermentation Steps</SectionLabel>
                 <EditableRowList
                   rows={fermentationSteps}
                   templateColumns="1.6fr 0.8fr 0.7fr 0.7fr"
@@ -1273,15 +1278,15 @@ export const RecipeEditor: FC<{ recipe?: RecipeEditorData; deviceType: string; r
             )}
             {(!readOnly || dryHops.length > 0) && (
               <div>
-                <SectionLabel>Dry Hops</SectionLabel>
+                <SectionLabel tip={GLOSSARY.dryHops}>Dry Hops</SectionLabel>
                 <EditableRowList
                   rows={dryHops}
                   templateColumns="1.4fr 0.8fr 0.7fr 0.8fr"
                   columns={[
                     { key: 'name', label: 'Type', type: 'text' },
                     { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
-                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
-                    { key: 'time', label: 'Time (days)', type: 'number' },
+                    { key: 'aa', label: 'AA%', type: 'number', step: 0.1, tip: GLOSSARY.aa },
+                    { key: 'time', label: 'Time (days)', type: 'number', tip: GLOSSARY.dryHopTime },
                   ]}
                   onChange={dryHopActions.onChange}
                   onAdd={() => dryHopActions.onAdd({ amount: 1, aa: 5, time: 3 })}

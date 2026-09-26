@@ -17,6 +17,7 @@ import { HopCompartmentInfo } from '~/components/recipe-editor/HopCompartmentInf
 import { StepRangeWarnings } from '~/components/recipe-editor/StepRangeWarnings';
 import { getPicoStepWarnings } from '~/utils/pico-step-ranges';
 import { MachineStepsModal, type MachineStepRow } from '~/components/recipe-editor/MachineStepsModal';
+import { GLOSSARY } from '~/utils/brewing-glossary';
 import { cn } from '~/lib/utils';
 import type { AiIngredientRow, PicoPackAiRecipe } from '~/services/ai-recipe-generator.server';
 import { IngredientSection, PicoLocationMap, RecipePackType } from '~/types';
@@ -633,7 +634,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               )}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">ABV %</p>
+                  <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                    ABV %<InfoTip label="ABV %">{GLOSSARY.abv}</InfoTip>
+                  </p>
                   {readOnly ? (
                     <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{abv.toFixed(1)}</p>
                   ) : (
@@ -650,7 +653,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   )}
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">IBU</p>
+                  <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                    IBU
+                    <InfoTip label="IBU">{GLOSSARY.ibu}</InfoTip>
+                  </p>
                   {readOnly ? (
                     <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold">{ibu}</p>
                   ) : (
@@ -666,7 +672,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                   )}
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase text-ink-text-faint">Batch Size</p>
+                  <p className="flex items-center gap-1 text-[11px] font-bold uppercase text-ink-text-faint">
+                    Batch Size
+                    <InfoTip label="Batch Size">{GLOSSARY.batchSizePico}</InfoTip>
+                  </p>
                   <p className="mt-1 px-2.5 py-2 font-mono text-sm font-bold text-ink-text-muted">
                     {PICOPACK_BATCH_SIZE_L} L (fixed)
                   </p>
@@ -679,7 +688,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
             <p className="text-[15px] font-bold">Fermentation</p>
             <div className="flex flex-col gap-4">
               <div className="w-[170px]">
-                <p className="mb-1.5 text-[11px] font-semibold text-ink-text-secondary">Fermentation (days)</p>
+                <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-ink-text-secondary">
+                  Fermentation (days)
+                  <InfoTip label="Fermentation (days)">{GLOSSARY.fermentDays}</InfoTip>
+                </p>
                 {readOnly ? (
                   <p className="px-2.5 py-2 font-mono text-sm font-bold">{fermentDays === '' ? '—' : fermentDays}</p>
                 ) : (
@@ -872,7 +884,10 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
               </div>
               {(!readOnly || grains.length > 0) && (
                 <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">Grains</p>
+                  <p className="mb-2 flex items-center gap-1 text-xs font-bold uppercase tracking-[0.4px] text-ink-text-faint">
+                    Grains
+                    <InfoTip label="grains">{GLOSSARY.fermentables}</InfoTip>
+                  </p>
                   <EditableRowList
                     rows={grains}
                     templateColumns="1.6fr 0.9fr"
@@ -900,8 +915,14 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
                     columns={[
                       { key: 'name', label: 'Hop Type', type: 'text' },
                       { key: 'amount', label: `Amount (${weightUnit})`, type: 'number', step: 0.1 },
-                      { key: 'aa', label: 'AA%', type: 'number', step: 0.1 },
-                      { key: 'compartment', label: 'Compartment', type: 'select', options: HOP_COMPARTMENTS },
+                      { key: 'aa', label: 'AA%', type: 'number', step: 0.1, tip: GLOSSARY.aa },
+                      {
+                        key: 'compartment',
+                        label: 'Compartment',
+                        type: 'select',
+                        options: HOP_COMPARTMENTS,
+                        tip: GLOSSARY.compartment,
+                      },
                     ]}
                     maxRows={HOP_COMPARTMENTS.length}
                     onChange={hopActions.onChange}

@@ -1,10 +1,12 @@
 import { MdAdd, MdDeleteOutline } from 'react-icons/md';
+import { InfoTip } from '~/components/ui/info-tip';
 import { Input } from '~/components/ui/input';
 import { Select } from '~/components/ui/select';
 
 export type RowColumn<T> = {
   key: Extract<keyof T, string>;
   label: string;
+  tip?: string;
   type: 'text' | 'number' | 'select';
   options?: string[];
   step?: number;
@@ -44,7 +46,10 @@ export function EditableRowList<T extends { id: string }>({
           style={{ gridTemplateColumns: rowTemplateColumns }}
         >
           {columns.map((col) => (
-            <span key={col.key}>{col.label}</span>
+            <span key={col.key} className="flex items-center gap-1">
+              {col.label}
+              {col.tip && <InfoTip label={col.label}>{col.tip}</InfoTip>}
+            </span>
           ))}
           {!readOnly && <div />}
         </div>
