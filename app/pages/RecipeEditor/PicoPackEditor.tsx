@@ -427,6 +427,7 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
         attenuation?: number;
         tempMin?: number | null;
         tempMax?: number | null;
+        fermentDays?: number | null;
         explanation?: string;
         error?: string;
       };
@@ -442,6 +443,9 @@ export const PicoPackEditor: FC<{ recipe?: PicoPackEditorData; deviceType: strin
       if (result.tempMin != null && result.tempMax != null) {
         setTempMin(result.tempMin);
         setTempMax(result.tempMax);
+      }
+      if (result.fermentDays != null) {
+        setFermentDays(result.fermentDays);
       }
       setEstimateNote({ text: `AI estimate: ${result.explanation || 'filled in from the grain bill.'}`, error: false });
     } catch {

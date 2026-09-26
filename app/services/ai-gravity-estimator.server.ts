@@ -25,6 +25,7 @@ export type GravityEstimate = {
   attenuation: number;
   tempMin: number | null;
   tempMax: number | null;
+  fermentDays: number | null;
   explanation: string;
 };
 export type GravityEstimateResult = ({ success: true } & GravityEstimate) | { success: false; error: string };
@@ -35,9 +36,10 @@ const SYSTEM =
   'from the grain bill and batch size (assume roughly 70-75% brewhouse efficiency), the style, the yeast, and the ' +
   "recipe's stated ABV — the ABV should roughly equal (OG - FG) x 131.25, so pick numbers consistent with it. " +
   'Also give the fermentation temperature range in degrees Fahrenheit that suits this beer and its yeast (e.g. ' +
-  'a clean American ale yeast: 64 to 72). ' +
+  'a clean American ale yeast: 64 to 72), and how many days fermentation should run before packaging, including ' +
+  'any conditioning or lagering this style needs (e.g. an American IPA: 14, a lager: 28). ' +
   'Respond with ONLY one JSON object, no markdown: {"og": 1.0xx, "fg": 1.0xx, "attenuation": <percent number>, ' +
-  '"tempMinF": <number>, "tempMaxF": <number>, "explanation": "one or two short sentences on how you got there"}. ' +
+  '"tempMinF": <number>, "tempMaxF": <number>, "fermentDays": <whole number>, "explanation": "one or two short sentences on how you got there"}. ' +
   'OG and FG are specific gravities with three decimals (e.g. 1.056 and 1.012); attenuation is apparent attenuation as ' +
   'a percentage (e.g. 79).';
 
@@ -125,6 +127,8 @@ export async function estimateGravityTargets(input: GravityEstimateInput): Promi
   const tMin = num(parsed.tempMinF);
   const tMax = num(parsed.tempMaxF);
   const tempOk = Number.isFinite(tMin) && Number.isFinite(tMax) && tMin >= 30 && tMax <= 100 && tMin < tMax;
+  const days = num(parsed.fermentDays);
+  const daysOk = Number.isFinite(days) && days >= 3 && days <= 120;
   const explanation = typeof parsed.explanation === 'string' ? parsed.explanation.trim().slice(0, 400) : '';
   return {
     success: true,
@@ -133,6 +137,7 @@ export async function estimateGravityTargets(input: GravityEstimateInput): Promi
     attenuation: Math.round(attenuation * 10) / 10,
     tempMin: tempOk ? Math.round(tMin) : null,
     tempMax: tempOk ? Math.round(tMax) : null,
+    fermentDays: daysOk ? Math.round(days) : null,
     explanation,
   };
 }
