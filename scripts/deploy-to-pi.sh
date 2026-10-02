@@ -150,7 +150,14 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-  ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable --now wlan1-watchdog.service'
+  # Restart, not just enable: a running watchdog keeps the old copy of its script until restarted.
+  ssh "$TARGET" 'sudo systemctl daemon-reload && sudo systemctl enable wlan1-watchdog.service && sudo systemctl restart wlan1-watchdog.service'
+}
+
+install_wifi_power_settings() {
+  echo "==> Turning off USB and Wi-Fi power saving (keeps the USB Wi-Fi adapter from dropping out)..."
+  ssh "$TARGET" "sudo install -m 0644 '$APP_DIR/scripts/udev/70-repicobrew-usb-power.rules' /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb --action=add"
+  ssh "$TARGET" "sudo install -m 0644 '$APP_DIR/scripts/networkmanager/repicobrew-wifi-powersave.conf' /etc/NetworkManager/conf.d/ && sudo systemctl reload NetworkManager"
 }
 
 deploy_aarch64() {
@@ -228,6 +235,7 @@ EOF
 
   install_service
   install_ble_scanner
+  install_wifi_power_settings
   install_wlan1_watchdog
 }
 

@@ -87,6 +87,11 @@ SUDOERS
 chmod 0440 /etc/sudoers.d/repicobrew-control
 visudo -cf /etc/sudoers.d/repicobrew-control
 
+echo "==> Turning off USB and Wi-Fi power saving (keeps a USB Wi-Fi adapter from dropping out)..."
+install -m 0644 "$APP_DIR/scripts/udev/70-repicobrew-usb-power.rules" /etc/udev/rules.d/
+mkdir -p /etc/NetworkManager/conf.d
+install -m 0644 "$APP_DIR/scripts/networkmanager/repicobrew-wifi-powersave.conf" /etc/NetworkManager/conf.d/
+
 echo "==> Configuring nginx reverse proxy..."
 rm -f /etc/nginx/sites-enabled/default
 ln -sf "$APP_DIR/scripts/nginx-picobrew.conf" /etc/nginx/sites-enabled/picobrew
