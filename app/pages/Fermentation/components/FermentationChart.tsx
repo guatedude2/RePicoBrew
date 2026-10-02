@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import type { ApexOptions } from 'apexcharts';
 import { ChartMenu } from '~/components/charts/ChartMenu';
 import { Chart } from '~/components/charts/Chart.client';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
+import { useServerSideEvent } from '~/utils/sse';
 import { expectedGravityAt, projectGravity, resolveGravityTargets, sampleCurve } from '~/utils/gravity-projection';
 import { chartTimeToken, formatDateTime, useTimeFormat } from '~/utils/time-format';
 
@@ -115,28 +116,11 @@ export default function FermentationChart({
         )
       : [];
 
-  // Subscribe to live updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/events');
-
-    eventSource.addEventListener('tilt-update', ((event: MessageEvent) => {
-      const update = JSON.parse(event.data);
-      if (update.sessionId === sessionId) {
-        setLive((prev) => [
-          ...prev,
-          {
-            time: Date.now(),
-            temp: update.temp,
-            gravity: update.gravity,
-          },
-        ]);
-      }
-    }) as EventListener);
-
-    return () => {
-      eventSource.close();
-    };
-  }, [sessionId]);
+  useServerSideEvent<{ sessionId: number; temp: number; gravity: number }>('tilt-update', (update) => {
+    if (update.sessionId === sessionId) {
+      setLive((prev) => [...prev, { time: Date.now(), temp: update.temp, gravity: update.gravity }]);
+    }
+  });
 
   // Expected and projected gravity, both dashed on the gravity axis. Only with the recipe targets, a known start and
   // a live gravity trend; otherwise the chart is just temperature and gravity as before.

@@ -1,3 +1,4 @@
+import { useServerSideEvent } from '~/utils/sse';
 import { useFetcher } from 'react-router';
 import { useEffect, useState } from 'react';
 import { MdScience, MdStop, MdThermostat, MdTimer, MdWifi } from 'react-icons/md';
@@ -61,32 +62,16 @@ export default function Fermentation({ sessions: initialSessions }: DashboardPro
   const fetcher = useFetcher();
   const activeSession = sessions.find((s) => s.id === selectedSessionId);
 
-  // Subscribe to SSE updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/events');
-
-    eventSource.addEventListener('tilt-update', ((event: MessageEvent) => {
-      const data: TiltUpdate = JSON.parse(event.data);
-      setCurrentReading(data);
-
-      setSessions((prev) => {
-        const exists = prev.find((s) => s.id === data.sessionId);
-        if (!exists) {
-          window.location.reload();
-        }
-        return prev;
-      });
-    }) as EventListener);
-
-    eventSource.addEventListener('tilt-seen', ((event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      console.log('[Tilt Seen]', data);
-    }) as EventListener);
-
-    return () => {
-      eventSource.close();
-    };
-  }, []);
+  useServerSideEvent<TiltUpdate>('tilt-update', (data) => {
+    setCurrentReading(data);
+    setSessions((prev) => {
+      const exists = prev.find((s) => s.id === data.sessionId);
+      if (!exists) {
+        window.location.reload();
+      }
+      return prev;
+    });
+  });
 
   // Fetch available Tilt devices
   useEffect(() => {

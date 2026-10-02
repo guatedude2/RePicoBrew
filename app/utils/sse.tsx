@@ -1,5 +1,5 @@
 import type { FC, PropsWithChildren } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 const context = createContext<EventSource | null>(null);
 
@@ -10,12 +10,15 @@ interface ServerSideEventsProviderProps extends PropsWithChildren {
   withCredentials?: boolean;
 }
 
-// server side event hook
+// Listens for one event on the app-wide stream (ServerSideEventsProvider) instead of opening a connection per
+// component. Always calls the latest `callback`, so it can use current props and state.
 export function useServerSideEvent<T>(name: string, callback: Callback<T>) {
   const eventSource = useContext(context);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
 
   useEffect(() => {
-    if (!eventSource || !callback) {
+    if (!eventSource) {
       return;
     }
 
@@ -25,7 +28,7 @@ export function useServerSideEvent<T>(name: string, callback: Callback<T>) {
       if (dataString === previousDataString) {
         return;
       }
-      callback(JSON.parse(dataString));
+      callbackRef.current(JSON.parse(dataString));
       previousDataString = dataString;
     };
 
@@ -33,7 +36,6 @@ export function useServerSideEvent<T>(name: string, callback: Callback<T>) {
     return () => {
       eventSource.removeEventListener(name, handleMessageEvent);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, eventSource]);
 }
 
