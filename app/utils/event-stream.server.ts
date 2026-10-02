@@ -24,7 +24,10 @@ export function eventStreamResponse(request: Request, run: (send: Send) => Promi
         await run(send);
       } catch (error) {
         console.error('[event-stream] handler failed', error);
-        send('error', { error: 'Something went wrong. Try again in a moment.' });
+        const detail = error instanceof Error ? error.message.split('\n')[0].slice(0, 160) : '';
+        send('error', {
+          error: `Something went wrong on RePicoBrew's side${detail ? ` (${detail})` : ''}. Try again in a moment.`,
+        });
       }
       if (!closed) {
         controller.close();

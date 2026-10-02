@@ -1,7 +1,7 @@
 import { useFetcher, useMatches, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GiHops } from 'react-icons/gi';
-import { MdClose, MdDeleteSweep, MdMenuBook, MdSend } from 'react-icons/md';
+import { MdClose, MdDeleteSweep, MdMenuBook, MdRefresh, MdSend } from 'react-icons/md';
 import { useAiSidekickBridge } from './AiSidekickContext';
 import { ChatMarkdown } from './ChatMarkdown';
 import { Spinner } from '~/components/ui/spinner';
@@ -192,6 +192,10 @@ export function AiBrewmasterSidekick() {
   const [streamText, setStreamText] = useState('');
   const [streamError, setStreamError] = useState<string | null>(null);
   const isSending = actionFetcher.state !== 'idle' || streamSending;
+  // The last message that didn't get a reply, offered for retry. `saved` is whether the server already stored it in
+  // the thread (plain chat saves the question before replying; recipe edits only save once they succeed).
+  const [failed, setFailed] = useState<{ text: string; saved: boolean } | null>(null);
+  const lastSentRef = useRef('');
 
   // Reload this scope's persisted history on mount and whenever the route-detected scope changes
   // (navigating between a recipe, a session, and every other page) — the panel can stay open
@@ -204,6 +208,7 @@ export function AiBrewmasterSidekick() {
     setPrompt('');
     setQueue([]);
     setConfirmingClear(false);
+    setFailed(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
 
@@ -231,8 +236,10 @@ export function AiBrewmasterSidekick() {
     if ('error' in result) {
       // Whatever was queued was meant to follow a reply that never came — don't fire it blindly.
       setQueue([]);
+      setFailed({ text: lastSentRef.current, saved: false });
       return;
     }
+    setFailed(null);
     if ('recipe' in result) {
       bridge?.onGenerated(result.recipe);
       setDynamicSuggestions(result.suggestions?.length ? result.suggestions : null);
@@ -248,7 +255,7 @@ export function AiBrewmasterSidekick() {
     setStreamStatus('Thinking…');
     setStreamText('');
     setStreamError(null);
-    let failed = false;
+    let didFail = false;
     try {
       await postEventStream('/api/ai-chat', { scope, scopeId, message: text, stream: true }, (event, payload) => {
         const data = payload as { status?: string; text?: string; error?: string; action?: AiChatAction | null };
@@ -257,19 +264,20 @@ export function AiBrewmasterSidekick() {
         } else if (event === 'delta' && data.text) {
           setStreamText((prev) => prev + data.text);
         } else if (event === 'error') {
-          failed = true;
+          didFail = true;
           setStreamError(data.error ?? 'Chat failed. Try again in a moment.');
         } else if (event === 'done' && data.action) {
           runChatAction(data.action);
         }
       });
     } catch (e) {
-      failed = true;
+      didFail = true;
       setStreamError(e instanceof Error ? e.message : 'Chat failed. Try again in a moment.');
     }
-    if (failed) {
+    if (didFail) {
       setQueue([]);
     }
+    setFailed(didFail ? { text, saved: true } : null);
     // Keep the streamed bubble up until the saved history has loaded, so the reply doesn't blink out.
     await historyFetcher.load(historyUrl(scope, scopeId));
     setPendingText(null);
@@ -277,8 +285,11 @@ export function AiBrewmasterSidekick() {
     setStreamSending(false);
   };
 
-  const send = (trimmed: string) => {
-    setPendingText(trimmed);
+  // `alreadyShown`: a retry of a question the thread already holds, so it isn't drawn a second time while sending.
+  const send = (trimmed: string, alreadyShown = false) => {
+    lastSentRef.current = trimmed;
+    setFailed(null);
+    setPendingText(alreadyShown ? null : trimmed);
     if (bridge) {
       const body =
         mode === 'edit'
@@ -508,6 +519,27 @@ export function AiBrewmasterSidekick() {
               </div>
             ))}
 
+            {failed && !isSending && (
+              <div className="flex flex-col items-end gap-1.5">
+                {!failed.saved && (
+                  <div className="ml-6 min-w-0 max-w-[calc(100%-1.5rem)] [overflow-wrap:anywhere] rounded-lg rounded-tr-sm bg-brand-500/15 px-3 py-2 text-[12.5px] text-ink-text whitespace-pre-wrap">
+                    <p>{failed.text}</p>
+                  </div>
+                )}
+                <div className="ml-6 flex max-w-[calc(100%-1.5rem)] items-start gap-2 text-[12px]">
+                  <p className="text-right text-danger-500">{error ?? 'Not sent.'}</p>
+                  <button
+                    type="button"
+                    onClick={() => send(failed.text, failed.saved)}
+                    className="flex flex-none items-center gap-1 font-semibold text-brand-500 hover:text-brand-400"
+                  >
+                    <MdRefresh className="size-3.5" />
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
             {messages.length === 0 && !isLoadingHistory && !pendingText && (
               <p className="text-[12.5px] text-ink-text-secondary">{emptyStateTextFor(mode, scope)}</p>
             )}
@@ -541,7 +573,7 @@ export function AiBrewmasterSidekick() {
               </p>
             )}
 
-            {error && !isSending && (
+            {error && !isSending && !failed && (
               <p className="rounded-lg border border-danger-500 bg-danger-100 px-3 py-2 text-[12.5px] text-danger-500">
                 {error}
               </p>

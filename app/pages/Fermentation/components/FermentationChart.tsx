@@ -171,8 +171,8 @@ export default function FermentationChart({
       ...gravityLines.projected.map((p) => p.y),
     ];
     return {
-      min: Math.floor((Math.min(...values) - 0.005) * 1000) / 1000,
-      max: Math.ceil((Math.max(...values) + 0.005) * 1000) / 1000,
+      min: Math.floor((values.reduce((a, b) => Math.min(a, b), Infinity) - 0.005) * 1000) / 1000,
+      max: Math.ceil((values.reduce((a, b) => Math.max(a, b), -Infinity) + 0.005) * 1000) / 1000,
     };
   })();
 

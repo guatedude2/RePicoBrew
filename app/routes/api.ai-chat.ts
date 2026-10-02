@@ -47,8 +47,14 @@ async function runChatTurn(
   hooks: TurnHooks,
 ): Promise<TurnResult> {
   const thread = await AiChatRepository.getOrCreateThread(scope, scopeId);
-  const history = (await AiChatRepository.listMessages(thread.id)).slice(-6);
-  await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
+  const messages = await AiChatRepository.listMessages(thread.id);
+  // A retry after a failed turn: the question is already saved with no reply, so don't save it twice.
+  const last = messages[messages.length - 1];
+  const isRetry = last?.role === 'user' && last.content === message.trim();
+  const history = (isRetry ? messages.slice(0, -1) : messages).slice(-6);
+  if (!isRetry) {
+    await AiChatRepository.appendMessage(thread.id, 'user', message.trim());
+  }
 
   // A light conversational touch for session/recipe-scoped chat — what's currently being viewed
   // — not a re-implementation of ai-advisor.server.ts's own scheduled/on-demand telemetry advice

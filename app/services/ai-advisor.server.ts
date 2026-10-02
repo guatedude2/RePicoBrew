@@ -30,9 +30,16 @@ function summarizeNumbers(values: number[]) {
   if (values.length === 0) {
     return null;
   }
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+  // A loop, not Math.min(...values): a long ferment has tens of thousands of readings, which overflows the stack.
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  for (const v of values) {
+    min = Math.min(min, v);
+    max = Math.max(max, v);
+    sum += v;
+  }
+  const avg = sum / values.length;
   return { min: Math.round(min * 100) / 100, max: Math.round(max * 100) / 100, avg: Math.round(avg * 100) / 100 };
 }
 
