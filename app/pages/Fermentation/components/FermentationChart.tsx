@@ -28,6 +28,7 @@ interface FermentationChartProps {
 }
 
 const DAY_MS = 86400000;
+const HOUR_MS = 3600000;
 const MAX_DAY_LINES = 120;
 
 // Local-time midnights after `min` up to `max`, for the day dividers.
@@ -102,6 +103,7 @@ export default function FermentationChart({
     data.length > 0 ? [data[0].time, data[data.length - 1].time] : null,
     onZoomChange,
     defaultRange,
+    HOUR_MS,
   );
   // Day dividers across everything the chart can show (the default range and all the data); lines outside the
   // visible range simply aren't drawn.

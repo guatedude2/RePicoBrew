@@ -12,6 +12,8 @@ export function useChartZoom(
   onZoomChange?: (range: ZoomRange | null) => void,
   // The range shown when the user hasn't zoomed (and what "Reset zoom" returns to); the chart's own auto range if null.
   defaultRange?: ZoomRange | null,
+  // The narrowest window the user can zoom to, in ms; a tighter zoom is widened to this, around the same middle.
+  minRangeMs?: number,
 ) {
   // A ref, not state: re-rendering in the middle of a zoom gesture interrupts it. The range is only needed
   // the next time new data re-renders the chart anyway.
@@ -42,6 +44,14 @@ export function useChartZoom(
   return {
     xaxisRange: rangeRef.current ?? defaultRange ?? {},
     events: {
+      beforeZoom: (_chart: unknown, args: AxisArgs) => {
+        const { min, max } = args?.xaxis ?? {};
+        if (!minRangeMs || typeof min !== 'number' || typeof max !== 'number' || max - min >= minRangeMs) {
+          return args;
+        }
+        const middle = (min + max) / 2;
+        return { xaxis: { min: middle - minRangeMs / 2, max: middle + minRangeMs / 2 } };
+      },
       zoomed: remember,
       scrolled: remember,
       beforeResetZoom: () => {

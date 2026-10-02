@@ -55,8 +55,8 @@ model Device {
   updatedAt            DateTime  @default(now()) @updatedAt
   deletedAt            DateTime?
 
-  sessions      Session[]
-  logs          DeviceLog[]
+  sessions       Session[]
+  logs           DeviceLog[]
   fermentBatches Batch[]
 }
 
@@ -149,8 +149,8 @@ model Batch {
   // "Ferment longer"), so extending one batch never changes its recipe.
   fermentDays Int?
 
-  recipe        Recipe?   @relation(fields: [recipeId], references: [id])
-  fermentDevice Device?   @relation(fields: [fermentDeviceId], references: [id])
+  recipe        Recipe?    @relation(fields: [recipeId], references: [id])
+  fermentDevice Device?    @relation(fields: [fermentDeviceId], references: [id])
   sessions      Session[]
   aiAdvice      AiAdvice[]
 }
@@ -168,10 +168,10 @@ model AiAdvice {
 }
 
 model RecipeIngredient {
-  id        Int    @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   recipeId  Int
   section   String // enum: WATER, MASH_STEP, FERMENTABLE, BOIL_HOP, OTHER_BOIL, FERMENTATION_STEP, DRY_HOP
-  sortOrder Int    @default(0)
+  sortOrder Int     @default(0)
   name      String
   amount    Float?
   unit      String?
@@ -223,6 +223,74 @@ model SessionLog {
   type      Int // 0 = Brew log, 1 = Ferment log
   time      DateTime @default(now())
   data      String // json
+
+  @@index([sessionId, time])
+}
+
+// Fermentation readings (SessionLog type 1) rolled up into 1-minute buckets, kept current as readings arrive, so charts
+// and AI summaries don't scan the raw table. Averages are sum / count.
+model SessionLogMinute {
+  id          Int    @id @default(autoincrement())
+  sessionId   Int
+  bucket      BigInt // bucket start, ms since epoch
+  lastTime    BigInt // newest reading in the bucket, ms since epoch
+  n           Int
+  tempSum     Float  @default(0)
+  tempN       Int    @default(0)
+  tempMin     Float?
+  tempMax     Float?
+  gravitySum  Float  @default(0)
+  gravityN    Int    @default(0)
+  gravityMin  Float?
+  gravityMax  Float?
+  pressureSum Float  @default(0)
+  pressureN   Int    @default(0)
+
+  @@unique([sessionId, bucket])
+}
+
+// Fermentation readings (SessionLog type 1) rolled up into 15-minute buckets, kept current as readings arrive, so charts
+// and AI summaries don't scan the raw table. Averages are sum / count.
+model SessionLogQuarterHour {
+  id          Int    @id @default(autoincrement())
+  sessionId   Int
+  bucket      BigInt // bucket start, ms since epoch
+  lastTime    BigInt // newest reading in the bucket, ms since epoch
+  n           Int
+  tempSum     Float  @default(0)
+  tempN       Int    @default(0)
+  tempMin     Float?
+  tempMax     Float?
+  gravitySum  Float  @default(0)
+  gravityN    Int    @default(0)
+  gravityMin  Float?
+  gravityMax  Float?
+  pressureSum Float  @default(0)
+  pressureN   Int    @default(0)
+
+  @@unique([sessionId, bucket])
+}
+
+// Fermentation readings (SessionLog type 1) rolled up into 1-hour buckets, kept current as readings arrive, so charts
+// and AI summaries don't scan the raw table. Averages are sum / count.
+model SessionLogHour {
+  id          Int    @id @default(autoincrement())
+  sessionId   Int
+  bucket      BigInt // bucket start, ms since epoch
+  lastTime    BigInt // newest reading in the bucket, ms since epoch
+  n           Int
+  tempSum     Float  @default(0)
+  tempN       Int    @default(0)
+  tempMin     Float?
+  tempMax     Float?
+  gravitySum  Float  @default(0)
+  gravityN    Int    @default(0)
+  gravityMin  Float?
+  gravityMax  Float?
+  pressureSum Float  @default(0)
+  pressureN   Int    @default(0)
+
+  @@unique([sessionId, bucket])
 }
 
 model DeviceLog {
@@ -249,11 +317,11 @@ model AiChatThread {
 }
 
 model AiChatMessage {
-  id        Int      @id @default(autoincrement())
+  id        Int          @id @default(autoincrement())
   threadId  Int
   thread    AiChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   role      String // user | assistant
   content   String // the display text (user's message, or the AI's explanation/reply)
   metadata  String? // JSON: e.g. { recipeSnapshot, action } — structured extras beyond the text
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 }

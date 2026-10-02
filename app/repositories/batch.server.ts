@@ -1,3 +1,4 @@
+import { deleteRollupsForSessions } from '~/repositories/session-rollups.server';
 import prisma from '~/services/prisma.server';
 import { BatchPhase, SessionState, SessionType } from '~/types';
 import { batchNeedsAttention, effectiveFermentDays } from '~/utils/batch-phase';
@@ -293,6 +294,7 @@ export class BatchRepository {
     const sessions = await prisma.session.findMany({ where: { batchId: id }, select: { id: true } });
     const sessionIds = sessions.map((s: { id: number }) => s.id);
     await prisma.sessionLog.deleteMany({ where: { sessionId: { in: sessionIds } } });
+    await deleteRollupsForSessions(sessionIds);
     await prisma.session.deleteMany({ where: { batchId: id } });
     await prisma.batch.delete({ where: { id } });
   }

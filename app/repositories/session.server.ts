@@ -1,3 +1,4 @@
+import { addReadingToRollups } from '~/repositories/session-rollups.server';
 import { lttbIndices } from '~/utils/lttb';
 import prisma from '~/services/prisma.server';
 import { SessionState, SessionType } from '~/types';
@@ -122,9 +123,13 @@ export class SessionRepository {
   }
 
   public static async createSessionLogEntry(sessionId: number, data: SessionLogData, type = 0) {
-    return await prisma.sessionLog.create({
+    const row = await prisma.sessionLog.create({
       data: { sessionId, type, data: JSON.stringify(data) },
     });
+    if (type === 1) {
+      await addReadingToRollups(sessionId, data, row.time);
+    }
+    return row;
   }
 
   public static async getSessionById(id: number) {

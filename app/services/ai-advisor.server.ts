@@ -1,3 +1,4 @@
+import { listRolledUpReadings } from '~/repositories/session-rollups.server';
 import { AiAdviceRepository, type AiAdviceTrigger } from '~/repositories/ai-advice.server';
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
 import { BatchRepository } from '~/repositories/batch.server';
@@ -215,7 +216,8 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
     stageSummary = brew.summary;
     step = brew.step;
   } else if (batch.phase === BatchPhase.FERMENTING) {
-    const logs = fermSession ? await SessionRepository.listSessionLogs(fermSession.id) : [];
+    // 15-minute averages: a fortnight is ~1,300 rows instead of 150k+ raw readings.
+    const logs = fermSession ? (await listRolledUpReadings(fermSession.id, { resolution: 'quarterHour' })) ?? [] : [];
     const progress = fermSession
       ? describeFermentationProgress(fermSession.createdAt, batch.fermentDays ?? recipe?.fermentDays)
       : '';
