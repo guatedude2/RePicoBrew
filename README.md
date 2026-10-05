@@ -18,8 +18,8 @@ A PicoBrew server as an alternative to [chiefwigms/picobrew_pico](https://github
     <td align="center" valign="top"><a href="docs/screenshots/session-brew.png"><img src="docs/screenshots/session-brew.png" alt="Brew session chart" width="400"></a><br><sub>Brew chart with each Pico step marked</sub></td>
   </tr>
   <tr>
-    <td align="center" valign="top"><a href="docs/screenshots/recipe-picopack-edit.png"><img src="docs/screenshots/recipe-picopack-edit.png" alt="PicoPack recipe editor" width="400"></a><br><sub>PicoPack editor: optional gravity and fermentation temperature targets, with an AI estimate button</sub></td>
-    <td align="center" valign="top"><a href="docs/screenshots/recipe-zpack.png"><img src="docs/screenshots/recipe-zpack.png" alt="ZPack recipe" width="400"></a><br><sub>ZPack recipe details</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/recipe-picopack-edit.png"><img src="docs/screenshots/recipe-picopack-edit.png" alt="PicoPack recipe editor" width="400"></a><br><sub>PicoPack editor: fermentation length, gravity and temperature targets, with an AI estimate button</sub></td>
+    <td align="center" valign="top"><a href="docs/screenshots/recipe-zpack.png"><img src="docs/screenshots/recipe-zpack.png" alt="ZPack recipe" width="400"></a><br><sub>ZPack recipe details, with (i) explanations of brewing terms</sub></td>
   </tr>
   <tr>
     <td align="center" valign="top"><a href="docs/screenshots/ai-brewmaster.png"><img src="docs/screenshots/ai-brewmaster.png" alt="AI Brewmaster" width="400"></a><br><sub>AI Brewmaster: chat, draft recipes, start sessions</sub></td>
