@@ -48,8 +48,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const session = await SessionRepository.getSession(body.data.rfid);
   if (session) {
-    // update the status if the session exists
-    await SessionRepository.updateSessionState(session.id, SessionType.BREWING, SessionState.READY, 'Ready to Brew');
+    // The Pico can read a PicoPak again after its brew finished (e.g. before a rinse). A completed brew stays
+    // completed: resetting it to Ready left it looking unfinished, and the next session the device started then
+    // canceled it.
+    if (session.state !== SessionState.COMPLETED) {
+      await SessionRepository.updateSessionState(session.id, SessionType.BREWING, SessionState.READY, 'Ready to Brew');
+    }
   } else {
     // create a session, and a batch to carry it through brew -> ferment -> carbonate -> done
     const newSession = await SessionRepository.createSession(body.data.rfid, SessionType.BREWING, device.id, recipe.id);
