@@ -120,6 +120,16 @@ export async function listRolledUpReadings(
   });
 }
 
+// The first fermentation gravity a session recorded (its first minute's average), or null if there's none yet.
+export async function firstRolledUpGravity(sessionId: number): Promise<number | null> {
+  const [row] = await prisma.$queryRawUnsafe<Array<{ gravity: number }>>(
+    `SELECT "gravitySum" / "gravityN" AS gravity FROM "SessionLogMinute"
+     WHERE "sessionId" = ? AND "gravityN" > 0 ORDER BY "bucket" LIMIT 1`,
+    sessionId,
+  );
+  return row ? round(row.gravity, 4) : null;
+}
+
 export async function deleteRollupsForSessions(sessionIds: number[]) {
   if (sessionIds.length === 0) {
     return;

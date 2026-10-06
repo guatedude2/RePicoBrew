@@ -34,6 +34,7 @@ import { cn } from '~/lib/utils';
 import { BatchPhase } from '~/types';
 import { batchOverallProgress, effectiveFermentDays, phaseAccent, phaseLabel } from '~/utils/batch-phase';
 import { phaseForStep } from '~/utils/brew-step-phase';
+import { InfoTip } from '~/components/ui/info-tip';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
@@ -383,6 +384,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
   brewSession,
   fermSession,
   lastFermLog,
+  firstFermGravity,
   tiltDevices,
   aiAdvice,
   brewErrors,
@@ -577,6 +579,13 @@ export const SessionDetail: FC<SessionDetailData> = ({
       ? { gravity: initialFermData.gravity, temp: initialFermData.temp, rssi: initialFermData.rssi }
       : null,
   );
+  // ABV from the fermentation so far: (OG - current gravity) x 131.25. The OG is the recipe's when set (a
+  // hydrometer reading is more reliable than a Tilt in fresh wort), otherwise the first Tilt reading.
+  const abvOg = batch.recipe?.og ?? firstFermGravity;
+  const estimatedAbv =
+    fermSession && abvOg && liveFerm?.gravity && liveFerm.gravity > 0 && abvOg > liveFerm.gravity
+      ? (abvOg - liveFerm.gravity) * 131.25
+      : null;
   const [lastFermReceivedAt, setLastFermReceivedAt] = useState<number | null>(
     lastFermLog ? new Date(lastFermLog.time).getTime() : null,
   );
@@ -1440,6 +1449,22 @@ export const SessionDetail: FC<SessionDetailData> = ({
                       <div>
                         <p className="text-[11px] text-ink-text-faint">ABV</p>
                         <p className="font-mono text-base font-bold">{formatAbv(batch.recipe.abv, { unit: false })}</p>
+                      </div>
+                    )}
+                    {estimatedAbv !== null && (
+                      <div>
+                        <p className="flex items-center gap-1 whitespace-nowrap text-[11px] text-ink-text-faint">
+                          Est. ABV
+                          <InfoTip label="Est. ABV">
+                            Alcohol so far, from how far the gravity has dropped: ({abvOg?.toFixed(3)} -{' '}
+                            {liveFerm?.gravity.toFixed(3)}) x 131.25. The starting gravity is{' '}
+                            {batch.recipe?.og ? "the recipe's OG" : 'the first Tilt reading'}; the ABV next to it is the
+                            recipe's target.
+                          </InfoTip>
+                        </p>
+                        <p className="font-mono text-base font-bold text-brand-500">
+                          {formatAbv(estimatedAbv, { unit: false })}
+                        </p>
                       </div>
                     )}
                     {batch.recipe.ibu >= 0 && (

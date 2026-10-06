@@ -1,3 +1,4 @@
+import { firstRolledUpGravity } from '~/repositories/session-rollups.server';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { data, redirect, useLoaderData } from 'react-router';
 import { AiAdviceRepository } from '~/repositories/ai-advice.server';
@@ -35,6 +36,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   // The full log history is fetched client-side, thinned (see useSessionLogs); only the newest ferment reading is
   // needed up front, to seed the live signal display.
   const lastFermLog = fermSession ? await SessionRepository.getLatestSessionLog(fermSession.id) : null;
+  const firstFermGravity = fermSession ? await firstRolledUpGravity(fermSession.id) : null;
 
   const [devices, aiAdvice, brewDeviceErrors] = await Promise.all([
     DeviceRepository.listDevices(),
@@ -61,7 +63,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       }),
   );
 
-  return { batch, brewSession, fermSession, lastFermLog, tiltDevices, aiAdvice, brewErrors };
+  return { batch, brewSession, fermSession, lastFermLog, firstFermGravity, tiltDevices, aiAdvice, brewErrors };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
