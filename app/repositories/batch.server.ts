@@ -235,6 +235,18 @@ export class BatchRepository {
 
   // Moves a batch to the next phase only if it's still where the caller expects — avoids racing
   // two triggers (e.g. brew-complete firing twice) into skipping a phase.
+  // Ends the batch's fermentation tracking: its hydrometer stops logging to it and is free for another batch.
+  public static async completeFermentationSessions(id: number) {
+    return await prisma.session.updateMany({
+      where: {
+        batchId: id,
+        type: SessionType.FERMENTATION,
+        state: { in: [SessionState.READY, SessionState.IN_PROGRESS] },
+      },
+      data: { state: SessionState.COMPLETED, statusText: 'Completed' },
+    });
+  }
+
   public static async advancePhase(id: number, from: BatchPhase, to: BatchPhase) {
     const batch = await prisma.batch.findUnique({ where: { id } });
     if (!batch || batch.phase !== from) {

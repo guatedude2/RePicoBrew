@@ -607,7 +607,9 @@ export const SessionDetail: FC<SessionDetailData> = ({
     return () => clearInterval(timer);
   }, [fermSession]);
   const fermHasEverReported = lastFermReceivedAt !== null;
-  const fermIsStale = fermHasEverReported && fermNowMs - lastFermReceivedAt > FERM_STALE_MS;
+  // Once the batch has moved past fermenting, the hydrometer is usually out of the beer; its silence isn't a fault.
+  const fermIsLive = batch.phase === BatchPhase.FERMENTING;
+  const fermIsStale = fermIsLive && fermHasEverReported && fermNowMs - lastFermReceivedAt > FERM_STALE_MS;
 
   const hasAiKey = Boolean(useRouteLoaderData<typeof import('~/routes/_admin').loader>('routes/_admin')?.hasAiKey);
   const timeFormat = useTimeFormat();
@@ -789,6 +791,12 @@ export const SessionDetail: FC<SessionDetailData> = ({
     : [];
 
   const fermentationTimeUp = fermRemainingMs <= 0;
+  let fermTimeValue = formatFermCountdown(Math.floor(fermRemainingMs / 1000));
+  if (!fermIsLive) {
+    fermTimeValue = 'Done';
+  } else if (fermentationTimeUp) {
+    fermTimeValue = 'Time up';
+  }
 
   const startBottling = () =>
     fetcher.submit(JSON.stringify({ intent: 'startBottling' }), {
@@ -1080,12 +1088,14 @@ export const SessionDetail: FC<SessionDetailData> = ({
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-text-secondary">
           {fermSession.device?.name ?? 'Tilt'}
-          <fermSignal.Icon
-            className={cn('size-4', fermIsStale || !fermHasEverReported ? 'text-danger-500' : 'text-ink-text-faint')}
-            title={fermSignal.label}
-          />
+          {fermIsLive && (
+            <fermSignal.Icon
+              className={cn('size-4', fermIsStale || !fermHasEverReported ? 'text-danger-500' : 'text-ink-text-faint')}
+              title={fermSignal.label}
+            />
+          )}
         </div>
-        {(!fermHasEverReported || fermIsStale) && (
+        {fermIsLive && (!fermHasEverReported || fermIsStale) && (
           <div
             className={cn(
               'flex items-center gap-2 rounded-lg border px-3.5 py-2.5',
@@ -1104,7 +1114,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
           <StatCard
             label="Specific Gravity"
             value={liveFerm?.gravity?.toFixed(3) ?? '-.---'}
-            sub="Current reading"
+            sub={fermIsLive ? 'Current reading' : 'Final reading'}
             icon={MdScience}
             accent={ACCENT.purple}
           />
@@ -1112,14 +1122,18 @@ export const SessionDetail: FC<SessionDetailData> = ({
             label="Temperature"
             value={liveFerm?.temp?.toFixed(1) ?? '--'}
             unit="°F"
-            sub="Fermentation temp"
+            sub={fermIsLive ? 'Fermentation temp' : 'Final fermentation temp'}
             icon={MdThermostat}
             accent={ACCENT.danger}
           />
           <StatCard
             label="Time Remaining"
-            value={fermentationTimeUp ? 'Time up' : formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
-            sub={`${formatDuration(fermSession.createdAt)} elapsed of ${fermentDaysTotal}d total`}
+            value={fermTimeValue}
+            sub={
+              fermIsLive
+                ? `${formatDuration(fermSession.createdAt)} elapsed of ${fermentDaysTotal}d total`
+                : `${fermentDaysTotal}d fermentation planned`
+            }
             icon={MdTimer}
             accent={ACCENT.brand}
           />

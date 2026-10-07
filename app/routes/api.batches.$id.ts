@@ -22,6 +22,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     case 'startBottling': {
       const batch = await BatchRepository.advancePhase(id, BatchPhase.FERMENTING, BatchPhase.BOTTLING);
+      if (batch?.phase === BatchPhase.BOTTLING) {
+        await BatchRepository.completeFermentationSessions(id);
+      }
       return { success: true, batch };
     }
     case 'startCarbonation': {
