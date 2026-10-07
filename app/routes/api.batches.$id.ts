@@ -1,3 +1,4 @@
+import { COLD_CRASH_MAX_DAYS } from '~/utils/cold-crash';
 import type { ActionFunctionArgs } from 'react-router';
 import { data } from 'react-router';
 import { BatchRepository } from '~/repositories/batch.server';
@@ -7,7 +8,7 @@ import { requireWriter } from '~/services/auth.server';
 
 /**
  * POST /api/batches/:id
- * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice' | 'extendFermentation', ... }
+ * Body: { intent: 'startFermentation' | 'startBottling' | 'startCarbonation' | 'extendCarbonation' | 'finishCarbonation' | 'endBatch' | 'archive' | 'requestAiAdvice' | 'extendFermentation' | 'startColdCrash', ... }
  */
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireWriter(request);
@@ -54,6 +55,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     case 'archive': {
       const batch = await BatchRepository.archiveBatch(id);
       return { success: true, batch };
+    }
+    case 'startColdCrash': {
+      const days = Number(body.days);
+      if (!Number.isInteger(days) || days < 1 || days > COLD_CRASH_MAX_DAYS) {
+        return data({ error: `Enter a whole number of days between 1 and ${COLD_CRASH_MAX_DAYS}.` }, { status: 400 });
+      }
+      try {
+        const batch = await BatchRepository.startColdCrash(id, days);
+        return { success: true, batch };
+      } catch (error) {
+        return data(
+          { error: error instanceof Error ? error.message : 'Could not start the cold crash.' },
+          { status: 400 },
+        );
+      }
     }
     case 'extendFermentation': {
       const days = Number(body.days);

@@ -1,3 +1,4 @@
+import { COLD_CRASH_TEMP, coldCrashWindow } from '~/utils/cold-crash';
 import { listRolledUpReadings } from '~/repositories/session-rollups.server';
 import { AiAdviceRepository, type AiAdviceTrigger } from '~/repositories/ai-advice.server';
 import { AiSettingsRepository } from '~/repositories/ai-settings.server';
@@ -181,6 +182,44 @@ function buildFermentSummary(logs: Array<{ data: string; time: Date }>) {
   return lines.length > 0 ? lines.join(' ') : 'No fermentation readings yet.';
 }
 
+// A cold crash replaces the yeast's temperature range with fridge temperature: say how far along it is and whether
+// the beer has actually been cold since it started.
+function describeColdCrash(
+  crash: { start: number; end: number; days: number },
+  logs: Array<{ data: string; time: Date }>,
+) {
+  const elapsedDays = (Date.now() - crash.start) / 86400000;
+  const since = logs.flatMap((log) => {
+    if (new Date(log.time).getTime() < crash.start) {
+      return [];
+    }
+    try {
+      const row = JSON.parse(log.data) as FermLogRow;
+      return typeof row.temp === 'number' ? [row.temp] : [];
+    } catch {
+      return [];
+    }
+  });
+  const { min, max } = COLD_CRASH_TEMP;
+  const progress =
+    elapsedDays >= crash.days
+      ? `The ${crash.days}-day cold crash is finished (started ${elapsedDays.toFixed(
+          1,
+        )} days ago); the beer is ready to rack.`
+      : `Cold crashing: day ${elapsedDays.toFixed(1)} of ${crash.days} in the fridge before racking.`;
+  const current = since[since.length - 1];
+  if (current === undefined) {
+    return `${progress} Target ${min}-${max}°F; no temperature readings since it started.`;
+  }
+  let where = 'within';
+  if (current < min) {
+    where = `${(min - current).toFixed(1)}°F below`;
+  } else if (current > max) {
+    where = `${(current - max).toFixed(1)}°F ABOVE`;
+  }
+  return `${progress} Target ${min}-${max}°F; the current ${current.toFixed(1)}°F is ${where} that range.`;
+}
+
 // How long ago something started, for the prompt ("3.2 days ago").
 function agoText(from: Date): string {
   const hours = (Date.now() - new Date(from).getTime()) / 3600000;
@@ -247,7 +286,8 @@ async function buildBatchContext(batch: NonNullable<Awaited<ReturnType<typeof Ba
         return [];
       }
     });
-    const tempOutlook = describeTempOutlook(temps, fullRecipe);
+    const crash = coldCrashWindow(batch);
+    const tempOutlook = crash ? describeColdCrash(crash, logs) : describeTempOutlook(temps, fullRecipe);
     stageSummary = [progress, buildFermentSummary(logs), outlook, tempOutlook].filter(Boolean).join(' ');
   }
 

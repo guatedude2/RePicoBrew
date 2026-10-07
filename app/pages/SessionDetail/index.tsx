@@ -2,6 +2,7 @@ import { Link, useFetcher, useNavigate, useRevalidator, useRouteLoaderData } fro
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import {
   MdArrowBack,
+  MdAcUnit,
   MdAutoAwesome,
   MdCheck,
   MdExpandMore,
@@ -36,6 +37,7 @@ import { batchOverallProgress, effectiveFermentDays, phaseAccent, phaseLabel } f
 import { phaseForStep } from '~/utils/brew-step-phase';
 import { InfoTip } from '~/components/ui/info-tip';
 import { formatAbv, formatIbu } from '~/utils/brew-stats';
+import { COLD_CRASH_DEFAULT_DAYS, COLD_CRASH_TEMP, coldCrashWindow } from '~/utils/cold-crash';
 import { useChartZoom } from '~/utils/chart-zoom';
 import { useSessionLogs } from '~/utils/session-logs';
 import { postEventStream } from '~/utils/event-stream';
@@ -408,6 +410,8 @@ export const SessionDetail: FC<SessionDetailData> = ({
   const [skipFermentModalOpen, setSkipFermentModalOpen] = useState(false);
   const [extendModalOpen, setExtendModalOpen] = useState(false);
   const [extendDays, setExtendDays] = useState(3);
+  const [crashModalOpen, setCrashModalOpen] = useState(false);
+  const [crashDays, setCrashDays] = useState(COLD_CRASH_DEFAULT_DAYS);
   const [selectedTiltId, setSelectedTiltId] = useState(batch.fermentDeviceId ? String(batch.fermentDeviceId) : '');
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -791,11 +795,30 @@ export const SessionDetail: FC<SessionDetailData> = ({
     : [];
 
   const fermentationTimeUp = fermRemainingMs <= 0;
+  const coldCrash = coldCrashWindow(batch);
+  const isCrashing = batch.phase === BatchPhase.FERMENTING && coldCrash !== null;
+  const crashRemainingMs = coldCrash ? Math.max(0, coldCrash.end - fermNowMs) : 0;
+  const crashDone = isCrashing && crashRemainingMs <= 0;
+  const crashDay = coldCrash ? Math.min(coldCrash.days, Math.floor((fermNowMs - coldCrash.start) / 86400000) + 1) : 0;
   let fermTimeValue = formatFermCountdown(Math.floor(fermRemainingMs / 1000));
   if (!fermIsLive) {
     fermTimeValue = 'Done';
+  } else if (isCrashing) {
+    fermTimeValue = crashDone ? 'Ready to rack' : formatFermCountdown(Math.floor(crashRemainingMs / 1000));
   } else if (fermentationTimeUp) {
     fermTimeValue = 'Time up';
+  }
+  let fermTempSub = fermIsLive ? 'Fermentation temp' : 'Final fermentation temp';
+  if (isCrashing) {
+    fermTempSub = `Cold crash target ${COLD_CRASH_TEMP.min}–${COLD_CRASH_TEMP.max}°F`;
+  }
+  let fermTimeSub = `${fermentDaysTotal}d fermentation planned`;
+  if (isCrashing && coldCrash) {
+    fermTimeSub = crashDone
+      ? `${coldCrash.days}-day cold crash done`
+      : `Day ${crashDay} of ${coldCrash.days} in the fridge`;
+  } else if (fermIsLive && fermSession) {
+    fermTimeSub = `${formatDuration(fermSession.createdAt)} elapsed of ${fermentDaysTotal}d total`;
   }
 
   const startBottling = () =>
@@ -829,6 +852,15 @@ export const SessionDetail: FC<SessionDetailData> = ({
     setExtendModalOpen(false);
   };
 
+  const submitColdCrash = () => {
+    fetcher.submit(JSON.stringify({ intent: 'startColdCrash', days: crashDays }), {
+      method: 'post',
+      action: `/api/batches/${batch.id}`,
+      encType: 'application/json',
+    });
+    setCrashModalOpen(false);
+  };
+
   const handleBottleClick = () => {
     if (fermentationTimeUp) {
       startBottling();
@@ -836,6 +868,59 @@ export const SessionDetail: FC<SessionDetailData> = ({
       setSkipFermentModalOpen(true);
     }
   };
+
+  const coldCrashNote = isCrashing && coldCrash && (
+    <div className="flex items-start gap-2 rounded-lg border border-info-500/40 bg-info-500/10 px-3.5 py-2.5 text-[13px] text-ink-text-secondary">
+      <MdAcUnit className="mt-0.5 size-4 flex-none text-info-500" />
+      <p>
+        {crashDone
+          ? `The ${coldCrash.days}-day cold crash is done; the yeast has had time to settle. Rack or bottle the beer.`
+          : `Cold crashing until ${formatDateTime(
+              new Date(coldCrash.end),
+              timeFormat,
+            )}: keep the fermenter in the fridge at ${COLD_CRASH_TEMP.min}–${
+              COLD_CRASH_TEMP.max
+            }°F so the yeast drops out, then rack.`}
+      </p>
+    </div>
+  );
+
+  const fermActions = batch.phase === BatchPhase.FERMENTING && (
+    <div className="flex flex-wrap items-center gap-2">
+      {isCrashing ? (
+        <Button variant={crashDone ? 'brand' : 'outline'} disabled={fetcher.state !== 'idle'} onClick={startBottling}>
+          {fetcher.state !== 'idle' ? 'Working…' : 'Start Bottling'}
+        </Button>
+      ) : (
+        <>
+          <Button
+            variant={fermentationTimeUp ? 'brand' : 'link'}
+            size={fermentationTimeUp ? 'default' : 'sm'}
+            disabled={fetcher.state !== 'idle'}
+            onClick={handleBottleClick}
+          >
+            {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
+          </Button>
+          {fermentationTimeUp && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={fetcher.state !== 'idle'}
+                onClick={() => setCrashModalOpen(true)}
+              >
+                <MdAcUnit className="text-info-500" />
+                Start Cold Crash
+              </Button>
+              <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
+                Ferment longer
+              </Button>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   const brewingCard = (
     <Card key="brew" className="gap-4 p-[22px]">
@@ -1110,6 +1195,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </p>
           </div>
         )}
+        {coldCrashNote}
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <StatCard
             label="Specific Gravity"
@@ -1122,18 +1208,14 @@ export const SessionDetail: FC<SessionDetailData> = ({
             label="Temperature"
             value={liveFerm?.temp?.toFixed(1) ?? '--'}
             unit="°F"
-            sub={fermIsLive ? 'Fermentation temp' : 'Final fermentation temp'}
+            sub={fermTempSub}
             icon={MdThermostat}
             accent={ACCENT.danger}
           />
           <StatCard
-            label="Time Remaining"
+            label={isCrashing ? 'Cold Crash' : 'Time Remaining'}
             value={fermTimeValue}
-            sub={
-              fermIsLive
-                ? `${formatDuration(fermSession.createdAt)} elapsed of ${fermentDaysTotal}d total`
-                : `${fermentDaysTotal}d fermentation planned`
-            }
+            sub={fermTimeSub}
             icon={MdTimer}
             accent={ACCENT.brand}
           />
@@ -1154,6 +1236,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             startTime={fermSession.createdAt}
             fermentDays={batch.fermentDays ?? batch.recipe?.fermentDays}
             recommendedTemp={batch.recipe ? resolveRecommendedTemp(batch.recipe)?.range ?? null : null}
+            coldCrash={coldCrash}
             expectedGravity={{
               days: fermentDaysTotal,
               recipeOg: batch.recipe?.og,
@@ -1172,23 +1255,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             canAsk={batch.phase === BatchPhase.FERMENTING}
           />
         )}
-        {batch.phase === BatchPhase.FERMENTING && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={fermentationTimeUp ? 'brand' : 'link'}
-              size={fermentationTimeUp ? 'default' : 'sm'}
-              disabled={fetcher.state !== 'idle'}
-              onClick={handleBottleClick}
-            >
-              {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-            </Button>
-            {fermentationTimeUp && (
-              <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
-                Ferment longer
-              </Button>
-            )}
-          </div>
-        )}
+        {fermActions}
       </div>
     );
   } else if (fermentationAvailable) {
@@ -1235,14 +1302,15 @@ export const SessionDetail: FC<SessionDetailData> = ({
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-ink-text-faint">
-              Total Fermentation Time Left
+              {isCrashing ? 'Cold Crash Time Left' : 'Total Fermentation Time Left'}
             </p>
             <p className="mt-1 font-mono text-[38px] font-light">
-              {formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
+              {isCrashing ? fermTimeValue : formatFermCountdown(Math.floor(fermRemainingMs / 1000))}
             </p>
           </div>
           <Ring percent={fermPercent} label="Complete" color={FERM_RING_COLOR} />
         </div>
+        {coldCrashNote}
         <div className="flex flex-col overflow-hidden rounded-[10px] border border-ink-divider">
           {fermInfoRows.map((row) => (
             <div
@@ -1263,23 +1331,7 @@ export const SessionDetail: FC<SessionDetailData> = ({
             canAsk={batch.phase === BatchPhase.FERMENTING}
           />
         )}
-        {batch.phase === BatchPhase.FERMENTING && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={fermentationTimeUp ? 'brand' : 'link'}
-              size={fermentationTimeUp ? 'default' : 'sm'}
-              disabled={fetcher.state !== 'idle'}
-              onClick={handleBottleClick}
-            >
-              {fetcher.state !== 'idle' ? 'Working…' : fermentationTimeUp ? 'Start Bottling' : 'Skip Fermentation'}
-            </Button>
-            {fermentationTimeUp && (
-              <Button variant="outline" size="sm" disabled={fetcher.state !== 'idle'} onClick={openExtendModal}>
-                Ferment longer
-              </Button>
-            )}
-          </div>
-        )}
+        {fermActions}
       </div>
     );
   }
@@ -1605,6 +1657,41 @@ export const SessionDetail: FC<SessionDetailData> = ({
             </Button>
             <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={submitExtend}>
               Add {extendDays} day{extendDays === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={crashModalOpen} onOpenChange={setCrashModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start a cold crash</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-ink-text-secondary">
+            Move the fermenter into the fridge ({COLD_CRASH_TEMP.min}–{COLD_CRASH_TEMP.max}°F). The cold drops the yeast
+            out of suspension, which clears the beer and makes racking easier. PicoBrew recommends 1–3 days before
+            racking.
+            {fermSession ? ' The hydrometer keeps logging, so you can watch the temperature come down.' : ''}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {[1, 2, 3].map((d) => (
+              <Button
+                key={d}
+                type="button"
+                size="sm"
+                variant={crashDays === d ? 'brand' : 'outline'}
+                onClick={() => setCrashDays(d)}
+              >
+                {d} day{d === 1 ? '' : 's'}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCrashModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="brand" disabled={fetcher.state !== 'idle'} onClick={submitColdCrash}>
+              Start {crashDays}-day cold crash
             </Button>
           </DialogFooter>
         </DialogContent>

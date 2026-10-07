@@ -149,6 +149,11 @@ model Batch {
   // "Ferment longer"), so extending one batch never changes its recipe.
   fermentDays Int?
 
+  // Optional cold crash at the end of fermentation: the fermenter goes in the fridge for a few days so the yeast
+  // drops out before racking. Set when it starts.
+  coldCrashStartedAt DateTime?
+  coldCrashDays      Int?
+
   recipe        Recipe?    @relation(fields: [recipeId], references: [id])
   fermentDevice Device?    @relation(fields: [fermentDeviceId], references: [id])
   sessions      Session[]

@@ -4,6 +4,7 @@ import type { ApexOptions } from 'apexcharts';
 import { ChartMenu } from '~/components/charts/ChartMenu';
 import { Chart } from '~/components/charts/Chart.client';
 import { useChartZoom } from '~/utils/chart-zoom';
+import { COLD_CRASH_TEMP } from '~/utils/cold-crash';
 import { useSessionLogs } from '~/utils/session-logs';
 import { useServerSideEvent } from '~/utils/sse';
 import { expectedGravityAt, projectGravity, resolveGravityTargets, sampleCurve } from '~/utils/gravity-projection';
@@ -19,6 +20,8 @@ interface FermentationChartProps {
   // curve and a dashed PROJECTED one (the current trend carried to the end of the window); see gravity-projection.ts.
   // The recipe's recommended fermentation temperature range (°F), drawn as a shaded band on the temperature axis.
   recommendedTemp?: { min: number; max: number } | null;
+  // A cold crash at the end of fermentation (ms), shaded across the chart.
+  coldCrash?: { start: number; end: number } | null;
   expectedGravity?: {
     days: number;
     recipeOg?: number | null;
@@ -65,6 +68,7 @@ const DAY_LINE_COLOR = 'oklch(0.42 0.01 260)';
 const PROJECTED_COLOR = 'oklch(0.85 0.09 235)';
 const EXPECTED_COLOR = 'oklch(0.75 0.14 150)';
 const TEMP_BAND_COLOR = 'oklch(0.72 0.13 150)';
+const COLD_CRASH_COLOR = 'oklch(0.75 0.11 220)';
 
 export default function FermentationChart({
   sessionId,
@@ -72,6 +76,7 @@ export default function FermentationChart({
   fermentDays,
   expectedGravity,
   recommendedTemp,
+  coldCrash,
 }: FermentationChartProps) {
   const timeFormat = useTimeFormat();
 
@@ -98,7 +103,7 @@ export default function FermentationChart({
   const lastDataMs = data.length > 0 ? data[data.length - 1].time : null;
   const defaultRange =
     fermentDays && startMs !== null && Number.isFinite(startMs)
-      ? { min: startMs, max: Math.max(startMs + fermentDays * DAY_MS, lastDataMs ?? 0) }
+      ? { min: startMs, max: Math.max(startMs + fermentDays * DAY_MS, lastDataMs ?? 0, coldCrash?.end ?? 0) }
       : null;
   const zoom = useChartZoom(
     data.length > 0 ? [data[0].time, data[data.length - 1].time] : null,
@@ -279,7 +284,29 @@ export default function FermentationChart({
     legend: { labels: { colors: TEXT_COLOR } },
     grid: { borderColor: GRID_COLOR },
     annotations: {
-      xaxis: dayLines.map((x) => ({ x, borderColor: DAY_LINE_COLOR, strokeDashArray: 4 })),
+      xaxis: [
+        ...dayLines.map((x) => ({ x, borderColor: DAY_LINE_COLOR, strokeDashArray: 4 })),
+        ...(coldCrash
+          ? [
+              {
+                x: coldCrash.start,
+                x2: coldCrash.end,
+                fillColor: COLD_CRASH_COLOR,
+                opacity: 0.14,
+                borderColor: COLD_CRASH_COLOR,
+                strokeDashArray: 0,
+                label: {
+                  text: `Cold crash ${COLD_CRASH_TEMP.min}–${COLD_CRASH_TEMP.max}°F`,
+                  orientation: 'horizontal',
+                  position: 'top',
+                  offsetY: -2,
+                  borderWidth: 0,
+                  style: { color: COLD_CRASH_COLOR, background: 'transparent', fontSize: '11px' },
+                },
+              },
+            ]
+          : []),
+      ],
       yaxis: recommendedTemp
         ? [
             {

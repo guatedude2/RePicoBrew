@@ -50,6 +50,17 @@ export class BatchRepository {
     return await prisma.batch.update({ where: { id }, data: { fermentDays: base + days } });
   }
 
+  public static async startColdCrash(id: number, days: number) {
+    const batch = await prisma.batch.findUnique({ where: { id } });
+    if (!batch || batch.phase !== BatchPhase.FERMENTING) {
+      throw new Error('Batch is not fermenting');
+    }
+    if (batch.coldCrashStartedAt) {
+      throw new Error('This batch is already cold crashing');
+    }
+    return await prisma.batch.update({ where: { id }, data: { coldCrashStartedAt: new Date(), coldCrashDays: days } });
+  }
+
   // A session's "detail" page is really its batch's detail page — resolve one from the other.
   public static async getBatchBySessionId(sessionId: number) {
     const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { batchId: true } });
